@@ -1,0 +1,9 @@
+docs/samples/*
+!docs/samples/.gitkeep
+
+appsettings.Development.json
+.env
+*.user
+bin/
+obj/
+node_modules/

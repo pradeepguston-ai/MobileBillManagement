@@ -1,0 +1,16 @@
+.tools/
+**/bin/
+**/obj/
+src/mobilebill-web/node_modules/
+src/mobilebill-web/dist/
+
+
+docs/samples/*
+!docs/samples/.gitkeep
+
+appsettings.Development.json
+.env
+*.user
+bin/
+obj/
+node_modules/

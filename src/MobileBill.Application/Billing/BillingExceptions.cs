@@ -1,0 +1,14 @@
+namespace MobileBill.Application.Billing;
+public sealed class BillBatchNotFoundException(Guid id) : Exception($"Bill batch with id '{id}' was not found.");
+public sealed class BillBatchValidationException(string message) : Exception(message);
+public sealed class BillBatchConflictException(string message) : Exception(message);
+public sealed class BillBatchParsingException(string message, Exception? inner = null) : Exception(message, inner);
+public sealed class BillReviewForbiddenException() : Exception("The current user is not authorized to resolve billing exceptions.");
+public sealed class BillReviewNotFoundException(Guid id) : Exception($"Bill exception with id '{id}' was not found.");
+public sealed class BillReviewConflictException(string message) : Exception(message);
+public sealed class BillReviewValidationException(string message) : Exception(message);
+public sealed class BillAssessmentNotFoundException(Guid id) : Exception($"Monthly bill with id '{id}' was not found.");
+public sealed class BillAssessmentValidationException(string message) : Exception(message);
+public sealed class BillReviewRowNotFoundException(Guid id) : Exception($"Monthly bill with id '{id}' was not found in this bill batch.");
+public sealed class BillWorkflowConflictException(string message) : Exception(message);
+public sealed class BillWorkflowValidationException(string message) : Exception(message);
