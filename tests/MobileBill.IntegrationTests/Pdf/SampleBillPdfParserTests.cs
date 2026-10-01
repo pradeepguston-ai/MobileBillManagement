@@ -29,6 +29,10 @@ public sealed class SampleBillPdfParserTests
         Assert.Equal(390096.74m, successfulLineTotalDue);
         Assert.Equal(successfulLineTotalDue, result.GrandTotalDue);
         Assert.Equal(390096.74m, result.GrandTotalDue);
+        // The first page's own "Total Due" is read independently and tallies with the account rows.
+        Assert.Equal(390096.74m, result.StatedGrandTotal);
+        Assert.Equal(MobileBill.Domain.Enums.GrandTotalSource.PdfSummaryPage, result.GrandTotalSource);
+        Assert.DoesNotContain(result.Warnings, warning => warning.Contains("first page", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Lines, line => line.MobileAccountNumber == "740052872" && line.PageNumber == 2);
         Assert.Contains(result.Lines, line => line.MobileAccountNumber == "761499198" && line.PageNumber is > 2 and < 9);
         Assert.Contains(result.Lines, line => line.MobileAccountNumber == "779442869" && line.PageNumber == 9);

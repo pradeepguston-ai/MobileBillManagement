@@ -15,11 +15,13 @@ function renderPage() {
   return render(<MemoryRouter initialEntries={['/billing/batch-1/review']}><Routes><Route path="/billing/:batchId/review" element={<MonthlyBillReviewPage />} /></Routes></MemoryRouter>)
 }
 
-function mockReview(options: { status?: string; detailAfterSave?: { row: Record<string, unknown>; [key: string]: unknown }; assessmentError?: { status: number; detail: string }; totalPages?: number; bulkResult?: { successCount: number; failureCount: number; items: Array<{ monthlyBillId: string; success: boolean; error: string | null }> } } = {}) {
+function mockReview(options: { rows?: Array<Record<string, unknown>>; status?: string; detailAfterSave?: { row: Record<string, unknown>; [key: string]: unknown }; assessmentError?: { status: number; detail: string }; totalPages?: number; unresolvedExceptionCount?: number; pageTwoGate?: Promise<void>; bulkResult?: { successCount: number; failureCount: number; items: Array<{ monthlyBillId: string; success: boolean; error: string | null }> } } = {}) {
   let saved = false
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
     const url = String(input)
     if (url.includes('/api/factories') || url.includes('/api/departments') || url.includes('/api/categories')) return json({ items: [], pageNumber: 1, pageSize: 100, totalCount: 0, totalPages: 0 })
+    if (url.endsWith('/excel')) return new Response(new Blob(['xlsx']), { status: 200, headers: { 'Content-Disposition': 'attachment; filename="report.xlsx"' } })
+    if (url.endsWith('/pdf')) return new Response(new Blob(['%PDF']), { status: 200, headers: { 'Content-Disposition': 'attachment; filename="report.pdf"' } })
     if (url.endsWith('/bulk-assessment')) return json(options.bulkResult ?? { successCount: 1, failureCount: 0, items: [{ monthlyBillId: 'bill-1', success: true, error: null }] })
     if (url.endsWith('/assessment')) {
       if (options.assessmentError) return json({ title: 'Assessment failed', detail: options.assessmentError.detail }, options.assessmentError.status)
@@ -27,8 +29,11 @@ function mockReview(options: { status?: string; detailAfterSave?: { row: Record<
       return json({ monthlyBillId: 'bill-1', responsibility: 'ByUser', actualBill: 150, availableEntitlement: 110, variance: -40, calculatedExcess: 40, finalDeduction: 40, assessedAt: '2026-09-09T05:00:00Z', assessedBy: 'dev-user', deductionOverrideAmount: null, deductionOverrideReason: null, deductionOverrideBy: null, deductionOverrideAt: null })
     }
     if (url.includes('/rows/bill-1')) return json(saved && options.detailAfterSave ? options.detailAfterSave : detail)
-    if (url.includes('/rows?')) return json(paged(saved && options.detailAfterSave ? [options.detailAfterSave.row] : [row], options.totalPages ?? 1))
-    return json({ ...summary, batchStatus: options.status ?? 'Validated', assessedCount: saved ? 1 : 0, unassessedCount: saved ? 0 : 1, totalFinalDeduction: saved ? 40 : 0 })
+    if (url.includes('/rows?')) {
+      if (options.pageTwoGate && url.includes('pageNumber=2')) await options.pageTwoGate
+      return json(paged(saved && options.detailAfterSave ? [options.detailAfterSave.row] : options.rows ?? [row], options.totalPages ?? 1))
+    }
+    return json({ ...summary, unresolvedExceptionCount: options.unresolvedExceptionCount ?? 0, batchStatus: options.status ?? 'Validated', assessedCount: saved ? 1 : 0, unassessedCount: saved ? 0 : 1, totalFinalDeduction: saved ? 40 : 0 })
   })
 }
 
@@ -50,20 +55,78 @@ describe('MonthlyBillReviewPage', () => {
     expect(screen.getAllByText('Unassessed').length).toBeGreaterThan(0)
   })
 
-  it('keeps review filters sorting and paging on server requests', async () => {
-    const fetchMock = mockReview({ totalPages: 2 }); renderPage()
+  it('sends filters and sorting to the server and fetches rows 100 at a time', async () => {
+    const fetchMock = mockReview(); renderPage()
     await screen.findByText('Employee One')
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Responsibility' }))
     fireEvent.click(screen.getByRole('option', { name: 'By User' }))
     fireEvent.change(screen.getByLabelText('Search mobile / EPF / employee / calling name'), { target: { value: 'Sam' } })
     fireEvent.click(screen.getByText('EPF'))
-    fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
       const url = String(input)
-      return url.includes('/rows?') && url.includes('responsibility=ByUser') && url.includes('search=Sam') && url.includes('sortBy=epf') && url.includes('pageNumber=2')
+      return url.includes('/rows?') && url.includes('responsibility=ByUser') && url.includes('search=Sam') && url.includes('sortBy=epf') && url.includes('pageNumber=1') && url.includes('pageSize=100')
     })).toBe(true))
+  })
+
+  it('loads every page of rows into one scrolling table with no page buttons', async () => {
+    const second = { ...row, id: 'bill-2', mobileNumber: '768791862', employeeName: 'Employee Two' }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('/api/factories') || url.includes('/api/departments') || url.includes('/api/categories')) return json({ items: [], pageNumber: 1, pageSize: 100, totalCount: 0, totalPages: 0 })
+      if (url.includes('/rows?')) return json(url.includes('pageNumber=2')
+        ? { items: [second], pageNumber: 2, pageSize: 100, totalCount: 101, totalPages: 2 }
+        : { items: [row], pageNumber: 1, pageSize: 100, totalCount: 101, totalPages: 2 })
+      return json({ ...summary, unresolvedExceptionCount: 0 })
+    })
+    renderPage()
+
+    expect(await screen.findByText('Employee Two')).toBeTruthy()
+    expect(screen.getByText('Employee One')).toBeTruthy()
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/rows?')).length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByRole('navigation', { name: /pagination/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Go to page 2' })).toBeNull()
+    const scrollArea = screen.getByLabelText('Monthly bill rows scroll area')
+    expect(getComputedStyle(scrollArea).overflow).toBe('auto')
+    expect(scrollArea.contains(screen.getByRole('table', { name: 'Monthly bill review rows' }))).toBe(true)
+  })
+
+  it('does not show the unused per-bill Status column or filter', async () => {
+    mockReview(); renderPage()
+    await screen.findByText('Employee One')
+
+    expect(screen.queryByRole('columnheader', { name: 'Status' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Status' })).toBeNull()
+    expect(screen.queryByText('Pending')).toBeNull()
+  })
+
+  it('shows the amount the company absorbs in Final Deduction for By Company rows', async () => {
+    const companyRow = { ...row, responsibility: 'ByCompany', finalDeduction: 0, isAssessed: true }
+    const userRow = { ...row, id: 'bill-2', mobileNumber: '768791862', employeeName: 'Employee Two', responsibility: 'ByUser', finalDeduction: 25, isAssessed: true }
+    mockReview({ rows: [companyRow, userRow] }); renderPage()
+
+    const companyLine = (await screen.findByText('Employee One')).closest('tr')!
+    const userLine = screen.getByText('Employee Two').closest('tr')!
+
+    expect(within(companyLine).getByText(/\(Company\)/)).toBeTruthy()
+    expect(companyLine.textContent).toContain('40.00 (Company)')
+    expect(userLine.textContent).not.toContain('(Company)')
+    expect(userLine.textContent).toContain('25.00')
+  })
+
+  it('highlights rows that have a Calculated Excess', async () => {
+    const noExcess = { ...row, id: 'bill-3', mobileNumber: '768791863', employeeName: 'Employee Three', calculatedExcess: 0, hasException: false }
+    mockReview({ rows: [row, noExcess] }); renderPage()
+
+    const withExcess = (await screen.findByText('Employee One')).closest('tr')!
+    const without = screen.getByText('Employee Three').closest('tr')!
+
+    expect(getComputedStyle(withExcess).backgroundColor).toBe('rgba(255, 201, 40, 0.22)')
+    expect(getComputedStyle(without).backgroundColor).not.toBe('rgba(255, 201, 40, 0.22)')
+    const excessColumn = screen.getAllByRole('columnheader').findIndex(header => header.textContent?.includes('Calculated Excess'))
+    expect(getComputedStyle(withExcess.cells[excessColumn]).fontWeight).toBe('700')
+    expect(getComputedStyle(without.cells[excessColumn]).fontWeight).not.toBe('700')
   })
 
   it('filters rows by a Calculated Excess amount range', async () => {
@@ -104,6 +167,24 @@ describe('MonthlyBillReviewPage', () => {
     expect(screen.getByText('Assessed Count').parentElement?.textContent).toContain('1')
     const assessmentCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/assessment'))
     expect(JSON.parse(String(assessmentCall?.[1]?.body))).toEqual({ responsibility: 'ByUser', finalDeduction: 40, reason: null })
+  })
+
+  it('shows the saved reason in the Calculation section straight after saving', async () => {
+    const assessedDetail = { ...detail, row: { ...row, responsibility: 'ByUser', finalDeduction: 40, isAssessed: true, remark: 'Personal roaming in Dubai' }, assessedBy: 'dev-user', assessedAt: '2026-09-09T05:00:00Z' }
+    const fetchMock = mockReview({ detailAfterSave: assessedDetail }); renderPage()
+    const form = await openDrawer()
+    const calculation = () => screen.getByText('Calculation').parentElement!
+    expect(within(calculation()).getByText('Reason:').parentElement?.textContent).toBe('Reason: None')
+    expect(within(screen.getByText('Assessment').parentElement!).queryByText('Remark:')).toBeNull()
+
+    fireEvent.mouseDown(within(form).getByRole('combobox', { name: 'Responsibility' }))
+    fireEvent.click(screen.getByRole('option', { name: 'By User' }))
+    fireEvent.change(within(form).getByLabelText('Reason / Remark'), { target: { value: 'Personal roaming in Dubai' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Save Assessment' }))
+
+    await waitFor(() => expect(within(calculation()).getByText('Reason:').parentElement?.textContent).toBe('Reason: Personal roaming in Dubai'))
+    const assessmentCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/assessment'))
+    expect(JSON.parse(String(assessmentCall?.[1]?.body)).reason).toBe('Personal roaming in Dubai')
   })
 
   it('forces zero deduction when assessing By Company', async () => {
@@ -173,11 +254,11 @@ describe('MonthlyBillReviewPage', () => {
     await waitFor(() => expect(screen.queryByText('1 selected')).toBeNull())
   })
 
-  it('selects every row on the page via the header checkbox', async () => {
+  it('selects every row via the header checkbox', async () => {
     mockReview(); renderPage()
     await screen.findByText('Employee One')
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all rows on this page' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all rows' }))
 
     expect(await screen.findByText('1 selected')).toBeTruthy()
   })
@@ -198,11 +279,72 @@ describe('MonthlyBillReviewPage', () => {
     expect(within(dialog).getByText(/768791861: Locked bill batches cannot be assessed or reassessed\./)).toBeTruthy()
   })
 
+  it('warns before downloading the Excel report when exceptions are unresolved', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report'); vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const fetchMock = mockReview({ status: 'Completed', unresolvedExceptionCount: 3 }); renderPage()
+    await screen.findByText('Employee One')
+    const excelCalls = () => fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/excel')).length
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download Excel Report' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/3 unresolved exceptions/)).toBeTruthy()
+    expect(excelCalls()).toBe(0)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(excelCalls()).toBe(0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download Excel Report' }))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Download anyway' }))
+    await waitFor(() => expect(excelCalls()).toBe(1))
+  })
+
+  it('downloads the PDF report, warning first when exceptions are unresolved', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report'); vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const fetchMock = mockReview({ status: 'Completed', unresolvedExceptionCount: 2 }); renderPage()
+    await screen.findByText('Employee One')
+    const calls = (suffix: string) => fetchMock.mock.calls.filter(([input]) => String(input).endsWith(suffix)).length
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download PDF Report' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/2 unresolved exceptions/)).toBeTruthy()
+    expect(calls('/pdf')).toBe(0)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Download anyway' }))
+    await waitFor(() => expect(calls('/pdf')).toBe(1))
+    expect(calls('/excel')).toBe(0)
+  })
+
+  it('downloads the PDF report straight away when no exceptions are unresolved', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report'); vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const fetchMock = mockReview({ status: 'Completed' }); renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download PDF Report' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/pdf'))).toBe(true))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('downloads the Excel report without a warning when no exceptions are unresolved', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report'); vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const fetchMock = mockReview({ status: 'Completed', unresolvedExceptionCount: 0 }); renderPage()
+    await screen.findByText('Employee One')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download Excel Report' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/excel'))).toBe(true))
+    expect(screen.queryByText(/unresolved exception/)).toBeNull()
+  })
+
   it('disables bulk selection for a locked batch', async () => {
     mockReview({ status: 'Locked' }); renderPage()
     await screen.findByText('Employee One')
 
-    expect(screen.getByRole('checkbox', { name: 'Select all rows on this page' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toHaveProperty('disabled', true)
     expect(screen.getByRole('checkbox', { name: 'Select 768791861' })).toHaveProperty('disabled', true)
   })
 })

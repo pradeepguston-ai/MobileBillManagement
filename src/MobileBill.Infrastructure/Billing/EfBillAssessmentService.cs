@@ -61,6 +61,9 @@ public sealed class EfBillAssessmentService(MobileBillDbContext db, IBillReviewA
         bill.FinalDeduction = finalDeduction;
         bill.AssessedAt = now;
         bill.AssessedBy = currentUser.UserId;
+        // The reason typed in the assessment is the bill's remark on screen and in the reports; a blank
+        // reason leaves an earlier remark in place.
+        if (reason is not null) bill.Remark = reason;
         bill.UpdatedAtUtc = now;
         bill.UpdatedBy = currentUser.UserId;
         if (isOverride)
@@ -77,6 +80,8 @@ public sealed class EfBillAssessmentService(MobileBillDbContext db, IBillReviewA
             bill.DeductionOverrideBy = null;
             bill.DeductionOverrideAt = null;
         }
+        var employee = await db.Employees.FindAsync([bill.EmployeeId], token);
+        if (employee is not null) employee.DefaultResponsibility = request.Responsibility;
         db.AuditLogs.Add(new AuditLog
         {
             EntityName = nameof(MonthlyBill), EntityId = bill.Id, Action = isReassessment ? "Reassessed" : "Assessed",

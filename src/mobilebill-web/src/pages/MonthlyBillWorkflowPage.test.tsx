@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MonthlyBillReviewPage } from './MonthlyBillReviewPage'
 
 const row = { id: 'bill-1', mobileNumber: '768791861', employeeEpf: 'EPF-1', employeeName: 'Employee One', callingName: 'Sam', category: 'Executive', designation: 'Manager', factory: 'Factory', department: 'IT', creditLimit: 100, monthlyRental: 10, availableEntitlement: 110, actualBill: 150, variance: -40, calculatedExcess: 40, responsibility: 'ByUser', finalDeduction: 40, remark: null, status: 'Reviewed', hasException: false, isAssessed: true }
-const approval = { id: 'approval-1', workflowStage: 'ITReview', action: 'Approve', workflowRole: 'ITReviewer', userId: 'it-user', displayName: 'IT User', timestamp: '2026-09-10T04:00:00Z', comment: 'Checked', previousStatus: 'ITReview', newStatus: 'HRApproval' }
+const approval = { id: 'approval-1', workflowStage: 'ITReview', action: 'Approve', workflowRole: 'ITReviewer', userRole: 'ITEngineer', userId: 'it-user', displayName: 'IT User', timestamp: '2026-09-10T04:00:00Z', comment: 'Checked', previousStatus: 'ITReview', newStatus: 'HRApproval' }
 const baseSummary = { batchId: 'batch-1', billingYear: 2026, billingMonth: 8, provider: 'Telecom', corporateCode: 'CORP', batchStatus: 'Validated', validationLevel: 'StructuralOnly', totalAccounts: 1, totalActualBill: 150, totalCalculatedExcess: 40, totalFinalDeduction: 40, companyResponsibilityAmount: 0, exceptionCount: 0, unmatchedCount: 0, assessedCount: 1, unassessedCount: 0, approvalHistory: [] }
 const capabilityDefaults = { canSubmit: false, canApprove: false, canReject: false, canReturnForCorrection: false, canLock: false, currentStage: 'Validation', status: 'Validated' }
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json', ...headers } })
@@ -134,7 +134,9 @@ describe('MonthlyBillReviewPage workflow and reporting', () => {
     installHarness({ status: 'HRApproval', approvalHistory: [approval] }); const view = renderPage()
     expect(await screen.findByText('IT User')).toBeTruthy()
     expect(screen.getByText('Checked')).toBeTruthy()
-    expect(screen.getByText('ITReviewer')).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'User Role' })).toBeTruthy()
+    expect(screen.queryByRole('columnheader', { name: 'Workflow Role' })).toBeNull()
+    expect(screen.getByText('IT Engineer')).toBeTruthy()
 
     view.unmount(); cleanup(); vi.restoreAllMocks()
     installHarness({ status: 'Validated' }); renderPage()

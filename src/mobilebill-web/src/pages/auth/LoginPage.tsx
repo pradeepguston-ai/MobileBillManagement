@@ -34,14 +34,14 @@ export function LoginPage() {
     <AuthLayout>
       <Stack spacing={2} component="form" onSubmit={event => void submit(event)}>
         <Box>
-          <Typography component="h1" variant="h4">Mobile Bill Management</Typography>
-          <Typography color="text.secondary">Sign in to continue.</Typography>
+          <Typography component="h1" variant="h4">Sign in</Typography>
+          <Typography color="text.secondary">Use your company credentials. Your role controls what you can view and manage.</Typography>
         </Box>
         {error && <ErrorState message={error} />}
         <TextField required label="Email" type="email" autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} />
         <TextField required label="Password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} />
         <Button type="submit" variant="contained" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in'}</Button>
-        <Typography variant="body2">No account? <MuiLink component={RouterLink} to="/register">Register</MuiLink></Typography>
+        <Typography variant="body2"><MuiLink component={RouterLink} to="/forgot-password">Forgot password?</MuiLink> · <MuiLink component={RouterLink} to="/register">Create account</MuiLink></Typography>
       </Stack>
     </AuthLayout>
   )

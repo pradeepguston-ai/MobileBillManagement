@@ -18,13 +18,14 @@ internal static class TestAuth
         AccessTokenLifetimeMinutes = 480
     };
 
-    public static string TokenFor(UserRole role, string displayName = "Test User")
+    public static string TokenFor(UserRole role, string displayName = "Test User", Guid? userId = null)
     {
         var user = new User { Email = $"{role}@test.local", DisplayName = displayName, Role = role, PasswordHash = "x" };
+        if (userId is { } id) user.Id = id;
         var tokenService = new JwtTokenService(Options.Create(JwtSettings));
         return tokenService.CreateAccessToken(user).Token;
     }
 
-    public static void Authorize(HttpClient client, UserRole role, string displayName = "Test User") =>
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenFor(role, displayName));
+    public static void Authorize(HttpClient client, UserRole role, string displayName = "Test User", Guid? userId = null) =>
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenFor(role, displayName, userId));
 }

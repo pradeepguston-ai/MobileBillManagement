@@ -40,6 +40,46 @@ public sealed class BillAssessmentServiceTests
         Assert.Null(saved.DeductionOverrideReason);
     }
 
+    [Fact]
+    public async Task Assessment_reason_is_saved_as_the_bill_remark_and_a_blank_reason_keeps_it()
+    {
+        await using var db = CreateDb(); var bill = await SeedAsync(db, 150m, 100m, 10m);
+        var service = new EfBillAssessmentService(db, new FixedAuthorization(true), new TestUser("reviewer"), new TestClock());
+
+        // A remark on a plain assessment (no override) is kept too.
+        await service.AssessAsync(bill.Id, new AssessMonthlyBillRequest(Responsibility.ByUser, null, "  Personal roaming in Dubai  "), default);
+        var saved = await db.MonthlyBills.SingleAsync();
+        Assert.Equal("Personal roaming in Dubai", saved.Remark);
+        Assert.Null(saved.DeductionOverrideReason);
+
+        await service.AssessAsync(bill.Id, new AssessMonthlyBillRequest(Responsibility.ByCompany, null, "Company approved the trip"), default);
+        Assert.Equal("Company approved the trip", (await db.MonthlyBills.SingleAsync()).Remark);
+    }
+
+    [Fact]
+    public async Task Blank_reason_on_first_assessment_leaves_the_remark_empty()
+    {
+        await using var db = CreateDb(); var bill = await SeedAsync(db, 150m, 100m, 10m);
+
+        await new EfBillAssessmentService(db, new FixedAuthorization(true), new TestUser("reviewer"), new TestClock())
+            .AssessAsync(bill.Id, new AssessMonthlyBillRequest(Responsibility.ByUser, null, "   "), default);
+
+        Assert.Null((await db.MonthlyBills.SingleAsync()).Remark);
+    }
+
+    [Fact]
+    public async Task Bulk_assessment_reason_is_saved_as_the_remark_on_every_selected_bill()
+    {
+        await using var db = CreateDb();
+        var billA = await SeedAsync(db, 150m, 100m, 10m);
+        var billB = await SeedAsync(db, 200m, 100m, 10m);
+
+        await new EfBillAssessmentService(db, new FixedAuthorization(true), new TestUser("reviewer"), new TestClock())
+            .BulkAssessAsync(new BulkAssessMonthlyBillsRequest([billA.Id, billB.Id], Responsibility.ByCompany, "Management phones"), default);
+
+        Assert.All(await db.MonthlyBills.ToListAsync(), item => Assert.Equal("Management phones", item.Remark));
+    }
+
     [Theory]
     [InlineData(15)]
     [InlineData(0)]
@@ -147,6 +187,32 @@ public sealed class BillAssessmentServiceTests
     }
 
     [Fact]
+    public async Task Assessment_remembers_the_responsibility_on_the_employee_and_reassessment_updates_it()
+    {
+        await using var db = CreateDb(); var bill = await SeedAsync(db, 150m, 100m, 10m);
+        var service = new EfBillAssessmentService(db, new FixedAuthorization(true), new TestUser("reviewer"), new TestClock());
+
+        await service.AssessAsync(bill.Id, new AssessMonthlyBillRequest(Responsibility.ByCompany, null, null), default);
+        Assert.Equal(Responsibility.ByCompany, (await db.Employees.SingleAsync()).DefaultResponsibility);
+
+        await service.AssessAsync(bill.Id, new AssessMonthlyBillRequest(Responsibility.ByUser, null, "Employee accepted charge"), default);
+        Assert.Equal(Responsibility.ByUser, (await db.Employees.SingleAsync()).DefaultResponsibility);
+    }
+
+    [Fact]
+    public async Task Bulk_assessment_remembers_the_responsibility_for_each_employee()
+    {
+        await using var db = CreateDb();
+        var billA = await SeedAsync(db, 150m, 100m, 10m);
+        var billB = await SeedAsync(db, 200m, 100m, 10m);
+        var service = new EfBillAssessmentService(db, new FixedAuthorization(true), new TestUser("reviewer"), new TestClock());
+
+        await service.BulkAssessAsync(new BulkAssessMonthlyBillsRequest([billA.Id, billB.Id], Responsibility.ByCompany, null), default);
+
+        Assert.All(await db.Employees.ToListAsync(), employee => Assert.Equal(Responsibility.ByCompany, employee.DefaultResponsibility));
+    }
+
+    [Fact]
     public async Task Bulk_assessment_rejects_an_empty_selection()
     {
         await using var db = CreateDb();
@@ -169,7 +235,9 @@ public sealed class BillAssessmentServiceTests
     private static async Task<MonthlyBill> SeedAsync(MobileBillDbContext db, decimal totalDue, decimal credit, decimal rental)
     {
         var line = new BillLine { MobileNumber = "761499198", PageNumber = 1, RawText = "row", ExtractionStatus = BillLineExtractionStatus.Extracted, TotalDueAmount = totalDue };
-        var bill = new MonthlyBill { EmployeeId = Guid.NewGuid(), MobileAccountId = Guid.NewGuid(), BillLineId = line.Id, BillLine = line, CreditLimit = credit, MonthlyRental = rental, ActualBill = totalDue, EmployeeEpfSnapshot = "EPF", EmployeeNameSnapshot = "Employee", MobileNumberSnapshot = line.MobileNumber, CategoryCodeSnapshot = "CAT", DesignationCodeSnapshot = "DES", FactoryCodeSnapshot = "FAC", DepartmentCodeSnapshot = "DEP", EntitlementEffectiveFromSnapshot = new DateOnly(2026, 9, 1) };
+        var employee = new Employee { EPF = Guid.NewGuid().ToString("N"), FullName = "Employee", CategoryCode = "CAT", DesignationCode = "DES", FactoryCode = "FAC", DepartmentCode = "DEP" };
+        db.Add(employee);
+        var bill = new MonthlyBill { EmployeeId = employee.Id, MobileAccountId = Guid.NewGuid(), BillLineId = line.Id, BillLine = line, CreditLimit = credit, MonthlyRental = rental, ActualBill = totalDue, EmployeeEpfSnapshot = "EPF", EmployeeNameSnapshot = "Employee", MobileNumberSnapshot = line.MobileNumber, CategoryCodeSnapshot = "CAT", DesignationCodeSnapshot = "DES", FactoryCodeSnapshot = "FAC", DepartmentCodeSnapshot = "DEP", EntitlementEffectiveFromSnapshot = new DateOnly(2026, 9, 1) };
         db.AddRange(line, bill); await db.SaveChangesAsync(); return bill;
     }
     private sealed class TestClock : IClock { public DateTimeOffset UtcNow => new(2026, 9, 5, 12, 0, 0, TimeSpan.Zero); }

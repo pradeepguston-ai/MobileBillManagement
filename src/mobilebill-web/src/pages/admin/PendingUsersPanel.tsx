@@ -5,10 +5,10 @@ import { activateUser, deactivateUser, listPendingUsers, roleLabels, type Pendin
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/common/ErrorState'
 import { LoadingState } from '../../components/common/LoadingState'
-import { PageHeader } from '../../components/common/PageHeader'
 import { formatDateTime } from '../../utils/formatters'
 
-export function PendingUsersPage() {
+// Pending registrations list, shown as a tab of the User Management screen.
+export function PendingUsersPanel({ onChanged }: { onChanged?: () => void }) {
   const [users, setUsers] = useState<PendingUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
@@ -27,7 +27,7 @@ export function PendingUsersPage() {
   const activate = async (id: string) => {
     setBusyId(id)
     setError(undefined)
-    try { await activateUser(id); await load() }
+    try { await activateUser(id); await load(); onChanged?.() }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to activate this account.') }
     finally { setBusyId(undefined) }
   }
@@ -35,14 +35,13 @@ export function PendingUsersPage() {
   const deactivate = async (id: string) => {
     setBusyId(id)
     setError(undefined)
-    try { await deactivateUser(id); await load() }
+    try { await deactivateUser(id); await load(); onChanged?.() }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to deactivate this account.') }
     finally { setBusyId(undefined) }
   }
 
   return (
     <Stack spacing={2}>
-      <PageHeader title="Pending Users" subtitle="Activate a registration to grant its requested role, or deactivate it to reject." />
       {error && <ErrorState message={error} />}
       {loading && <LoadingState label="Loading pending registrations…" />}
       {!loading && users.length === 0 && <EmptyState message="No pending registrations." />}

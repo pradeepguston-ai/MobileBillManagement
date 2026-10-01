@@ -5,12 +5,19 @@ namespace MobileBill.Api.Controllers;
 
 [ApiController]
 [Route("api/reports/billing")]
-public sealed class ReportsController(IBillingExcelReportService reportService) : ControllerBase
+public sealed class ReportsController(IBillingExcelReportService excelReportService, IBillingPdfReportService pdfReportService) : ControllerBase
 {
     [HttpGet("{batchId:guid}/excel")]
-    public async Task<IActionResult> ExportExcel(Guid batchId, CancellationToken cancellationToken)
+    public async Task<IActionResult> ExportExcel(Guid batchId, [FromQuery] string[]? factoryCode, [FromQuery] string[]? categoryCode, CancellationToken cancellationToken)
     {
-        var report = await reportService.ExportAsync(new BillingExcelReportRequest(batchId), cancellationToken);
+        var report = await excelReportService.ExportAsync(new BillingExcelReportRequest(batchId, factoryCode, categoryCode), cancellationToken);
+        return File(report.Content, report.ContentType, report.FileName);
+    }
+
+    [HttpGet("{batchId:guid}/pdf")]
+    public async Task<IActionResult> ExportPdf(Guid batchId, [FromQuery] string[]? factoryCode, [FromQuery] string[]? categoryCode, CancellationToken cancellationToken)
+    {
+        var report = await pdfReportService.ExportAsync(new BillingExcelReportRequest(batchId, factoryCode, categoryCode), cancellationToken);
         return File(report.Content, report.ContentType, report.FileName);
     }
 }

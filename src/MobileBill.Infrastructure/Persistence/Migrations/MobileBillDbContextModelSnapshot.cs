@@ -694,6 +694,10 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<string>("DefaultResponsibility")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("DepartmentCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1054,6 +1058,56 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.ToTable("MonthlyBills", (string)null);
                 });
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.PasswordResetRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset?>("DecidedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("NewPasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("PasswordResetRequests", (string)null);
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.TelecomProvider", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1297,6 +1351,17 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("MobileAccount");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.PasswordResetRequest", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.BillBatch", b =>

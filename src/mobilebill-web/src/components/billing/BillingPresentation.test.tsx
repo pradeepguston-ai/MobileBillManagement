@@ -30,6 +30,15 @@ describe('shared billing presentation', () => {
     expect(screen.getByText('No audit history yet')).toBeTruthy()
   })
 
+  it('formats raw ISO timestamps in audit entries as readable local date and time', () => {
+    render(<AuditTimeline entries={['Assessed by Nimal Perera at 2026-09-25T04:46:14.0402859+00:00']} />)
+
+    const text = screen.getByText(/Assessed by Nimal Perera at /).textContent ?? ''
+    expect(text).not.toContain('T04:46')
+    expect(text).not.toContain('+00:00')
+    expect(text).toContain('2026')
+  })
+
   it('shows the full batch journey for a completed batch', () => {
     render(<MemoryRouter><BatchContextNavigation batchId="batch-1" status="Completed" /></MemoryRouter>)
 

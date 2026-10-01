@@ -101,6 +101,7 @@ internal sealed class EmployeeConfiguration : AuditableEntityConfiguration<Emplo
         builder.Property(entity => entity.DesignationCode).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.FactoryCode).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.DepartmentCode).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.DefaultResponsibility).HasConversion<string>().HasMaxLength(50);
         builder.HasAlternateKey(entity => entity.EPF);
         builder.HasIndex(entity => entity.IsActive);
         builder.HasOne(entity => entity.Category).WithMany(category => category.Employees).HasForeignKey(entity => entity.CategoryCode).HasPrincipalKey(category => category.Code).OnDelete(DeleteBehavior.Restrict);
@@ -271,6 +272,20 @@ internal sealed class UserConfiguration : AuditableEntityConfiguration<User>
         builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(50);
         builder.HasIndex(entity => entity.Email).IsUnique();
         builder.HasIndex(entity => entity.Status);
+    }
+}
+
+internal sealed class PasswordResetRequestConfiguration : AuditableEntityConfiguration<PasswordResetRequest>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<PasswordResetRequest> builder)
+    {
+        builder.ToTable("PasswordResetRequests");
+        builder.Property(entity => entity.NewPasswordHash).HasMaxLength(512).IsRequired();
+        builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(50);
+        builder.Property(entity => entity.DecidedBy).HasMaxLength(256);
+        builder.HasIndex(entity => new { entity.UserId, entity.Status });
+        builder.HasIndex(entity => entity.Status);
+        builder.HasOne(entity => entity.User).WithMany().HasForeignKey(entity => entity.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

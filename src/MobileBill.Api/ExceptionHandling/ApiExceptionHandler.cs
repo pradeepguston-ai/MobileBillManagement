@@ -30,11 +30,14 @@ public sealed class ApiExceptionHandler(IProblemDetailsService problemDetailsSer
             BillWorkflowConflictException => StatusCodes.Status409Conflict,
             BillWorkflowValidationException => StatusCodes.Status400BadRequest,
             BillingReportNotFoundException => StatusCodes.Status404NotFound,
+            BillingReportFilterNotFoundException => StatusCodes.Status404NotFound,
             BillingReportConflictException => StatusCodes.Status409Conflict,
             EmailAlreadyRegisteredException => StatusCodes.Status409Conflict,
             InvalidCredentialsException => StatusCodes.Status401Unauthorized,
             AccountNotActiveException => StatusCodes.Status403Forbidden,
             UserNotFoundException => StatusCodes.Status404NotFound,
+            PasswordResetRequestNotFoundException => StatusCodes.Status404NotFound,
+            PasswordResetConflictException => StatusCodes.Status409Conflict,
             UserManagementConflictException => StatusCodes.Status400BadRequest,
             _ => StatusCodes.Status500InternalServerError
         };

@@ -1,23 +1,33 @@
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined'
 import { Chip } from '@mui/material'
-import { alpha, useTheme } from '@mui/material/styles'
+import type { Theme } from '@mui/material/styles'
 
 export type StatusTone = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 
+function toneColor(theme: Theme, tone: StatusTone) {
+  const palette = (theme.vars ?? theme).palette
+  return tone === 'success' ? palette.success.main
+    : tone === 'warning' ? palette.warning.main
+    : tone === 'error' ? palette.error.main
+    : tone === 'info' ? palette.info.main
+    : palette.text.secondary
+}
+
+// Errors also carry an icon so they are never told apart from primary (red) actions by colour alone.
 export function StatusBadge({ label, tone, outlined = false }: { label: string; tone: StatusTone; outlined?: boolean }) {
-  const theme = useTheme()
-  const mainColor = tone === 'success' ? theme.palette.success.main
-    : tone === 'warning' ? theme.palette.warning.main
-    : tone === 'error' ? theme.palette.error.main
-    : tone === 'info' ? theme.palette.primary.main
-    : theme.palette.text.secondary
   return <Chip
     label={label}
     size="small"
     variant={outlined ? 'outlined' : 'filled'}
-    sx={{
-      bgcolor: outlined ? 'transparent' : alpha(mainColor, 0.12),
-      color: mainColor,
-      borderColor: outlined ? alpha(mainColor, 0.4) : undefined,
+    icon={tone === 'error' ? <ErrorOutlineIcon /> : undefined}
+    sx={theme => {
+      const color = toneColor(theme, tone)
+      return {
+        bgcolor: outlined ? 'transparent' : theme.alpha(color, 0.12),
+        color,
+        borderColor: outlined ? theme.alpha(color, 0.4) : undefined,
+        '& .MuiChip-icon': { color: 'inherit' },
+      }
     }}
   />
 }

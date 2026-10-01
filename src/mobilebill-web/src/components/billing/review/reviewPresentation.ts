@@ -28,5 +28,4 @@ export const reviewColumns: ReviewColumn[] = [
   { key: 'calculatedExcess', label: 'Calculated Excess', sortKey: 'calculatedExcess' },
   { key: 'responsibility', label: 'Responsibility', sortKey: 'responsibility' },
   { key: 'finalDeduction', label: 'Final Deduction', sortKey: 'finalDeduction' },
-  { key: 'status', label: 'Status', sortKey: 'status' },
 ]

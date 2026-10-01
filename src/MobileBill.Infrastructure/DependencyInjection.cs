@@ -1,3 +1,5 @@
+using MobileBill.Application.Insights;
+using MobileBill.Infrastructure.Insights;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +51,9 @@ public static class DependencyInjection
         services.AddScoped<IBillApprovalWorkflowService, EfBillApprovalWorkflowService>();
         services.AddScoped<IBillBatchReviewQueryService, EfBillBatchReviewQueryService>();
         services.AddScoped<IBillingExcelReportService, ClosedXmlBillingExcelReportService>();
+        services.AddScoped<IBillingPdfReportService, PdfBillingReportService>();
+        services.AddScoped<IBillLinesExcelExportService, ClosedXmlBillLinesExcelExportService>();
+        services.AddScoped<IBillingInsightsService, EfBillingInsightsService>();
         services.AddSingleton<IPdfBillParser, PdfBillParser>();
 
         return services;

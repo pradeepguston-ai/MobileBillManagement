@@ -8,6 +8,7 @@ import { BatchSummary } from '../../components/billing/BatchSummary'
 import { BatchContextNavigation } from '../../components/billing/BatchContextNavigation'
 import { formatCurrency } from '../../utils/formatters'
 import { PdfDropZone } from '../../components/billing/PdfDropZone'
+import { TotalTallyCard } from '../../components/billing/TotalTallyCard'
 import { ErrorState } from '../../components/common/ErrorState'
 import { KpiCard } from '../../components/common/KpiCard'
 import { LoadingState } from '../../components/common/LoadingState'
@@ -22,6 +23,7 @@ export function BillingProcessingPage() {
   const [file, setFile] = useState<File>()
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
+  const [validatedThisVisit, setValidatedThisVisit] = useState(false)
   const [error, setError] = useState<string>()
   const load = useCallback(async () => { try { setError(undefined); setBatch(await getBatch(batchId)) } catch (reason) { setError(message(reason, 'Unable to load billing batch.')) } finally { setLoading(false) } }, [batchId])
   useEffect(() => { const timer = window.setTimeout(() => { void load() }, 0); return () => window.clearTimeout(timer) }, [load])
@@ -48,12 +50,14 @@ export function BillingProcessingPage() {
     <BatchContextNavigation batchId={batchId} status={batch.status} />
     <Stepper activeStep={activeStep} alternativeLabel sx={{ overflowX: 'auto' }}>{steps.map(step => <Step key={step}><StepLabel>{step}</StepLabel></Step>)}</Stepper>
     {error && <ErrorState message={error} />}
-    {batch.validationWarning && <Alert severity="warning">{batch.validationWarning}</Alert>}
+    {/* Shown once, right after this visit ran validation; a later visit to the batch does not repeat it. */}
+    {validatedThisVisit && batch.validationWarning && <Alert severity="warning">{batch.validationWarning}</Alert>}
     {batch.warnings?.filter(warning => warning !== batch.validationWarning).map(warning => <Alert severity="warning" key={warning}>{warning}</Alert>)}
     {batch.status === 'Draft' && <Card variant="outlined"><CardContent><Stack spacing={2}><Typography variant="h6">Upload PDF</Typography><PdfDropZone file={file} disabled={working} onChange={setFile} /><Button variant="contained" disabled={working || !file} onClick={upload}>{working ? 'Uploading…' : 'Upload PDF'}</Button></Stack></CardContent></Card>}
     {batch.status === 'Uploaded' && <ActionCard title="Parse Bill" description="Extract every account row and its PDF charge fields." button="Parse Bill" working={working} onClick={() => void run(() => parseBill(batchIdForActions))} />}
     {hasParseResult(batch) && <ParseSummary batch={batch} />}
-    {(batch.status === 'Parsed' || batch.status === 'ValidationFailed') && <ActionCard title="Validate Bill" description="Validate the persisted extraction result. Totals are supplied by the server." button={batch.status === 'ValidationFailed' ? 'Retry Validation' : 'Validate Bill'} working={working} onClick={() => void run(() => validateBill(batchIdForActions))} />}
+    {hasParseResult(batch) && <TotalTallyCard batch={batch} />}
+    {(batch.status === 'Parsed' || batch.status === 'ValidationFailed') && <ActionCard title="Validate Bill" description="Validate the persisted extraction result. Totals are supplied by the server." button={batch.status === 'ValidationFailed' ? 'Retry Validation' : 'Validate Bill'} working={working} onClick={() => void run(() => validateBill(batchIdForActions).then(validated => { setValidatedThisVisit(true); return validated }))} />}
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
       <Button component={RouterLink} to={`/billing/${batchId}/lines`} variant="outlined" disabled={batch.status === 'Draft' || batch.status === 'Uploaded'}>View Extracted Lines</Button>
       {isReviewReady(batch.status) && <Button component={RouterLink} to={`/billing/${batchId}/exceptions`} variant="outlined">Review Exceptions</Button>}
@@ -68,7 +72,7 @@ function ActionCard({ title, description, button, working, onClick }: { title: s
 }
 
 function ParseSummary({ batch }: { batch: BillBatch }) {
-  const values = [['Total candidates', String(batch.totalCandidates)], ['Successfully parsed', String(batch.successfulCount)], ['Failed', String(batch.failedCount)], ['Calculated grand total', money(batch.calculatedGrandTotal)], ...(batch.statedGrandTotal == null ? [] : [['Stated grand total', money(batch.statedGrandTotal)]]), ...(batch.difference == null ? [] : [['Difference', money(batch.difference)]]), ['Validation level', batch.validationLevel]]
+  const values = [['Total candidates', String(batch.totalCandidates)], ['Successfully parsed', String(batch.successfulCount)], ['Failed', String(batch.failedCount)], ['Calculated grand total', money(batch.calculatedGrandTotal)]]
   return <Grid container spacing={2}>{values.map(([label, value]) => <Grid key={label} size={{ xs: 12, sm: 6, md: 3 }}><KpiCard label={label} value={value} /></Grid>)}</Grid>
 }
 

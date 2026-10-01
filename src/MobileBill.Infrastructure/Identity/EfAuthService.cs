@@ -55,5 +55,34 @@ public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService
         return Map(user);
     }
 
+
+    // Always completes silently for unknown or inactive accounts so the endpoint cannot be used to discover which emails are registered.
+    public async Task RequestPasswordResetAsync(ForgotPasswordRequest request, CancellationToken token)
+    {
+        var email = request.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 8)
+            throw new UserManagementConflictException("A valid email and a new password of at least 8 characters are required.");
+
+        var user = await db.Users.SingleOrDefaultAsync(x => x.Email == email && x.Status == UserAccountStatus.Active, token);
+        if (user is null) return;
+
+        var now = clock.UtcNow;
+        var earlier = await db.PasswordResetRequests.Where(x => x.UserId == user.Id && x.Status == PasswordResetStatus.Pending).ToListAsync(token);
+        foreach (var previous in earlier)
+        {
+            previous.Status = PasswordResetStatus.Superseded;
+            previous.UpdatedAtUtc = now;
+        }
+        db.PasswordResetRequests.Add(new PasswordResetRequest
+        {
+            UserId = user.Id,
+            NewPasswordHash = hasher.Hash(user, request.NewPassword),
+            Status = PasswordResetStatus.Pending,
+            CreatedAtUtc = now,
+            CreatedBy = user.Id.ToString()
+        });
+        await db.SaveChangesAsync(token);
+    }
+
     private static UserDto Map(User user) => new(user.Id, user.Email, user.DisplayName, user.Role, user.Status);
 }

@@ -58,6 +58,57 @@ describe('MonthlyBillReportPage', () => {
     await waitFor(() => expect(downloadedName).toBe('August-2026-Mobile-Bill.xlsx'))
   })
 
+  it('downloads the PDF report with the server filename', async () => {
+    let downloadedName = ''
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { downloadedName = this.download })
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('/api/bill-batches?')) return json({ items: [batchItems[0]], pageNumber: 1, pageSize: 20, totalCount: 1, totalPages: 1 })
+      if (url.endsWith('/pdf')) return new Response('%PDF', { headers: { 'Content-Disposition': 'attachment; filename="Mobile_Bill_Report_2026_08.pdf"' } })
+      return json({ batchId: 'completed', billingYear: 2026, billingMonth: 8, provider: 'Dialog', corporateCode: 'CORP', batchStatus: 'Completed', validationLevel: 'StructuralOnly', totalAccounts: 1, totalActualBill: 100, totalCalculatedExcess: 0, totalFinalDeduction: 12.5, companyResponsibilityAmount: 0, exceptionCount: 0, unmatchedCount: 0, assessedCount: 1, unassessedCount: 0, approvalHistory: [] })
+    })
+    render(<MemoryRouter><MonthlyBillReportPage /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: 'Download PDF' }))
+
+    await waitFor(() => expect(downloadedName).toBe('Mobile_Bill_Report_2026_08.pdf'))
+  })
+
+  it('downloads reports filtered by factory and category, and the full report by default', async () => {
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('/api/bill-batches?')) return json({ items: [batchItems[0]], pageNumber: 1, pageSize: 20, totalCount: 1, totalPages: 1 })
+      if (url.includes('/api/factories')) return json({ items: [{ id: 'f1', code: 'CAL', name: 'Concord Apparel', isActive: true }, { id: 'f2', code: 'CFL', name: 'Concord Footware', isActive: true }], pageNumber: 1, pageSize: 100, totalCount: 2, totalPages: 1 })
+      if (url.includes('/api/categories')) return json({ items: [{ id: 'c1', code: 'MGR', name: 'Manager & Executive', isActive: true }, { id: 'c2', code: 'OTH', name: 'Other Category', isActive: true }], pageNumber: 1, pageSize: 100, totalCount: 2, totalPages: 1 })
+      if (url.includes('/excel') || url.includes('/pdf')) return new Response('file', { headers: { 'Content-Disposition': 'attachment; filename="report"' } })
+      return json({ batchId: 'completed', billingYear: 2026, billingMonth: 8, provider: 'Dialog', corporateCode: 'CORP', batchStatus: 'Completed', validationLevel: 'StructuralOnly', totalAccounts: 1, totalActualBill: 100, totalCalculatedExcess: 0, totalFinalDeduction: 12.5, companyResponsibilityAmount: 0, exceptionCount: 0, unmatchedCount: 0, assessedCount: 1, unassessedCount: 0, approvalHistory: [] })
+    })
+    render(<MemoryRouter><MonthlyBillReportPage /></MemoryRouter>)
+    const reportCalls = () => fetchMock.mock.calls.map(([input]) => String(input)).filter(url => url.includes('/api/reports/'))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download Excel' }))
+    await waitFor(() => expect(reportCalls()).toHaveLength(1))
+    expect(reportCalls()[0]).toMatch(/\/excel$/)
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Report factory' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Concord Apparel' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Concord Footware' }))
+    expect(screen.getByRole('option', { name: 'Concord Footware' }).querySelector('input')?.checked).toBe(true)
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }))
+    await waitFor(() => expect(reportCalls()).toHaveLength(2))
+    expect(reportCalls()[1]).toMatch(/\/pdf\?factoryCode=CAL&factoryCode=CFL$/)
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Report category' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Manager & Executive' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Other Category' }))
+    expect(screen.getByRole('option', { name: 'Other Category' }).querySelector('input')?.checked).toBe(true)
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Download Excel' }))
+    await waitFor(() => expect(reportCalls()).toHaveLength(3))
+    expect(reportCalls()[2]).toMatch(/\/excel\?factoryCode=CAL&factoryCode=CFL&categoryCode=MGR&categoryCode=OTH$/)
+  })
+
   it('displays an export reconciliation ProblemDetails message', async () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {

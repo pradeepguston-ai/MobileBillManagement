@@ -55,6 +55,24 @@ public sealed class BillBatchReviewQueryServiceTests
     }
 
     [Fact]
+    public async Task Summary_includes_the_approving_users_role_when_the_user_exists()
+    {
+        await using var db = CreateDb();
+        var seed = await SeedAsync(db);
+        var user = new User { Email = "hr@test.local", DisplayName = "HR Manager", PasswordHash = "x", Role = UserRole.GroupHrManager };
+        db.Users.Add(user);
+        db.ApprovalHistories.AddRange(
+            Approval(seed.Batch.Id, ApprovalStage.HRApproval, WorkflowRole.HRApprover, ApprovalAction.Approve, "HR Manager", user.Id.ToString(), new DateTimeOffset(2026, 9, 10, 5, 0, 0, TimeSpan.Zero), null, BillBatchStatus.HRApproval, BillBatchStatus.FinanceApproval),
+            Approval(seed.Batch.Id, ApprovalStage.ITReview, WorkflowRole.ITReviewer, ApprovalAction.Approve, "IT User", "unknown-user", new DateTimeOffset(2026, 9, 10, 4, 0, 0, TimeSpan.Zero), null, BillBatchStatus.ITReview, BillBatchStatus.HRApproval));
+        await db.SaveChangesAsync();
+
+        var result = await new EfBillBatchReviewQueryService(db).GetSummaryAsync(seed.Batch.Id, default);
+
+        Assert.Null(result.ApprovalHistory[0].UserRole);
+        Assert.Equal("GroupHrManager", result.ApprovalHistory[1].UserRole);
+    }
+
+    [Fact]
     public async Task Summary_returns_empty_approval_history_when_no_actions_exist()
     {
         await using var db = CreateDb();
@@ -153,6 +171,27 @@ public sealed class BillBatchReviewQueryServiceTests
 
         Assert.Contains(nameof(BillExceptionType.MOBILE_NOT_FOUND), result.Exceptions);
         Assert.Contains(result.AuditHistory, value => value.Contains("Historical allocation override", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Detail_shows_user_display_names_instead_of_user_ids_in_audit_history_and_assessed_by()
+    {
+        await using var db = CreateDb();
+        var seed = await SeedAsync(db);
+        var user = new User { Email = "reviewer@test.local", DisplayName = "Nimal Perera", PasswordHash = "x", Role = UserRole.ITEngineer };
+        db.Users.Add(user);
+        seed.MonthlyBill.AssessedBy = user.Id.ToString();
+        db.AuditLogs.AddRange(
+            new AuditLog { EntityName = nameof(MonthlyBill), EntityId = seed.MonthlyBill.Id, Action = "Assessed", PerformedBy = user.Id.ToString(), PerformedAt = new DateTimeOffset(2026, 9, 25, 4, 46, 14, TimeSpan.Zero) },
+            new AuditLog { EntityName = nameof(MonthlyBill), EntityId = seed.MonthlyBill.Id, Action = "Matched", PerformedBy = "dev-user", PerformedAt = new DateTimeOffset(2026, 9, 25, 4, 0, 0, TimeSpan.Zero) });
+        await db.SaveChangesAsync();
+
+        var result = await new EfBillBatchReviewQueryService(db).GetDetailAsync(seed.Batch.Id, seed.MonthlyBill.Id, default);
+
+        Assert.Contains(result.AuditHistory, value => value.StartsWith("Assessed by Nimal Perera at ", StringComparison.Ordinal));
+        Assert.Contains(result.AuditHistory, value => value.StartsWith("Matched by dev-user at ", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.AuditHistory, value => value.Contains(user.Id.ToString(), StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Nimal Perera", result.AssessedBy);
     }
 
     [Fact]

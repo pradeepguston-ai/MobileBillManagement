@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -30,7 +30,7 @@ describe('BillingProcessingPage', () => {
     fireEvent.change(await screen.findByLabelText('Choose PDF file'), { target: { files: [file] } })
     fireEvent.click(screen.getByRole('button', { name: 'Upload PDF' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Parse Bill' }))
-    expect(await screen.findByText('390,096.74', { exact: false })).toBeTruthy()
+    expect((await screen.findAllByText('390,096.74', { exact: false })).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Validate Bill' }))
 
     expect(await screen.findByText('Source PDF grand total could not be independently extracted.')).toBeTruthy()
@@ -47,6 +47,14 @@ describe('BillingProcessingPage', () => {
     expect(screen.getByText('141')).toBeTruthy()
     expect(screen.getByText('One candidate requires review.')).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not repeat the validation warning when a validated batch is opened again', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(batch('Validated', { totalCandidates: 100, successfulCount: 99, failedCount: 1, calculatedGrandTotal: 390096.74, validationLevel: 'StructuralOnly', validationWarning: 'Source PDF grand total could not be independently extracted.' })))
+    renderPage()
+
+    expect((await screen.findAllByText('390,096.74', { exact: false })).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Source PDF grand total could not be independently extracted.')).toBeNull()
   })
 
   it('shows server problem details for failed processing actions', async () => {
@@ -94,5 +102,19 @@ describe('BillingProcessingPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Match Records & Open Review' }))
 
     expect(await screen.findByText('Review destination')).toBeTruthy()
+  })
+
+  it.each([
+    [{ statedGrandTotal: 390096.74, calculatedGrandTotal: 390096.74, difference: 0 }, 'Totals tally', '390,096.74'],
+    [{ statedGrandTotal: 390096.74, calculatedGrandTotal: 389000, difference: 1096.74 }, 'Totals do not tally', '1,096.74'],
+    [{ statedGrandTotal: null, calculatedGrandTotal: 390096.74, difference: null }, 'PDF total not read', 'Not read'],
+  ])('compares the PDF page-1 Total Due with the calculated grand total (%#)', async (totals, status, shown) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(batch('Parsed', { totalCandidates: 259, successfulCount: 259, failedCount: 0, ...totals })))
+    renderPage()
+
+    const card = await screen.findByLabelText('PDF total check')
+    expect(within(card).getByText(status)).toBeTruthy()
+    expect(within(card).getByText('Total Due (PDF page 1)')).toBeTruthy()
+    expect(within(card).getAllByText(new RegExp(shown.replace('.', '\.'))).length).toBeGreaterThan(0)
   })
 })

@@ -32,6 +32,98 @@ public sealed class BillMatchingServiceTests
     }
 
     [Fact]
+    public async Task Match_leaves_the_bill_unassessed_when_the_employee_has_no_remembered_responsibility()
+    {
+        await using var db = CreateDb();
+        var setup = await SeedAsync(db);
+
+        await new EfBillMatchingService(db, new TestClock(), new TestUser("matcher"), new FixedAuthorization(true)).MatchAsync(setup.Batch.Id, default);
+
+        var monthly = await db.MonthlyBills.SingleAsync();
+        Assert.Null(monthly.Responsibility);
+        Assert.Null(monthly.AssessedAt);
+        Assert.Empty(await db.AuditLogs.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(Responsibility.ByUser)]
+    public async Task Match_makes_a_roaming_bill_by_company_with_a_roaming_remark_even_over_a_remembered_by_user(Responsibility? remembered)
+    {
+        await using var db = CreateDb();
+        var setup = await SeedAsync(db);
+        setup.Line.Roaming = 12.50m;
+        setup.Account.Employee.DefaultResponsibility = remembered;
+        await db.SaveChangesAsync();
+
+        await new EfBillMatchingService(db, new TestClock(), new TestUser("matcher"), new FixedAuthorization(true)).MatchAsync(setup.Batch.Id, default);
+
+        var monthly = await db.MonthlyBills.SingleAsync();
+        Assert.Equal(Responsibility.ByCompany, monthly.Responsibility);
+        Assert.Equal(0m, monthly.FinalDeduction);
+        Assert.Equal(40m, monthly.CalculatedExcess);
+        Assert.Equal("Roaming", monthly.Remark);
+        Assert.NotNull(monthly.AssessedAt);
+        Assert.Equal("AutoAssessedRoaming", (await db.AuditLogs.SingleAsync()).Action);
+        // A one-month roaming charge does not change what is remembered for the employee.
+        Assert.Equal(remembered, (await db.Employees.SingleAsync()).DefaultResponsibility);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task Match_ignores_zero_or_credit_roaming_amounts(int roaming)
+    {
+        await using var db = CreateDb();
+        var setup = await SeedAsync(db);
+        setup.Line.Roaming = roaming;
+        await db.SaveChangesAsync();
+
+        await new EfBillMatchingService(db, new TestClock(), new TestUser("matcher"), new FixedAuthorization(true)).MatchAsync(setup.Batch.Id, default);
+
+        var monthly = await db.MonthlyBills.SingleAsync();
+        Assert.Null(monthly.Responsibility);
+        Assert.Null(monthly.Remark);
+    }
+
+    [Theory]
+    [InlineData(Responsibility.ByCompany, 0)]
+    [InlineData(Responsibility.ByUser, 40)]
+    public async Task Match_auto_assesses_with_the_remembered_responsibility_and_its_default_deduction(Responsibility remembered, int expectedDeduction)
+    {
+        await using var db = CreateDb();
+        var setup = await SeedAsync(db);
+        setup.Account.Employee.DefaultResponsibility = remembered; await db.SaveChangesAsync();
+
+        await new EfBillMatchingService(db, new TestClock(), new TestUser("matcher"), new FixedAuthorization(true)).MatchAsync(setup.Batch.Id, default);
+
+        var monthly = await db.MonthlyBills.SingleAsync();
+        Assert.Equal(remembered, monthly.Responsibility);
+        Assert.Equal(expectedDeduction, monthly.FinalDeduction);
+        Assert.Equal(40m, monthly.CalculatedExcess);
+        Assert.NotNull(monthly.AssessedAt);
+        Assert.Equal("matcher", monthly.AssessedBy);
+        Assert.Null(monthly.DeductionOverrideAmount);
+        Assert.Equal("AutoAssessedFromPreviousBatch", (await db.AuditLogs.SingleAsync()).Action);
+    }
+
+    [Fact]
+    public async Task Historical_override_also_applies_the_remembered_responsibility()
+    {
+        await using var db = CreateDb();
+        var setup = await SeedAsync(db, accountIsActive: false);
+        setup.Account.Employee.DefaultResponsibility = Responsibility.ByCompany; await db.SaveChangesAsync();
+        var exception = new BillException { BillBatchId = setup.Batch.Id, BillLineId = setup.Line.Id, ExceptionType = BillExceptionType.MOBILE_NOT_FOUND, Severity = BillExceptionSeverity.Blocking, Description = "not found" };
+        db.BillExceptions.Add(exception); await db.SaveChangesAsync();
+
+        await new EfBillExceptionReviewService(db, new FixedAuthorization(true), new TestUser("actual-reviewer"), new TestClock())
+            .ResolveMobileNotFoundAsync(exception.Id, new ResolveMobileAccountExceptionRequest(setup.Account.Id, "historical ownership confirmed manually"), default);
+
+        Assert.Equal(Responsibility.ByCompany, (await db.MonthlyBills.SingleAsync()).Responsibility);
+        Assert.Contains(await db.AuditLogs.ToListAsync(), audit => audit.Action == "AutoAssessedFromPreviousBatch");
+    }
+
+    [Fact]
     public async Task Match_creates_mobile_not_found_and_zero_bill_exceptions_without_discarding_line()
     {
         await using var db = CreateDb();

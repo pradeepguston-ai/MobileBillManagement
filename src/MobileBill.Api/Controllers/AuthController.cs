@@ -18,6 +18,13 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     [HttpPost("login"), AllowAnonymous]
     public Task<AuthResultDto> Login(LoginRequest request, CancellationToken token) => authService.LoginAsync(request, token);
 
+    [HttpPost("forgot-password"), AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken token)
+    {
+        await authService.RequestPasswordResetAsync(request, token);
+        return Accepted();
+    }
+
     [HttpGet("me"), Authorize]
     public Task<UserDto> Me(CancellationToken token)
     {

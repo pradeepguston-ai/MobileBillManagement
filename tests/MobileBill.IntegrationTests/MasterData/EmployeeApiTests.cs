@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using MobileBill.Application.Common;
 using MobileBill.Application.MasterData;
 using MobileBill.Domain.Entities;
+using MobileBill.Domain.Enums;
 using MobileBill.Infrastructure.Persistence;
 
 namespace MobileBill.IntegrationTests.MasterData;
@@ -61,6 +62,7 @@ public sealed class EmployeeApiTests
         }
 
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.GetAsync("/api/employees?pageNumber=1&pageSize=20&search=");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -92,6 +94,7 @@ public sealed class EmployeeApiTests
         }
 
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.GetAsync("/api/mobile-accounts?pageNumber=1&pageSize=20&search=");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -118,6 +121,7 @@ public sealed class EmployeeApiTests
         }
 
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
             mobileNumber = "0771234567", employeeEpf, monthlyCreditLimit = 1500.25m, monthlyRental = 700m
@@ -145,6 +149,7 @@ public sealed class EmployeeApiTests
         }
 
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
             mobileNumber = "0771234567", employeeEpf, monthlyCreditLimit = -1m, monthlyRental = 700m
@@ -160,6 +165,7 @@ public sealed class EmployeeApiTests
         await connection.OpenAsync();
         using var factory = CreateApiFactory(connection);
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
 
         var missingCredit = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
@@ -187,6 +193,7 @@ public sealed class EmployeeApiTests
         }
 
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.PostAsJsonAsync("/api/departments", new
         {
             code = "FIN",
@@ -228,6 +235,7 @@ public sealed class EmployeeApiTests
         }
 
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.PostAsJsonAsync("/api/employees", new
         {
             epf = "EPF-002",
@@ -272,6 +280,7 @@ public sealed class EmployeeApiTests
         }
 
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.GetAsync($"/api/mobile-accounts/{accountId}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -332,6 +341,7 @@ public sealed class EmployeeApiTests
             CREATE TABLE Employees (
                 Id TEXT PRIMARY KEY, EPF TEXT NOT NULL, FullName TEXT NOT NULL, CallingName TEXT NULL,
                 CategoryCode TEXT NOT NULL, DesignationCode TEXT NOT NULL, FactoryCode TEXT NOT NULL, DepartmentCode TEXT NOT NULL,
+                DefaultResponsibility TEXT NULL,
                 IsActive INTEGER NOT NULL, CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             """;
         await command.ExecuteNonQueryAsync();

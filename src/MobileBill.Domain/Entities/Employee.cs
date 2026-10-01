@@ -1,4 +1,5 @@
 using MobileBill.Domain.Common;
+using MobileBill.Domain.Enums;
 
 namespace MobileBill.Domain.Entities;
 
@@ -12,6 +13,7 @@ public sealed class Employee : AuditableEntity
     public required string FactoryCode { get; set; }
     public required string DepartmentCode { get; set; }
     public bool IsActive { get; set; } = true;
+    public Responsibility? DefaultResponsibility { get; set; }
     public EmployeeCategory Category { get; set; } = null!;
     public Designation Designation { get; set; } = null!;
     public Factory Factory { get; set; } = null!;

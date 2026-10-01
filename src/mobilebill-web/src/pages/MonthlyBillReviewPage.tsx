@@ -1,13 +1,13 @@
-import { Alert, Pagination, Stack } from '@mui/material'
+import { Alert, Stack } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 
-import { downloadExcelReport } from '../api/billingApi'
-import { getReviewDetail, getReviewRows, getReviewSummary, type ReviewDetail, type ReviewRow, type ReviewSummary } from '../api/billReviewApi'
+import { downloadReportAs, type ReportFilters, type ReportFormat } from '../api/billingApi'
+import { getAllReviewRows, getReviewDetail, getReviewSummary, type ReviewDetail, type ReviewRow, type ReviewSummary } from '../api/billReviewApi'
 import { decideWorkflow, getWorkflowCapabilities, lockBatch, submitForItReview, type WorkflowCapabilities } from '../api/billWorkflowApi'
 import { listMasterData } from '../api/masterDataApi'
 import type { PagedResponse } from '../api/types'
-import { billingPeriod } from '../billing/billingRoutes'
+import { billingPeriod, exceptionDownloadWarning } from '../billing/billingRoutes'
 import { BatchContextNavigation } from '../components/billing/BatchContextNavigation'
 import { WorkflowStepper } from '../components/billing/WorkflowStepper'
 import { ApprovalHistorySection, BillDetailDrawer, BulkAssignBar, BulkAssignDialog, ReportCard, ReviewFilters, ReviewHeader, ReviewKpis, ReviewTable, WorkflowActionDialog, WorkflowActions } from '../components/billing/review/MonthlyBillReviewComponents'
@@ -22,7 +22,6 @@ export function MonthlyBillReviewPage() {
   const [rows, setRows] = useState<PagedResponse<ReviewRow>>()
   const [error, setError] = useState<string>()
   const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(1)
   const [sort, setSort] = useState('mobileNumber')
   const [direction, setDirection] = useState('asc')
   const [filters, setFilters] = useState<Record<string, string>>({ exception: 'All' })
@@ -37,15 +36,18 @@ export function MonthlyBillReviewPage() {
   const [downloading, setDownloading] = useState(false)
   const [options, setOptions] = useState({ factories: [] as MasterOption[], departments: [] as MasterOption[], categories: [] as MasterOption[] })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [selectingAll, setSelectingAll] = useState(false)
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
-  const query = useMemo(() => ({ pageNumber: String(page), pageSize: '20', sortBy: sort, sortDirection: direction, ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value.trim() !== '')) }), [page, sort, direction, filters])
+  const [downloadWarningOpen, setDownloadWarningOpen] = useState(false)
+  const [pendingFormat, setPendingFormat] = useState<ReportFormat>('excel')
+  const [pendingFilters, setPendingFilters] = useState<ReportFilters>()
+  // Every matching row is loaded and shown in one scrolling table (no pages).
+  const query = useMemo(() => ({ sortBy: sort, sortDirection: direction, ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value.trim() !== '')) }), [sort, direction, filters])
 
   const load = useCallback(async () => {
     if (!batchId) return
     try {
       setError(undefined)
-      const [nextSummary, nextRows] = await Promise.all([getReviewSummary(batchId), getReviewRows(batchId, query)])
+      const [nextSummary, nextRows] = await Promise.all([getReviewSummary(batchId), getAllReviewRows(batchId, query)])
       setSummary(nextSummary); setRows(nextRows)
     } catch (reason) { setError(message(reason, 'Unable to load bill review.')) }
     finally { setLoading(false) }
@@ -66,7 +68,7 @@ export function MonthlyBillReviewPage() {
   ]).then(([factories, departments, categories]) => setOptions({ factories: factories.items ?? [], departments: departments.items ?? [], categories: categories.items ?? [] })).catch(() => setOptions({ factories: [], departments: [], categories: [] })) }, [])
   useEffect(() => { setSelectedIds(new Set()) }, [filters])
 
-  const updateFilter = (key: string, value: string) => { setError(undefined); setLoading(true); setPage(1); setFilters(current => ({ ...current, [key]: value })) }
+  const updateFilter = (key: string, value: string) => { setError(undefined); setLoading(true); setFilters(current => ({ ...current, [key]: value })) }
   const openDetail = async (row: ReviewRow) => { try { setError(undefined); setDetail(await getReviewDetail(batchId, row.id)) } catch (reason) { setError(message(reason, 'Unable to load bill detail.')) } }
   const toggleRow = (id: string) => setSelectedIds(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })
   const allOnPageSelected = (rows?.items.length ?? 0) > 0 && (rows?.items.every(row => selectedIds.has(row.id)) ?? false)
@@ -77,22 +79,11 @@ export function MonthlyBillReviewPage() {
     return next
   })
   const clearSelection = () => setSelectedIds(new Set())
-  const selectAllMatching = async () => {
-    setSelectingAll(true); setError(undefined)
-    try {
-      const first = await getReviewRows(batchId, { ...query, pageNumber: '1', pageSize: '100' })
-      const ids = first.items.map(row => row.id)
-      for (let pageNumber = 2; pageNumber <= first.totalPages; pageNumber += 1) {
-        const next = await getReviewRows(batchId, { ...query, pageNumber: String(pageNumber), pageSize: '100' })
-        ids.push(...next.items.map(row => row.id))
-      }
-      setSelectedIds(new Set(ids))
-    } catch (reason) { setError(message(reason, 'Unable to select all matching rows.')) }
-    finally { setSelectingAll(false) }
-  }
+  // All matching rows are already loaded, so selecting them all needs no extra requests.
+  const selectAllMatching = () => setSelectedIds(new Set(rows?.items.map(row => row.id) ?? []))
   const mobileNumberById = Object.fromEntries((rows?.items ?? []).map(row => [row.id, row.mobileNumber]))
   const canBulkAssign = summary?.batchStatus !== 'Locked'
-  const toggleSort = (column: ReviewColumn) => { if (!column.sortKey) return; setLoading(true); setPage(1); if (sort === column.sortKey) setDirection(current => current === 'asc' ? 'desc' : 'asc'); else { setSort(column.sortKey); setDirection('asc') } }
+  const toggleSort = (column: ReviewColumn) => { if (!column.sortKey) return; setLoading(true); if (sort === column.sortKey) setDirection(current => current === 'asc' ? 'desc' : 'asc'); else { setSort(column.sortKey); setDirection('asc') } }
   const refreshAfterAssessment = async (monthlyBillId: string) => { const [nextDetail] = await Promise.all([getReviewDetail(batchId, monthlyBillId), load()]); setDetail(nextDetail) }
   const refreshAuthoritativeState = async () => { setLoading(true); await Promise.all([load(), loadCapabilities()]) }
   const openWorkflowDialog = (state: WorkflowDialogState) => { setWorkflowComment(''); setWorkflowDialogError(undefined); setWorkflowDialog(state) }
@@ -114,7 +105,8 @@ export function MonthlyBillReviewPage() {
     catch (reason) { const errorMessage = message(reason, 'Unable to lock the billing period.'); await refreshAuthoritativeState(); setError(errorMessage) }
     finally { setWorkflowSaving(false) }
   }
-  const downloadReport = async () => { setDownloading(true); setError(undefined); try { await downloadExcelReport(batchId) } catch (reason) { setError(message(reason, 'Unable to download the Excel report.')) } finally { setDownloading(false) } }
+  const downloadReport = async (format: ReportFormat, filters?: ReportFilters) => { setDownloading(true); setError(undefined); try { await downloadReportAs(batchId, format, filters) } catch (reason) { setError(message(reason, `Unable to download the ${format === 'pdf' ? 'PDF' : 'Excel'} report.`)) } finally { setDownloading(false) } }
+  const requestReportDownload = (format: ReportFormat, filters: ReportFilters) => { if ((summary?.unresolvedExceptionCount ?? 0) > 0) { setPendingFormat(format); setPendingFilters(filters); setDownloadWarningOpen(true) } else void downloadReport(format, filters) }
 
   const period = summary ? billingPeriod(summary.billingYear, summary.billingMonth) : 'Billing period'
   return <Stack spacing={2}>
@@ -124,17 +116,17 @@ export function MonthlyBillReviewPage() {
     {capabilityError && <Alert severity="warning">Workflow actions are unavailable: {capabilityError}</Alert>}
     {summary && <WorkflowActions status={summary.batchStatus} capabilities={capabilities} disabled={workflowSaving} onOpen={openWorkflowDialog} onLock={() => setLockConfirmationOpen(true)} />}
     {summary && <ReviewKpis summary={summary} />}
-    {summary && ['Completed', 'Locked'].includes(summary.batchStatus) && <ReportCard summary={summary} period={period} downloading={downloading} onDownload={() => void downloadReport()} />}
+    {summary && ['Completed', 'Locked'].includes(summary.batchStatus) && <ReportCard summary={summary} period={period} downloading={downloading} onDownload={requestReportDownload} />}
     {summary && <ApprovalHistorySection summary={summary} />}
     <ReviewFilters filters={filters} options={options} onChange={updateFilter} />
     {error && <ErrorState message={error} />}
-    {loading && <LoadingState label="Loading review…" />}
-    <BulkAssignBar selectedCount={selectedIds.size} matchingCount={rows?.totalCount ?? 0} selectable={canBulkAssign} selectingAll={selectingAll} onSelectAllMatching={() => void selectAllMatching()} onClear={clearSelection} onAssign={() => setBulkDialogOpen(true)} />
+    {loading && !rows && <LoadingState label="Loading review…" />}
+    <BulkAssignBar selectedCount={selectedIds.size} matchingCount={rows?.totalCount ?? 0} selectable={canBulkAssign} onSelectAllMatching={selectAllMatching} onClear={clearSelection} onAssign={() => setBulkDialogOpen(true)} />
     <ReviewTable rows={rows} loading={loading} sort={sort} direction={direction} selectable={canBulkAssign} selectedIds={selectedIds} allOnPageSelected={allOnPageSelected} onToggleRow={toggleRow} onToggleAllOnPage={toggleAllOnPage} onSort={toggleSort} onOpen={row => void openDetail(row)} />
-    {(rows?.totalPages ?? 0) > 0 && <Pagination count={rows?.totalPages ?? 0} page={page} onChange={(_, value) => { setLoading(true); setPage(value) }} />}
     <BillDetailDrawer detail={detail} batchStatus={summary?.batchStatus} onClose={() => setDetail(undefined)} onSaved={() => detail ? refreshAfterAssessment(detail.row.id) : Promise.resolve()} />
     <WorkflowActionDialog state={workflowDialog} comment={workflowComment} error={workflowDialogError} saving={workflowSaving} onComment={setWorkflowComment} onCancel={() => setWorkflowDialog(undefined)} onConfirm={() => void runWorkflow()} />
     <ConfirmActionDialog open={lockConfirmationOpen} title="Lock Billing Period" message="Locking this billing period will prevent further bill, matching, exception and deduction changes. Continue?" confirmLabel="Confirm Lock" busy={workflowSaving} onCancel={() => setLockConfirmationOpen(false)} onConfirm={() => void runLock()} />
+    <ConfirmActionDialog open={downloadWarningOpen} title="Unresolved exceptions" message={exceptionDownloadWarning(summary?.unresolvedExceptionCount ?? 0)} confirmLabel="Download anyway" busy={downloading} onCancel={() => setDownloadWarningOpen(false)} onConfirm={() => { setDownloadWarningOpen(false); void downloadReport(pendingFormat, pendingFilters) }} />
     <BulkAssignDialog open={bulkDialogOpen} selectedIds={Array.from(selectedIds)} mobileNumberById={mobileNumberById} onClose={() => setBulkDialogOpen(false)} onCompleted={() => { setBulkDialogOpen(false); clearSelection(); setLoading(true); void load() }} />
   </Stack>
 }

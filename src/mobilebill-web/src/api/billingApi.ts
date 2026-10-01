@@ -112,17 +112,53 @@ export function getBillLines(batchId: string, page: number, pageSize: number, se
   return apiFetch<PagedResponse<BillLine>>(`/api/bill-batches/${batchId}/lines?${params}`)
 }
 
-export async function downloadExcelReport(batchId: string) {
-  const response = await apiResponse(`/api/reports/billing/${batchId}/excel`)
+// Every extracted line matching the search, fetched 100 at a time (the server's page limit).
+export async function getAllBillLines(batchId: string, search: string) {
+  const first = await getBillLines(batchId, 1, 100, search)
+  const items = [...first.items]
+  for (let page = 2; page <= first.totalPages; page += 1) items.push(...(await getBillLines(batchId, page, 100, search)).items)
+  return items
+}
+
+export type ReportFormat = 'excel' | 'pdf'
+
+export type ReportFilters = { factoryCodes?: string[]; categoryCodes?: string[] }
+
+async function downloadReport(batchId: string, format: ReportFormat, filters: ReportFilters = {}) {
+  const params = new URLSearchParams()
+  for (const code of filters.factoryCodes ?? []) params.append('factoryCode', code)
+  for (const code of filters.categoryCodes ?? []) params.append('categoryCode', code)
+  const query = params.toString() ? `?${params}` : ''
+  const response = await apiResponse(`/api/reports/billing/${batchId}/${format}${query}`)
   const blob = await response.blob()
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
   const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
-  const fileName = encoded ? decodeURIComponent(encoded) : plain ?? `mobile-bill-${batchId}.xlsx`
+  const fileName = encoded ? decodeURIComponent(encoded) : plain ?? `mobile-bill-${batchId}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = fileName
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+export const downloadExcelReport = (batchId: string) => downloadReport(batchId, 'excel')
+// Leave both filters empty for the full batch report.
+export const downloadReportAs = (batchId: string, format: ReportFormat, filters?: ReportFilters) => downloadReport(batchId, format, filters)
+
+// All extracted lines of a batch as an Excel file; search keeps only matching mobile numbers, like the screen.
+export async function downloadBillLinesExcel(batchId: string, search = '') {
+  const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''
+  const response = await apiResponse(`/api/bill-batches/${batchId}/lines/excel${query}`)
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = encoded ? decodeURIComponent(encoded) : plain ?? `extracted-bill-lines-${batchId}.xlsx`
   anchor.click()
   URL.revokeObjectURL(url)
 }

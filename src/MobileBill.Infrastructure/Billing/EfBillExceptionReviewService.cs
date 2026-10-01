@@ -72,6 +72,7 @@ public sealed class EfBillExceptionReviewService(MobileBillDbContext db, IBillRe
         }
         var monthlyBill = EfBillMatchingService.CreateMonthlyBill(line, allocation, AllocationMatchMethod.ManualHistoricalOverride, now, user.UserId);
         db.MonthlyBills.Add(monthlyBill);
+        if (EfBillMatchingService.AutoAssessmentAudit(monthlyBill, now, user.UserId) is { } autoAudit) db.AuditLogs.Add(autoAudit);
         await db.SaveChangesAsync(token);
         return new BillExceptionResolutionResult(exception.Id, exception.Status, monthlyBill.Id, null);
     }

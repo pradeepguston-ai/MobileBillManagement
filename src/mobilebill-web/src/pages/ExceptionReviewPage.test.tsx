@@ -43,6 +43,25 @@ describe('ExceptionReviewPage', () => {
     expect(fetchMock.mock.calls.some(([requestInput]) => String(requestInput).includes('/api/bill-batches/batch-1/exceptions'))).toBe(true)
   })
 
+  it('pages and filters exceptions after choosing a batch from the dropdown', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('/api/bill-batches?')) return json({ items: [{ id: 'batch-1', providerId: 'provider-1', provider: 'Telecom', corporateCode: 'CORP', billingYear: 2026, billingMonth: 8, calculatedGrandTotal: 100, validationLevel: 'StructuralOnly', status: 'Validated', originalFileName: null, uploadedBy: null, uploadedAt: null }], pageNumber: 1, pageSize: 100, totalCount: 1, totalPages: 1 })
+      if (url.endsWith('/review')) return json(batch)
+      if (url.endsWith('/exceptions/summary')) return json({ billBatchId: 'batch-1', totalCount: 30, unresolvedCount: 30, resolvedCount: 0 })
+      return json({ items: [exception], pageNumber: 1, pageSize: 20, totalCount: 30, totalPages: 2 })
+    })
+    render(<MemoryRouter><ExceptionReviewPage /></MemoryRouter>)
+
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Bill batch' }), { target: { value: 'Telecom' } })
+    fireEvent.click(await screen.findByRole('option', { name: /Telecom · CORP/ }))
+    await screen.findByText('768791861')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/exceptions?') && String(input).includes('pageNumber=2'))).toBe(true))
+  })
+
   it('shows batch context and whole-batch unresolved and resolved counts', async () => {
     mockBatchExceptions()
     renderBatchPage()

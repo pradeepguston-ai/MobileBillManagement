@@ -65,7 +65,9 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
                     $"The employee allocated to {line.MobileNumber} is inactive."));
                 continue;
             }
-            monthlyBills.Add(CreateMonthlyBill(line, allocation, AllocationMatchMethod.Automatic, clock.UtcNow, currentUser.UserId));
+            var monthlyBill = CreateMonthlyBill(line, allocation, AllocationMatchMethod.Automatic, clock.UtcNow, currentUser.UserId);
+            monthlyBills.Add(monthlyBill);
+            if (AutoAssessmentAudit(monthlyBill, clock.UtcNow, currentUser.UserId) is { } audit) db.AuditLogs.Add(audit);
         }
 
         await using var transaction = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(token) : null;
@@ -79,7 +81,7 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
     internal static MonthlyBill CreateMonthlyBill(BillLine line, MobileAccount allocation, AllocationMatchMethod allocationMethod, DateTimeOffset now, string userId)
     {
         var calculation = MonthlyBillCalculation.Create(line.TotalDueAmount, allocation.MonthlyCreditLimit, allocation.MonthlyRental);
-        return new MonthlyBill
+        var bill = new MonthlyBill
         {
         EmployeeId = allocation.Employee.Id, MobileAccountId = allocation.Id, BillLineId = line.Id,
         CreditLimit = allocation.MonthlyCreditLimit, MonthlyRental = allocation.MonthlyRental, ActualBill = calculation.ActualBill,
@@ -94,7 +96,38 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
          AllocationMatchMethod = allocationMethod,
         EntitlementMatchMethod = EntitlementMatchMethod.Automatic, CreatedAtUtc = now, CreatedBy = userId
         };
+        if (HasRoaming(line))
+        {
+            // Roaming charges are the company's responsibility. This month-specific rule wins over the
+            // employee's remembered responsibility and does not change what is remembered for them.
+            bill.Responsibility = Responsibility.ByCompany;
+            bill.FinalDeduction = 0m;
+            bill.Remark = RoamingRemark;
+            bill.AssessedAt = now;
+            bill.AssessedBy = userId;
+        }
+        else if (allocation.Employee.DefaultResponsibility is { } remembered)
+        {
+            bill.Responsibility = remembered;
+            bill.FinalDeduction = remembered == Responsibility.ByCompany ? 0m : calculation.CalculatedExcess;
+            bill.AssessedAt = now;
+            bill.AssessedBy = userId;
+        }
+        return bill;
     }
+
+    internal const string RoamingRemark = "Roaming";
+
+    internal static bool HasRoaming(BillLine line) => line.Roaming > 0m;
+
+    internal static AuditLog? AutoAssessmentAudit(MonthlyBill bill, DateTimeOffset now, string userId) => bill.Responsibility is null ? null : new AuditLog
+    {
+        EntityName = nameof(MonthlyBill), EntityId = bill.Id,
+        Action = bill.Remark == RoamingRemark ? "AutoAssessedRoaming" : "AutoAssessedFromPreviousBatch",
+        BeforeDataJson = "{}",
+        AfterDataJson = System.Text.Json.JsonSerializer.Serialize(new { Responsibility = bill.Responsibility.ToString(), bill.FinalDeduction, bill.Remark }),
+        PerformedBy = userId, PerformedAt = now, CreatedAtUtc = now, CreatedBy = userId
+    };
 
     internal static BillException Exception(Guid batchId, Guid lineId, BillExceptionType type, BillExceptionSeverity severity, string description) => new()
     { BillBatchId = batchId, BillLineId = lineId, ExceptionType = type, Severity = severity, Description = description };

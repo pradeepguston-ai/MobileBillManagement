@@ -42,8 +42,9 @@ describe('App', () => {
 
     expect(await screen.findByText('Billing')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Billing Batches' }).getAttribute('href')).toBe('/billing')
+    expect(screen.getByRole('link', { name: 'Monthly Bill Review' }).getAttribute('href')).toBe('/monthly-bill-review')
     expect(screen.getByRole('link', { name: 'Exception Review' }).getAttribute('href')).toBe('/exception-review')
-    expect(screen.getByRole('link', { name: 'Bill Review' }).getAttribute('href')).toBe('/billing')
+    expect(screen.queryByRole('link', { name: 'Bill Review' })).toBeNull()
     expect(screen.getByText('Masters')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Telecom Providers' }).getAttribute('href')).toBe('/providers')
     expect(screen.getByText('Reports')).toBeTruthy()

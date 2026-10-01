@@ -8,20 +8,26 @@ import type { EntityRow } from '../../api/types'
 import { ErrorState } from '../../components/common/ErrorState'
 import { PageHeader } from '../../components/common/PageHeader'
 
-type Provider = EntityRow & { name?: string }
+type Provider = EntityRow & { name?: string; code?: string }
+
+// Dialog is the provider for almost every batch, so it is pre-selected; another provider can still be chosen.
+const isDialog = (provider: Provider) => String(provider.code ?? '').toUpperCase() === 'DIALOG' || /^dialog\b/i.test(String(provider.name ?? ''))
+
+const defaultCorporateCode = 'PR48799679'
 
 export function CreateBillingBatchPage() {
   const navigate = useNavigate()
   const today = new Date()
   const [providers, setProviders] = useState<Provider[]>([])
   const [providerId, setProviderId] = useState('')
-  const [corporateCode, setCorporateCode] = useState('')
+  // Pre-filled with the company's usual corporate account; it can still be changed for a different account.
+  const [corporateCode, setCorporateCode] = useState(defaultCorporateCode)
   const [billingMonth, setBillingMonth] = useState(today.getMonth() + 1)
   const [billingYear, setBillingYear] = useState(today.getFullYear())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
 
-  useEffect(() => { void listMasterData<Provider>('/api/providers', { pageNumber: 1, pageSize: 100, search: '', isActive: true }).then(result => setProviders(result.items)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load providers.')) }, [])
+  useEffect(() => { void listMasterData<Provider>('/api/providers', { pageNumber: 1, pageSize: 100, search: '', isActive: true }).then(result => { setProviders(result.items); const dialog = result.items.find(isDialog); if (dialog) setProviderId(current => current || dialog.id) }).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load providers.')) }, [])
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!providerId || !corporateCode.trim() || billingMonth < 1 || billingMonth > 12 || billingYear < 2000) { setError('Complete all required billing batch fields.'); return }

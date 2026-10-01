@@ -92,6 +92,8 @@ public sealed class BillingExcelReportApiTests
         Assert.Equal(0m, table.DataRange.Cell(1, 14).GetValue<decimal>());
         Assert.Equal("By User", table.DataRange.Cell(1, 15).GetString());
         Assert.Equal("By Company", table.DataRange.Cell(2, 15).GetString());
+        // By Company rows list the excess the company absorbs (999.88 is the seeded CalculatedExcess).
+        Assert.Equal(999.88m, table.DataRange.Cell(2, 14).GetValue<decimal>());
         Assert.DoesNotContain(table.DataRange.Rows(), row => row.Cell(2).GetString() == "768791861");
 
         var totalsRow = table.RangeAddress.LastAddress.RowNumber + 1;
@@ -104,6 +106,11 @@ public sealed class BillingExcelReportApiTests
         Assert.Equal("Report Actual Bill Total", sheet.Cell(totalsRow + 4, 1).GetString());
         Assert.Equal(200.25m, sheet.Cell(totalsRow + 4, 12).GetValue<decimal>());
         Assert.Equal("#,##0.00", sheet.Cell(totalsRow, 12).Style.NumberFormat.Format);
+        Assert.Equal(999.88m, sheet.Cell(totalsRow, 14).GetValue<decimal>());
+        Assert.Equal("Deducted from Employees (By User)", sheet.Cell(totalsRow + 6, 1).GetString());
+        Assert.Equal(0m, sheet.Cell(totalsRow + 6, 14).GetValue<decimal>());
+        Assert.Equal("Borne by Company (By Company)", sheet.Cell(totalsRow + 7, 1).GetString());
+        Assert.Equal(999.88m, sheet.Cell(totalsRow + 7, 14).GetValue<decimal>());
     }
 
     [Fact]
@@ -141,14 +148,213 @@ public sealed class BillingExcelReportApiTests
     }
 
     [Fact]
-    public async Task Unresolved_blocking_exception_blocks_export()
+    public async Task Unresolved_exception_lines_are_exported_with_employee_columns_blank()
     {
         using var fixture = new ReportApiFixture();
-        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow()], 100m, addBlockingException: true);
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow(actualBill: 100m)], 130m, [("742253933", 30m)]);
 
         var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel");
 
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var workbook = new XLWorkbook(content);
+        var sheet = workbook.Worksheet("Monthly Bill Report");
+        var table = sheet.Table("MonthlyBillReportTable");
+        Assert.Equal(2, table.DataRange!.RowCount());
+        var exceptionRow = Assert.Single(table.DataRange.Rows(), row => row.Cell(2).GetString() == "742253933");
+        Assert.Equal(30m, exceptionRow.Cell(12).GetValue<decimal>());
+        foreach (var column in new[] { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16 })
+            Assert.True(exceptionRow.Cell(column).IsEmpty(), $"Column {column} should be blank for an exception line.");
+        var totalsRow = table.RangeAddress.LastAddress.RowNumber + 1;
+        Assert.Equal(130m, sheet.Cell(totalsRow, 12).GetValue<decimal>());
+    }
+
+    [Theory]
+    [InlineData(BillBatchStatus.Draft)]
+    [InlineData(BillBatchStatus.Validated)]
+    [InlineData(BillBatchStatus.FinanceApproval)]
+    public async Task Non_completed_batch_cannot_be_exported_as_pdf(BillBatchStatus status)
+    {
+        using var fixture = new ReportApiFixture();
+        var batchId = await fixture.SeedAsync(status, [ValidRow()], 100m);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf");
+
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Pdf_export_has_the_same_data_as_the_excel_report_and_the_system_generated_notice()
+    {
+        using var fixture = new ReportApiFixture();
+        var rows = new[]
+        {
+            ValidRow("761499198", Responsibility.ByUser, 120.25m, 100m, 20m, -999.99m, 0m, "Approved waiver"),
+            ValidRow("761499199", Responsibility.ByCompany, 80m, 40m, 10m, 77.77m, 0m, "Company charge"),
+            ValidRow("768791861", null, 5m, status: MonthlyBillStatus.Excluded, assessed: false)
+        };
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, rows, 235.25m, [("742253933", 30m)]);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        Assert.Equal("Mobile_Bill_Report_2026_08.pdf", fileName);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
+        using var pdf = UglyToad.PdfPig.PdfDocument.Open(bytes);
+        var text = string.Join(" ", pdf.GetPages().SelectMany(page => page.GetWords()).Select(word => word.Text));
+        Assert.Contains("Monthly Mobile Bill Report", text);
+        Assert.Contains("August 2026", text);
+        Assert.Contains("2026-09-08 05:30", text);
+        Assert.Contains("761499198", text);
+        Assert.Contains("761499199", text);
+        Assert.Contains("742253933", text);          // exception line, employee columns blank
+        Assert.DoesNotContain("768791861", text);    // excluded rows stay out of the report
+        Assert.Contains("120.25", text);
+        Assert.Contains("999.88", text);             // By Company row shows the excess the company absorbs
+        Assert.Contains("By Company", text);
+        Assert.Contains("Borne by Company (By Company)", text);
+        Assert.Contains("Less: Excluded Records", text);
+        Assert.Contains("This is a system generated report. No signature required.", text);
+    }
+
+    [Fact]
+    public async Task Excel_report_also_shows_the_system_generated_notice()
+    {
+        using var fixture = new ReportApiFixture();
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow(actualBill: 100m)], 100m);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel");
+
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var workbook = new XLWorkbook(content);
+        var sheet = workbook.Worksheet("Monthly Bill Report");
+        Assert.Equal("This is a system generated report. No signature required.", sheet.Cell("D4").GetString());
+        var lastUsedRow = sheet.LastRowUsed()!.RowNumber();
+        Assert.Equal("This is a system generated report. No signature required.", sheet.Cell(lastUsedRow, 1).GetString());
+    }
+
+    [Fact]
+    public async Task Factory_report_contains_only_that_factorys_bills_in_excel_and_pdf()
+    {
+        using var fixture = new ReportApiFixture();
+        var rows = new[]
+        {
+            ValidRow("761499198", actualBill: 100m),
+            ValidRow("761499199", actualBill: 80m) with { Factory = "Factory B" },
+        };
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, rows, 210m, [("742253933", 30m)]);
+
+        var excel = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel?factoryCode=FB");
+
+        Assert.Equal(HttpStatusCode.OK, excel.StatusCode);
+        Assert.Equal("Mobile_Bill_Report_2026_08_FB.xlsx", excel.Content.Headers.ContentDisposition?.FileNameStar ?? excel.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        await using (var content = await excel.Content.ReadAsStreamAsync())
+        {
+            using var workbook = new XLWorkbook(content);
+            var sheet = workbook.Worksheet("Monthly Bill Report");
+            Assert.Equal("Factory B (FB)", sheet.Cell("E2").GetString());
+            var table = sheet.Table("MonthlyBillReportTable");
+            var only = Assert.Single(table.DataRange!.Rows());
+            Assert.Equal("761499199", only.Cell(2).GetString());
+            Assert.Equal(80m, sheet.Cell(table.RangeAddress.LastAddress.RowNumber + 1, 12).GetValue<decimal>());
+        }
+
+        var pdf = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?factoryCode=FB");
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        using var document = UglyToad.PdfPig.PdfDocument.Open(await pdf.Content.ReadAsByteArrayAsync());
+        var text = string.Join(" ", document.GetPages().SelectMany(page => page.GetWords()).Select(word => word.Text));
+        Assert.Contains("761499199", text);
+        Assert.DoesNotContain("761499198", text);
+        Assert.DoesNotContain("742253933", text);    // exception lines belong to no factory
+        Assert.Contains("(FB)", text);
+    }
+
+    [Fact]
+    public async Task Full_report_says_all_factories_and_unknown_factory_is_not_found()
+    {
+        using var fixture = new ReportApiFixture();
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow(actualBill: 100m)], 100m);
+
+        var full = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel");
+        await using (var content = await full.Content.ReadAsStreamAsync())
+        {
+            using var workbook = new XLWorkbook(content);
+            Assert.Equal("All factories", workbook.Worksheet("Monthly Bill Report").Cell("E2").GetString());
+        }
+
+        var unknown = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?factoryCode=NOPE");
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+    }
+
+    [Fact]
+    public async Task Report_can_be_filtered_by_category_and_by_factory_and_category_together()
+    {
+        using var fixture = new ReportApiFixture();
+        var rows = new[]
+        {
+            ValidRow("761499101", actualBill: 10m),                                                   // Factory A, Manager
+            ValidRow("761499102", actualBill: 20m) with { Category = "Staff" },                       // Factory A, Staff
+            ValidRow("761499103", actualBill: 30m) with { Factory = "Factory B", Category = "Staff" } // Factory B, Staff
+        };
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, rows, 60m);
+
+        async Task<(string FileName, string[] Mobiles, decimal Total, string Category)> Excel(string query)
+        {
+            var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel?{query}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition!.FileName!.Trim('"');
+            await using var content = await response.Content.ReadAsStreamAsync();
+            using var workbook = new XLWorkbook(content);
+            var sheet = workbook.Worksheet("Monthly Bill Report");
+            var table = sheet.Table("MonthlyBillReportTable");
+            var mobiles = table.DataRange!.Rows().Select(row => row.Cell(2).GetString()).Where(value => value.Length > 0).ToArray();
+            return (name, mobiles, sheet.Cell(table.RangeAddress.LastAddress.RowNumber + 1, 12).GetValue<decimal>(), sheet.Cell("H2").GetString());
+        }
+
+        var staff = await Excel("categoryCode=STF");
+        Assert.Equal(["761499102", "761499103"], staff.Mobiles);
+        Assert.Equal(50m, staff.Total);
+        Assert.Equal("Staff (STF)", staff.Category);
+        Assert.Equal("Mobile_Bill_Report_2026_08_STF.xlsx", staff.FileName);
+
+        var both = await Excel("factoryCode=FB&categoryCode=STF");
+        Assert.Equal(["761499103"], both.Mobiles);
+        Assert.Equal(30m, both.Total);
+        Assert.Equal("Mobile_Bill_Report_2026_08_FB_STF.xlsx", both.FileName);
+
+        var pdf = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?factoryCode=FAC&categoryCode=STF");
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        using var document = UglyToad.PdfPig.PdfDocument.Open(await pdf.Content.ReadAsByteArrayAsync());
+        var text = string.Join(" ", document.GetPages().SelectMany(page => page.GetWords()).Select(word => word.Text));
+        Assert.Contains("761499102", text);
+        Assert.DoesNotContain("761499101", text);
+        Assert.DoesNotContain("761499103", text);
+        Assert.Contains("(STF)", text);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?categoryCode=NOPE")).StatusCode);
+
+        // Several categories at once: every bill in any of them.
+        var many = await Excel("categoryCode=CAT&categoryCode=STF");
+        Assert.Equal(["761499101", "761499102", "761499103"], many.Mobiles);
+        Assert.Equal(60m, many.Total);
+        Assert.Equal("Manager (CAT), Staff (STF)", many.Category);
+        Assert.Equal("Mobile_Bill_Report_2026_08_CAT-STF.xlsx", many.FileName);
+
+        var manyWithFactory = await Excel("factoryCode=FAC&categoryCode=CAT&categoryCode=STF");
+        Assert.Equal(["761499101", "761499102"], manyWithFactory.Mobiles);
+
+        // Several factories at once, combined with several categories.
+        var manyFactories = await Excel("factoryCode=FAC&factoryCode=FB&categoryCode=STF");
+        Assert.Equal(["761499102", "761499103"], manyFactories.Mobiles);
+        Assert.Equal(50m, manyFactories.Total);
+        Assert.Equal("Mobile_Bill_Report_2026_08_FAC-FB_STF.xlsx", manyFactories.FileName);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?factoryCode=FAC&factoryCode=NOPE")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel?categoryCode=STF&categoryCode=NOPE")).StatusCode);
     }
 
     [Fact]
@@ -261,7 +467,7 @@ public sealed class BillingExcelReportApiTests
             Client = factory.CreateClient();
         }
 
-        public async Task<Guid> SeedAsync(BillBatchStatus status, IReadOnlyCollection<RowSeed> rows, decimal? calculatedGrandTotal, bool addBlockingException = false)
+        public async Task<Guid> SeedAsync(BillBatchStatus status, IReadOnlyCollection<RowSeed> rows, decimal? calculatedGrandTotal, IReadOnlyCollection<(string Mobile, decimal Amount)>? unmatchedLines = null)
         {
             using var scope = factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<MobileBillDbContext>();
@@ -272,7 +478,7 @@ public sealed class BillingExcelReportApiTests
                 BillingMonth = 8, Status = status, CalculatedGrandTotal = calculatedGrandTotal,
                 ValidationLevel = ValidationLevel.StructuralOnly
             };
-            db.AddRange(provider, batch);
+            db.AddRange(provider, batch, new Factory { Code = "FAC", Name = "Factory A" }, new Factory { Code = "FB", Name = "Factory B" }, new EmployeeCategory { Code = "CAT", Name = "Manager" }, new EmployeeCategory { Code = "STF", Name = "Staff" });
             foreach (var row in rows)
             {
                 var line = new BillLine
@@ -289,19 +495,25 @@ public sealed class BillingExcelReportApiTests
                     Responsibility = row.Responsibility, AssessedAt = row.AssessedAt, AssessedBy = row.AssessedAt is null ? null : "dev-user",
                     Remark = row.Remark, Status = row.Status, EmployeeEpfSnapshot = row.Epf,
                     EmployeeNameSnapshot = row.EmployeeName, CallingNameSnapshot = row.CallingName,
-                    CategoryCodeSnapshot = "CAT", CategoryNameSnapshot = row.Category,
+                    CategoryCodeSnapshot = row.Category == "Staff" ? "STF" : "CAT", CategoryNameSnapshot = row.Category,
                     DesignationCodeSnapshot = "DES", DesignationNameSnapshot = row.Designation,
-                    FactoryCodeSnapshot = "FAC", FactoryNameSnapshot = row.Factory,
+                    FactoryCodeSnapshot = row.Factory == "Factory B" ? "FB" : "FAC", FactoryNameSnapshot = row.Factory,
                     DepartmentCodeSnapshot = "DEP", DepartmentNameSnapshot = row.Department,
                     MobileNumberSnapshot = row.MobileNumber,
                     EntitlementEffectiveFromSnapshot = new DateOnly(2026, 1, 1)
                 });
             }
-            if (addBlockingException)
+            foreach (var (mobile, amount) in unmatchedLines ?? [])
             {
+                var line = new BillLine
+                {
+                    BillBatchId = batch.Id, MobileNumber = mobile, RawText = mobile,
+                    PageNumber = 1, ExtractionStatus = BillLineExtractionStatus.Extracted, TotalDueAmount = amount
+                };
+                db.Add(line);
                 db.Add(new BillException
                 {
-                    BillBatchId = batch.Id, ExceptionType = BillExceptionType.MOBILE_NOT_FOUND,
+                    BillBatchId = batch.Id, BillLineId = line.Id, ExceptionType = BillExceptionType.MOBILE_NOT_FOUND,
                     Severity = BillExceptionSeverity.Blocking, Status = BillExceptionStatus.Open,
                     Description = "Unresolved matching exception"
                 });
