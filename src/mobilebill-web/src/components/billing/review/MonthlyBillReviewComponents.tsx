@@ -56,10 +56,10 @@ export function ReviewFilters({ filters, options, onChange }: { filters: Record<
     </FilterBar>
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={1}>
-        <Typography variant="subtitle2" color="text.secondary">Calculated Excess Range</Typography>
+        <Typography variant="subtitle2" color="text.secondary">Deduction Range</Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-          <TextField size="small" label="Min Calculated Excess" type="number" value={filters.calculatedExcessMin ?? ''} onChange={event => onChange('calculatedExcessMin', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
-          <TextField size="small" label="Max Calculated Excess" type="number" value={filters.calculatedExcessMax ?? ''} onChange={event => onChange('calculatedExcessMax', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
+          <TextField size="small" label="Min Deduction" type="number" value={filters.calculatedExcessMin ?? ''} onChange={event => onChange('calculatedExcessMin', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
+          <TextField size="small" label="Max Deduction" type="number" value={filters.calculatedExcessMax ?? ''} onChange={event => onChange('calculatedExcessMax', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
         </Stack>
       </Stack>
     </Paper>

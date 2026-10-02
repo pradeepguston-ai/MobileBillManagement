@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Local development settings (including the database password) are never published; servers get their settings from environment variables. -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MobileBill.Application\MobileBill.Application.csproj" />
     <ProjectReference Include="..\MobileBill.Infrastructure\MobileBill.Infrastructure.csproj" />
   </ItemGroup>

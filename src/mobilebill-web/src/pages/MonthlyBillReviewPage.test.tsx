@@ -133,8 +133,8 @@ describe('MonthlyBillReviewPage', () => {
     const fetchMock = mockReview(); renderPage()
     await screen.findByText('Employee One')
 
-    fireEvent.change(screen.getByLabelText('Min Calculated Excess'), { target: { value: '100' } })
-    fireEvent.change(screen.getByLabelText('Max Calculated Excess'), { target: { value: '500' } })
+    fireEvent.change(screen.getByLabelText('Min Deduction'), { target: { value: '100' } })
+    fireEvent.change(screen.getByLabelText('Max Deduction'), { target: { value: '500' } })
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
       const url = String(input)
