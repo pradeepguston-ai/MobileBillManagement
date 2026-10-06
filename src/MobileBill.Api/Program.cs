@@ -1,5 +1,7 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using MobileBill.Api.Configuration;
@@ -29,6 +31,11 @@ var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtIssuer = jwtSection["Issuer"] ?? throw new InvalidOperationException("Configuration 'Jwt:Issuer' is required.");
 var jwtAudience = jwtSection["Audience"] ?? throw new InvalidOperationException("Configuration 'Jwt:Audience' is required.");
 var jwtSigningKey = jwtSection["SigningKey"] ?? throw new InvalidOperationException("Configuration 'Jwt:SigningKey' is required.");
+if (Encoding.UTF8.GetByteCount(jwtSigningKey) < 32)
+    throw new InvalidOperationException("Configuration 'Jwt:SigningKey' must be at least 32 bytes long.");
+if (!builder.Environment.IsDevelopment()
+    && (jwtSigningKey.Contains("dev-only", StringComparison.OrdinalIgnoreCase) || jwtSigningKey.Contains("REPLACE_WITH", StringComparison.OrdinalIgnoreCase)))
+    throw new InvalidOperationException("Configuration 'Jwt:SigningKey' is still the development or placeholder key. Set a new random secret.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
@@ -40,11 +47,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         ValidAudience = jwtAudience,
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+        RequireExpirationTime = true,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.FromMinutes(1)
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var validator = context.HttpContext.RequestServices.GetRequiredService<IUserSessionValidator>();
+            if (!await validator.IsValidAsync(context.Principal!, context.HttpContext.RequestAborted))
+                context.Fail("The account is no longer active or its role has changed. Sign in again.");
+        }
+    };
 });
-builder.Services.AddAuthorization();
+// Every endpoint requires a signed-in user unless it is explicitly marked [AllowAnonymous].
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+// Limits password guessing and request flooding on the sign-in, registration and password-reset endpoints.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(RateLimitPolicies.Authentication, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
 builder.Services.AddScoped<IBillReviewAuthorizationService, RoleBasedBillReviewAuthorizationService>();
 
@@ -61,8 +90,9 @@ if (app.Environment.IsDevelopment())
 app.UseCors(CorsPolicies.LocalReactDevelopment);
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").AllowAnonymous();
 
 await BootstrapAdministratorAsync(app.Services, builder.Configuration);
 

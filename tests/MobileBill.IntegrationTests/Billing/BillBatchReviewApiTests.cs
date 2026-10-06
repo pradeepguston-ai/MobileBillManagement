@@ -22,6 +22,7 @@ public sealed class BillBatchReviewApiTests
             services.AddSingleton<IBillBatchReviewQueryService>(service);
         }));
         using var client = factory.CreateClient();
+        TestAuth.Authorize(client, MobileBill.Domain.Enums.UserRole.Cfo);
 
         var summaryResponse = await client.GetAsync($"/api/bill-batches/{batchId}/review");
         var rowsResponse = await client.GetAsync($"/api/bill-batches/{batchId}/review/rows?pageNumber=2&pageSize=20&responsibility=Unassessed");

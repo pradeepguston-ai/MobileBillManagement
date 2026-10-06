@@ -1,5 +1,6 @@
 import { Alert, Stack } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCanPrepareBilling } from '../auth/AuthContext'
 import { useParams } from 'react-router-dom'
 
 import { downloadReportAs, type ReportFilters, type ReportFormat } from '../api/billingApi'
@@ -34,7 +35,7 @@ export function MonthlyBillReviewPage() {
   const [lockConfirmationOpen, setLockConfirmationOpen] = useState(false)
   const [workflowSaving, setWorkflowSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [options, setOptions] = useState({ factories: [] as MasterOption[], departments: [] as MasterOption[], categories: [] as MasterOption[] })
+  const [options, setOptions] = useState({ factories: [] as MasterOption[], departments: [] as MasterOption[], sections: [] as MasterOption[], categories: [] as MasterOption[] })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
   const [downloadWarningOpen, setDownloadWarningOpen] = useState(false)
@@ -65,7 +66,9 @@ export function MonthlyBillReviewPage() {
     listMasterData<MasterOption>('/api/factories', { pageNumber: 1, pageSize: 100, search: '', isActive: true }),
     listMasterData<MasterOption>('/api/departments', { pageNumber: 1, pageSize: 100, search: '', isActive: true }),
     listMasterData<MasterOption>('/api/categories', { pageNumber: 1, pageSize: 100, search: '', isActive: true }),
-  ]).then(([factories, departments, categories]) => setOptions({ factories: factories.items ?? [], departments: departments.items ?? [], categories: categories.items ?? [] })).catch(() => setOptions({ factories: [], departments: [], categories: [] })) }, [])
+  ]).then(([factories, departments, categories]) => setOptions(current => ({ ...current, factories: factories.items ?? [], departments: departments.items ?? [], categories: categories.items ?? [] }))).catch(() => setOptions(current => ({ ...current, factories: [], departments: [], categories: [] }))) }, [])
+  useEffect(() => { void listMasterData<MasterOption>('/api/sections', { pageNumber: 1, pageSize: 100, search: '', isActive: true })
+    .then(sections => setOptions(current => ({ ...current, sections: sections.items ?? [] }))).catch(() => setOptions(current => ({ ...current, sections: [] }))) }, [])
   useEffect(() => { setSelectedIds(new Set()) }, [filters])
 
   const updateFilter = (key: string, value: string) => { setError(undefined); setLoading(true); setFilters(current => ({ ...current, [key]: value })) }
@@ -82,7 +85,8 @@ export function MonthlyBillReviewPage() {
   // All matching rows are already loaded, so selecting them all needs no extra requests.
   const selectAllMatching = () => setSelectedIds(new Set(rows?.items.map(row => row.id) ?? []))
   const mobileNumberById = Object.fromEntries((rows?.items ?? []).map(row => [row.id, row.mobileNumber]))
-  const canBulkAssign = summary?.batchStatus !== 'Locked'
+  const canAssess = useCanPrepareBilling()
+  const canBulkAssign = canAssess && summary?.batchStatus !== 'Locked'
   const toggleSort = (column: ReviewColumn) => { if (!column.sortKey) return; setLoading(true); if (sort === column.sortKey) setDirection(current => current === 'asc' ? 'desc' : 'asc'); else { setSort(column.sortKey); setDirection('asc') } }
   const refreshAfterAssessment = async (monthlyBillId: string) => { const [nextDetail] = await Promise.all([getReviewDetail(batchId, monthlyBillId), load()]); setDetail(nextDetail) }
   const refreshAuthoritativeState = async () => { setLoading(true); await Promise.all([load(), loadCapabilities()]) }
@@ -123,7 +127,7 @@ export function MonthlyBillReviewPage() {
     {loading && !rows && <LoadingState label="Loading review…" />}
     <BulkAssignBar selectedCount={selectedIds.size} matchingCount={rows?.totalCount ?? 0} selectable={canBulkAssign} onSelectAllMatching={selectAllMatching} onClear={clearSelection} onAssign={() => setBulkDialogOpen(true)} />
     <ReviewTable rows={rows} loading={loading} sort={sort} direction={direction} selectable={canBulkAssign} selectedIds={selectedIds} allOnPageSelected={allOnPageSelected} onToggleRow={toggleRow} onToggleAllOnPage={toggleAllOnPage} onSort={toggleSort} onOpen={row => void openDetail(row)} />
-    <BillDetailDrawer detail={detail} batchStatus={summary?.batchStatus} onClose={() => setDetail(undefined)} onSaved={() => detail ? refreshAfterAssessment(detail.row.id) : Promise.resolve()} />
+    <BillDetailDrawer batchId={batchId} canAssess={canAssess} detail={detail} batchStatus={summary?.batchStatus} onClose={() => setDetail(undefined)} onSaved={() => detail ? refreshAfterAssessment(detail.row.id) : Promise.resolve()} />
     <WorkflowActionDialog state={workflowDialog} comment={workflowComment} error={workflowDialogError} saving={workflowSaving} onComment={setWorkflowComment} onCancel={() => setWorkflowDialog(undefined)} onConfirm={() => void runWorkflow()} />
     <ConfirmActionDialog open={lockConfirmationOpen} title="Lock Billing Period" message="Locking this billing period will prevent further bill, matching, exception and deduction changes. Continue?" confirmLabel="Confirm Lock" busy={workflowSaving} onCancel={() => setLockConfirmationOpen(false)} onConfirm={() => void runLock()} />
     <ConfirmActionDialog open={downloadWarningOpen} title="Unresolved exceptions" message={exceptionDownloadWarning(summary?.unresolvedExceptionCount ?? 0)} confirmLabel="Download anyway" busy={downloading} onCancel={() => setDownloadWarningOpen(false)} onConfirm={() => { setDownloadWarningOpen(false); void downloadReport(pendingFormat, pendingFilters) }} />

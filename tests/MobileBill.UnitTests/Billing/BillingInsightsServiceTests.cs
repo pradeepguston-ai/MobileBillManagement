@@ -37,11 +37,11 @@ public sealed class BillingInsightsServiceTests
         Assert.Equal(5, kpis.OverLimitAccounts);
 
         var split = result.ExcessSplit.ToDictionary(item => item.Key, item => item.Amount);
+        Assert.Equal(["deducted", "company", "unassessed"], result.ExcessSplit.Select(item => item.Key));
         Assert.Equal(45m, split["deducted"]);
-        Assert.Equal(15m, split["waived"]);
-        Assert.Equal(50m, split["companyRoaming"]);
-        Assert.Equal(10m, split["company"]);
+        Assert.Equal(75m, split["company"]);                                   // 50 roaming + 10 other + 15 waived by override
         Assert.Equal(8m, split["unassessed"]);
+        Assert.Equal(["Deducted from employees", "By Company", "Not yet assigned"], result.ExcessSplit.Select(item => item.Label));
         Assert.Equal(kpis.TotalCalculatedExcess, split.Values.Sum());
     }
 

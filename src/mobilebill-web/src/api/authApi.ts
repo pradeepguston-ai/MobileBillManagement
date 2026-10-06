@@ -1,6 +1,6 @@
 import { apiFetch, apiResponse } from './http'
 
-export type UserRole = 'Administrator' | 'ITEngineer' | 'HeadOfIt' | 'GroupHrManager' | 'Cfo'
+export type UserRole = 'Administrator' | 'ITEngineer' | 'HeadOfIt' | 'GroupHrManager' | 'Cfo' | 'HrUser' | 'FinanceUser'
 export type UserStatus = 'PendingActivation' | 'Active' | 'Deactivated'
 
 export type CurrentUser = {
@@ -87,6 +87,8 @@ export const roleLabels: Record<UserRole, string> = {
   HeadOfIt: 'Head of IT',
   GroupHrManager: 'Group HR Manager',
   Cfo: 'CFO',
+  HrUser: 'HR User',
+  FinanceUser: 'Finance User',
 }
 
 export const selfRegisterableRoles: { value: UserRole; label: string }[] = [
@@ -94,6 +96,8 @@ export const selfRegisterableRoles: { value: UserRole; label: string }[] = [
   { value: 'HeadOfIt', label: roleLabels.HeadOfIt },
   { value: 'GroupHrManager', label: roleLabels.GroupHrManager },
   { value: 'Cfo', label: roleLabels.Cfo },
+  { value: 'HrUser', label: roleLabels.HrUser },
+  { value: 'FinanceUser', label: roleLabels.FinanceUser },
 ]
 
 export type ManagedUser = {

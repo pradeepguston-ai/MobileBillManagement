@@ -11,6 +11,8 @@ public sealed class MobileBillDbContext(DbContextOptions<MobileBillDbContext> op
 
     public DbSet<Factory> Factories => Set<Factory>();
     public DbSet<Department> Departments => Set<Department>();
+    public DbSet<Section> Sections => Set<Section>();
+    public DbSet<SubSection> SubSections => Set<SubSection>();
     public DbSet<Designation> Designations => Set<Designation>();
     public DbSet<EmployeeCategory> EmployeeCategories => Set<EmployeeCategory>();
     public DbSet<TelecomProvider> TelecomProviders => Set<TelecomProvider>();

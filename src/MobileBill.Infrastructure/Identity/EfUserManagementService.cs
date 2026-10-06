@@ -30,6 +30,7 @@ public sealed class EfUserManagementService(MobileBillDbContext db, ICurrentUser
 
     public async Task<UserDto> ChangeRoleAsync(Guid userId, ChangeUserRoleRequest request, CancellationToken token)
     {
+        if (!Enum.IsDefined(request.Role)) throw new UserManagementConflictException("A valid role is required.");
         var user = await Find(userId, token);
         if (IsCurrentUser(user) && request.Role != UserRole.Administrator)
             throw new UserManagementConflictException("You cannot remove your own Administrator role.");
@@ -44,6 +45,7 @@ public sealed class EfUserManagementService(MobileBillDbContext db, ICurrentUser
 
     public async Task<UserDto> ActivateUserAsync(Guid userId, ActivateUserRequest request, CancellationToken token)
     {
+        if (request.RoleOverride is { } roleOverride && !Enum.IsDefined(roleOverride)) throw new UserManagementConflictException("A valid role is required.");
         var user = await Find(userId, token);
         if (request.RoleOverride is not null) user.Role = request.RoleOverride.Value;
         user.Status = UserAccountStatus.Active;

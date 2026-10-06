@@ -7,8 +7,9 @@ public interface IBillingExcelReportService
         CancellationToken cancellationToken);
 }
 
-// FactoryCodes and CategoryCodes narrow the report (either or both, several of each allowed); leaving both empty produces the full batch report.
-public sealed record BillingExcelReportRequest(Guid BatchId, IReadOnlyList<string>? FactoryCodes = null, IReadOnlyList<string>? CategoryCodes = null);
+// FactoryCodes, CategoryCodes and SectionCodes narrow the report (any combination, several of each allowed); leaving all empty produces the full batch report.
+// IncludeVas adds a "VAS" sheet (numbers with Value Added Services, same filters) to the Excel report.
+public sealed record BillingExcelReportRequest(Guid BatchId, IReadOnlyList<string>? FactoryCodes = null, IReadOnlyList<string>? CategoryCodes = null, IReadOnlyList<string>? SectionCodes = null, bool IncludeVas = false);
 
 public sealed record BillingExcelReportResult(
     Guid BatchId,

@@ -6,5 +6,9 @@ public enum UserRole
     ITEngineer,
     HeadOfIt,
     GroupHrManager,
-    Cfo
+    Cfo,
+    // Master-data maintainers: edit employee and organisation masters, reassign mobile numbers,
+    // and view billing and download reports. No billing changes or approvals.
+    HrUser,
+    FinanceUser
 }

@@ -34,7 +34,13 @@ public sealed class MonthlyBill : AuditableEntity
     public string? FactoryNameSnapshot { get; set; }
     public required string DepartmentCodeSnapshot { get; set; }
     public string? DepartmentNameSnapshot { get; set; }
+    public string? SectionCodeSnapshot { get; set; }
+    public string? SectionNameSnapshot { get; set; }
+    public string? SubSectionCodeSnapshot { get; set; }
+    public string? SubSectionNameSnapshot { get; set; }
     public required string MobileNumberSnapshot { get; set; }
+    // A company-paid bill for a SIM in the pool (or billed after disconnection); EmployeeId is the last holder.
+    public bool IsPooled { get; set; }
     public DateOnly? EntitlementEffectiveFromSnapshot { get; set; }
     public DateOnly? EntitlementEffectiveToSnapshot { get; set; }
     public AllocationMatchMethod AllocationMatchMethod { get; set; } = AllocationMatchMethod.Automatic;

@@ -5,7 +5,7 @@ using MobileBill.Application.Common;
 
 namespace MobileBill.Api.Controllers;
 
-[ApiController]
+[ApiController, Authorize]
 public sealed class BillMatchingController(IBillMatchingService matchingService, IBillExceptionReviewService exceptionReviewService) : ControllerBase
 {
     [HttpPost("api/bill-batches/{id:guid}/match"), Authorize]

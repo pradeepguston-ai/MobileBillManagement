@@ -4,6 +4,7 @@ import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 
 import { getBatch, matchBillBatch, parseBill, uploadBill, validateBill, type BillBatch } from '../../api/billingApi'
 import { ApiError } from '../../api/http'
+import { useCanPrepareBilling } from '../../auth/AuthContext'
 import { BatchSummary } from '../../components/billing/BatchSummary'
 import { BatchContextNavigation } from '../../components/billing/BatchContextNavigation'
 import { formatCurrency } from '../../utils/formatters'
@@ -19,6 +20,7 @@ const steps = ['Create Batch', 'Upload PDF', 'Parse Bill', 'Validate', 'Match', 
 export function BillingProcessingPage() {
   const { batchId = '' } = useParams()
   const navigate = useNavigate()
+  const canPrepare = useCanPrepareBilling()
   const [batch, setBatch] = useState<BillBatch>()
   const [file, setFile] = useState<File>()
   const [loading, setLoading] = useState(true)
@@ -53,15 +55,16 @@ export function BillingProcessingPage() {
     {/* Shown once, right after this visit ran validation; a later visit to the batch does not repeat it. */}
     {validatedThisVisit && batch.validationWarning && <Alert severity="warning">{batch.validationWarning}</Alert>}
     {batch.warnings?.filter(warning => warning !== batch.validationWarning).map(warning => <Alert severity="warning" key={warning}>{warning}</Alert>)}
-    {batch.status === 'Draft' && <Card variant="outlined"><CardContent><Stack spacing={2}><Typography variant="h6">Upload PDF</Typography><PdfDropZone file={file} disabled={working} onChange={setFile} /><Button variant="contained" disabled={working || !file} onClick={upload}>{working ? 'Uploading…' : 'Upload PDF'}</Button></Stack></CardContent></Card>}
-    {batch.status === 'Uploaded' && <ActionCard title="Parse Bill" description="Extract every account row and its PDF charge fields." button="Parse Bill" working={working} onClick={() => void run(() => parseBill(batchIdForActions))} />}
+    {!canPrepare && !isReviewReady(batch.status) && <Alert severity="info">This batch is still being prepared by IT. You can view its progress here.</Alert>}
+    {canPrepare && batch.status === 'Draft' && <Card variant="outlined"><CardContent><Stack spacing={2}><Typography variant="h6">Upload PDF</Typography><PdfDropZone file={file} disabled={working} onChange={setFile} /><Button variant="contained" disabled={working || !file} onClick={upload}>{working ? 'Uploading…' : 'Upload PDF'}</Button></Stack></CardContent></Card>}
+    {canPrepare && batch.status === 'Uploaded' && <ActionCard title="Parse Bill" description="Extract every account row and its PDF charge fields." button="Parse Bill" working={working} onClick={() => void run(() => parseBill(batchIdForActions))} />}
     {hasParseResult(batch) && <ParseSummary batch={batch} />}
     {hasParseResult(batch) && <TotalTallyCard batch={batch} />}
-    {(batch.status === 'Parsed' || batch.status === 'ValidationFailed') && <ActionCard title="Validate Bill" description="Validate the persisted extraction result. Totals are supplied by the server." button={batch.status === 'ValidationFailed' ? 'Retry Validation' : 'Validate Bill'} working={working} onClick={() => void run(() => validateBill(batchIdForActions).then(validated => { setValidatedThisVisit(true); return validated }))} />}
+    {canPrepare && (batch.status === 'Parsed' || batch.status === 'ValidationFailed') && <ActionCard title="Validate Bill" description="Validate the persisted extraction result. Totals are supplied by the server." button={batch.status === 'ValidationFailed' ? 'Retry Validation' : 'Validate Bill'} working={working} onClick={() => void run(() => validateBill(batchIdForActions).then(validated => { setValidatedThisVisit(true); return validated }))} />}
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
       <Button component={RouterLink} to={`/billing/${batchId}/lines`} variant="outlined" disabled={batch.status === 'Draft' || batch.status === 'Uploaded'}>View Extracted Lines</Button>
       {isReviewReady(batch.status) && <Button component={RouterLink} to={`/billing/${batchId}/exceptions`} variant="outlined">Review Exceptions</Button>}
-      {batch.status === 'Validated' && <Button variant="contained" disabled={working} onClick={() => void matchAndReview()}>{working ? 'Matching…' : 'Match Records & Open Review'}</Button>}
+      {canPrepare && batch.status === 'Validated' && <Button variant="contained" disabled={working} onClick={() => void matchAndReview()}>{working ? 'Matching…' : 'Match Records & Open Review'}</Button>}
       {isReviewReady(batch.status) && batch.status !== 'Validated' && <Button component={RouterLink} to={`/billing/${batchId}/review`} variant="contained">Open Bill Review</Button>}
     </Stack>
   </Stack>

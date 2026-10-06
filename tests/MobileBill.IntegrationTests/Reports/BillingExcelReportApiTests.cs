@@ -19,7 +19,7 @@ public sealed class BillingExcelReportApiTests
     private static readonly string[] ExpectedHeaders =
     [
         "Serial", "Mobile Phone", "EPF", "Name", "Category", "Designation", "Factory", "Department",
-        "Calling Name", "Monthly Credit Limit", "Monthly Rental", "Actual Bill", "Variance", "Deduction",
+        "Section", "Sub Section", "Calling Name", "Monthly Credit Limit", "Monthly Rental", "Actual Bill", "Variance", "Deduction",
         "Deduction Responsibility", "Remark"
     ];
 
@@ -81,36 +81,36 @@ public sealed class BillingExcelReportApiTests
         Assert.Equal("August 2026", sheet.Cell("B2").GetString());
         Assert.Contains("Dialog Telecom", sheet.Cell("B3").GetString());
         Assert.Equal("2026-09-08 05:30", sheet.Cell("B4").GetString());
-        Assert.Equal(ExpectedHeaders, sheet.Range("A5:P5").Cells().Select(cell => cell.GetString()));
+        Assert.Equal(ExpectedHeaders, sheet.Range("A5:R5").Cells().Select(cell => cell.GetString()));
 
         var table = sheet.Table("MonthlyBillReportTable");
         Assert.Equal(2, table.DataRange!.RowCount());
         Assert.True(table.ShowAutoFilter);
         Assert.Equal("761499198", table.DataRange.Cell(1, 2).GetString());
-        Assert.Equal(120.25m, table.DataRange.Cell(1, 12).GetValue<decimal>());
-        Assert.Equal(-999.99m, table.DataRange.Cell(1, 13).GetValue<decimal>());
-        Assert.Equal(0m, table.DataRange.Cell(1, 14).GetValue<decimal>());
-        Assert.Equal("By User", table.DataRange.Cell(1, 15).GetString());
-        Assert.Equal("By Company", table.DataRange.Cell(2, 15).GetString());
+        Assert.Equal(120.25m, table.DataRange.Cell(1, 14).GetValue<decimal>());
+        Assert.Equal(-999.99m, table.DataRange.Cell(1, 15).GetValue<decimal>());
+        Assert.Equal(0m, table.DataRange.Cell(1, 16).GetValue<decimal>());
+        Assert.Equal("By User", table.DataRange.Cell(1, 17).GetString());
+        Assert.Equal("By Company", table.DataRange.Cell(2, 17).GetString());
         // By Company rows list the excess the company absorbs (999.88 is the seeded CalculatedExcess).
-        Assert.Equal(999.88m, table.DataRange.Cell(2, 14).GetValue<decimal>());
+        Assert.Equal(999.88m, table.DataRange.Cell(2, 16).GetValue<decimal>());
         Assert.DoesNotContain(table.DataRange.Rows(), row => row.Cell(2).GetString() == "768791861");
 
         var totalsRow = table.RangeAddress.LastAddress.RowNumber + 1;
         Assert.Equal("Totals", sheet.Cell(totalsRow, 1).GetString());
-        Assert.Equal(200.25m, sheet.Cell(totalsRow, 12).GetValue<decimal>());
+        Assert.Equal(200.25m, sheet.Cell(totalsRow, 14).GetValue<decimal>());
         Assert.Equal("Provider / Batch Total", sheet.Cell(totalsRow + 2, 1).GetString());
-        Assert.Equal(205.25m, sheet.Cell(totalsRow + 2, 12).GetValue<decimal>());
+        Assert.Equal(205.25m, sheet.Cell(totalsRow + 2, 14).GetValue<decimal>());
         Assert.Equal("Less: Excluded Records", sheet.Cell(totalsRow + 3, 1).GetString());
-        Assert.Equal(5m, sheet.Cell(totalsRow + 3, 12).GetValue<decimal>());
+        Assert.Equal(5m, sheet.Cell(totalsRow + 3, 14).GetValue<decimal>());
         Assert.Equal("Report Actual Bill Total", sheet.Cell(totalsRow + 4, 1).GetString());
-        Assert.Equal(200.25m, sheet.Cell(totalsRow + 4, 12).GetValue<decimal>());
-        Assert.Equal("#,##0.00", sheet.Cell(totalsRow, 12).Style.NumberFormat.Format);
-        Assert.Equal(999.88m, sheet.Cell(totalsRow, 14).GetValue<decimal>());
+        Assert.Equal(200.25m, sheet.Cell(totalsRow + 4, 14).GetValue<decimal>());
+        Assert.Equal("#,##0.00", sheet.Cell(totalsRow, 14).Style.NumberFormat.Format);
+        Assert.Equal(999.88m, sheet.Cell(totalsRow, 16).GetValue<decimal>());
         Assert.Equal("Deducted from Employees (By User)", sheet.Cell(totalsRow + 6, 1).GetString());
-        Assert.Equal(0m, sheet.Cell(totalsRow + 6, 14).GetValue<decimal>());
+        Assert.Equal(0m, sheet.Cell(totalsRow + 6, 16).GetValue<decimal>());
         Assert.Equal("Borne by Company (By Company)", sheet.Cell(totalsRow + 7, 1).GetString());
-        Assert.Equal(999.88m, sheet.Cell(totalsRow + 7, 14).GetValue<decimal>());
+        Assert.Equal(999.88m, sheet.Cell(totalsRow + 7, 16).GetValue<decimal>());
     }
 
     [Fact]
@@ -122,6 +122,19 @@ public sealed class BillingExcelReportApiTests
         var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel");
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("Monthly bill for mobile 761499100 has not been assessed. Assign its responsibility on the Monthly Bill Review screen", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Several_unassessed_rows_are_all_named_in_one_message()
+    {
+        using var fixture = new ReportApiFixture();
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow("761499101", assessed: false), ValidRow("761499102", assessed: false), ValidRow("761499103")], 300m);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("2 monthly bills have not been assessed: 761499101, 761499102. Filter the Monthly Bill Review screen by Unassessed", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -162,11 +175,11 @@ public sealed class BillingExcelReportApiTests
         var table = sheet.Table("MonthlyBillReportTable");
         Assert.Equal(2, table.DataRange!.RowCount());
         var exceptionRow = Assert.Single(table.DataRange.Rows(), row => row.Cell(2).GetString() == "742253933");
-        Assert.Equal(30m, exceptionRow.Cell(12).GetValue<decimal>());
-        foreach (var column in new[] { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16 })
+        Assert.Equal(30m, exceptionRow.Cell(14).GetValue<decimal>());
+        foreach (var column in new[] { 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18 })
             Assert.True(exceptionRow.Cell(column).IsEmpty(), $"Column {column} should be blank for an exception line.");
         var totalsRow = table.RangeAddress.LastAddress.RowNumber + 1;
-        Assert.Equal(130m, sheet.Cell(totalsRow, 12).GetValue<decimal>());
+        Assert.Equal(130m, sheet.Cell(totalsRow, 14).GetValue<decimal>());
     }
 
     [Theory]
@@ -261,7 +274,7 @@ public sealed class BillingExcelReportApiTests
             var table = sheet.Table("MonthlyBillReportTable");
             var only = Assert.Single(table.DataRange!.Rows());
             Assert.Equal("761499199", only.Cell(2).GetString());
-            Assert.Equal(80m, sheet.Cell(table.RangeAddress.LastAddress.RowNumber + 1, 12).GetValue<decimal>());
+            Assert.Equal(80m, sheet.Cell(table.RangeAddress.LastAddress.RowNumber + 1, 14).GetValue<decimal>());
         }
 
         var pdf = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?factoryCode=FB");
@@ -292,6 +305,73 @@ public sealed class BillingExcelReportApiTests
     }
 
     [Fact]
+    public async Task Vas_sheet_is_added_to_the_excel_report_only_when_asked_for()
+    {
+        using var fixture = new ReportApiFixture();
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow("761499101", actualBill: 10m)], 10m);
+
+        async Task<string[]> Sheets(string query)
+        {
+            var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel{query}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var workbook = new XLWorkbook(await response.Content.ReadAsStreamAsync());
+            return workbook.Worksheets.Select(sheet => sheet.Name).ToArray();
+        }
+
+        Assert.Equal(["Monthly Bill Report"], await Sheets(string.Empty));
+        Assert.Equal(["Monthly Bill Report", "VAS"], await Sheets("?includeVas=true"));
+    }
+
+    [Fact]
+    public async Task Report_totals_the_sim_pool_cost_of_numbers_with_no_holder()
+    {
+        using var fixture = new ReportApiFixture();
+        var rows = new[]
+        {
+            ValidRow("761499101", actualBill: 10m),
+            ValidRow("761499102", responsibility: Responsibility.ByCompany, actualBill: 30m) with { Epf = "POOL", EmployeeName = "SIM Pool (Unassigned)", FinalDeduction = 0m, IsPooled = true },
+        };
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, rows, 40m);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var workbook = new XLWorkbook(content);
+        var sheet = workbook.Worksheet("Monthly Bill Report");
+        var poolRow = sheet.RowsUsed().Single(row => row.Cell(1).GetString() == "SIM Pool cost (numbers with no holder)");
+        Assert.Equal(30m, poolRow.Cell(14).GetValue<decimal>());
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Report_shows_section_columns_and_can_be_filtered_by_section()
+    {
+        using var fixture = new ReportApiFixture();
+        var rows = new[]
+        {
+            ValidRow("761499101", actualBill: 10m) with { Section = "Infrastructure", SubSection = "Network" },
+            ValidRow("761499102", actualBill: 20m),
+        };
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, rows, 30m);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel?sectionCode=INF");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Mobile_Bill_Report_2026_08_INF.xlsx", response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        await using var content = await response.Content.ReadAsStreamAsync();
+        using var workbook = new XLWorkbook(content);
+        var sheet = workbook.Worksheet("Monthly Bill Report");
+        Assert.Equal("Infrastructure (INF)", sheet.Cell("H3").GetString());
+        var only = Assert.Single(sheet.Table("MonthlyBillReportTable").DataRange!.Rows());
+        Assert.Equal(("761499101", "Infrastructure", "Network"), (only.Cell(2).GetString(), only.Cell(9).GetString(), only.Cell(10).GetString()));
+
+        var pdf = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?sectionCode=INF");
+        Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel?sectionCode=NOPE")).StatusCode);
+    }
+
+    [Fact]
     public async Task Report_can_be_filtered_by_category_and_by_factory_and_category_together()
     {
         using var fixture = new ReportApiFixture();
@@ -313,7 +393,7 @@ public sealed class BillingExcelReportApiTests
             var sheet = workbook.Worksheet("Monthly Bill Report");
             var table = sheet.Table("MonthlyBillReportTable");
             var mobiles = table.DataRange!.Rows().Select(row => row.Cell(2).GetString()).Where(value => value.Length > 0).ToArray();
-            return (name, mobiles, sheet.Cell(table.RangeAddress.LastAddress.RowNumber + 1, 12).GetValue<decimal>(), sheet.Cell("H2").GetString());
+            return (name, mobiles, sheet.Cell(table.RangeAddress.LastAddress.RowNumber + 1, 14).GetValue<decimal>(), sheet.Cell("H2").GetString());
         }
 
         var staff = await Excel("categoryCode=STF");
@@ -388,10 +468,10 @@ public sealed class BillingExcelReportApiTests
         var table = report!.Table("MonthlyBillReportTable");
         Assert.Equal(258, table.DataRange!.RowCount());
         var totalsRow = table.RangeAddress.LastAddress.RowNumber + 1;
-        Assert.Equal(390096.74m, report.Cell(totalsRow, 12).GetValue<decimal>());
+        Assert.Equal(390096.74m, report.Cell(totalsRow, 14).GetValue<decimal>());
 
         using var reopened = new XLWorkbook(new MemoryStream(bytes));
-        Assert.Equal(390096.74m, reopened.Worksheet("Monthly Bill Report").Cell(totalsRow, 12).GetValue<decimal>());
+        Assert.Equal(390096.74m, reopened.Worksheet("Monthly Bill Report").Cell(totalsRow, 14).GetValue<decimal>());
     }
 
     private static RowSeed ValidRow(
@@ -445,7 +525,7 @@ public sealed class BillingExcelReportApiTests
         string MobileNumber, string Epf, string EmployeeName, string Category, string Designation, string Factory,
         string Department, string CallingName, decimal CreditLimit, decimal MonthlyRental, decimal ActualBill,
         decimal Variance, decimal FinalDeduction, Responsibility? Responsibility, string? Remark,
-        MonthlyBillStatus Status, DateTimeOffset? AssessedAt);
+        MonthlyBillStatus Status, DateTimeOffset? AssessedAt, string? Section = null, string? SubSection = null, bool IsPooled = false);
 
     private sealed class ReportApiFixture : IDisposable
     {
@@ -465,6 +545,8 @@ public sealed class BillingExcelReportApiTests
                 services.AddSingleton<IClock>(new FixedClock(GeneratedAt));
             }));
             Client = factory.CreateClient();
+            // Read endpoints need a signed-in user; any role may read.
+            TestAuth.Authorize(Client, MobileBill.Domain.Enums.UserRole.Cfo);
         }
 
         public async Task<Guid> SeedAsync(BillBatchStatus status, IReadOnlyCollection<RowSeed> rows, decimal? calculatedGrandTotal, IReadOnlyCollection<(string Mobile, decimal Amount)>? unmatchedLines = null)
@@ -478,7 +560,8 @@ public sealed class BillingExcelReportApiTests
                 BillingMonth = 8, Status = status, CalculatedGrandTotal = calculatedGrandTotal,
                 ValidationLevel = ValidationLevel.StructuralOnly
             };
-            db.AddRange(provider, batch, new Factory { Code = "FAC", Name = "Factory A" }, new Factory { Code = "FB", Name = "Factory B" }, new EmployeeCategory { Code = "CAT", Name = "Manager" }, new EmployeeCategory { Code = "STF", Name = "Staff" });
+            db.AddRange(provider, batch, new Factory { Code = "FAC", Name = "Factory A" }, new Factory { Code = "FB", Name = "Factory B" }, new EmployeeCategory { Code = "CAT", Name = "Manager" }, new EmployeeCategory { Code = "STF", Name = "Staff" },
+                new Department { Code = "DEP", Name = "Department" }, new Section { Code = "INF", Name = "Infrastructure", DepartmentCode = "DEP" });
             foreach (var row in rows)
             {
                 var line = new BillLine
@@ -499,6 +582,8 @@ public sealed class BillingExcelReportApiTests
                     DesignationCodeSnapshot = "DES", DesignationNameSnapshot = row.Designation,
                     FactoryCodeSnapshot = row.Factory == "Factory B" ? "FB" : "FAC", FactoryNameSnapshot = row.Factory,
                     DepartmentCodeSnapshot = "DEP", DepartmentNameSnapshot = row.Department,
+                    SectionCodeSnapshot = row.Section == "Infrastructure" ? "INF" : null, SectionNameSnapshot = row.Section,
+                    SubSectionNameSnapshot = row.SubSection, IsPooled = row.IsPooled,
                     MobileNumberSnapshot = row.MobileNumber,
                     EntitlementEffectiveFromSnapshot = new DateOnly(2026, 1, 1)
                 });

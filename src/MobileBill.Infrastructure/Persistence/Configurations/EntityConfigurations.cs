@@ -44,6 +44,32 @@ internal sealed class DepartmentConfiguration : AuditableEntityConfiguration<Dep
     }
 }
 
+internal sealed class SectionConfiguration : AuditableEntityConfiguration<Section>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<Section> builder)
+    {
+        builder.ToTable("Sections");
+        builder.Property(entity => entity.Code).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.Name).HasMaxLength(200).IsRequired();
+        builder.Property(entity => entity.DepartmentCode).HasMaxLength(50).IsRequired();
+        builder.HasAlternateKey(entity => entity.Code);
+        builder.HasOne(entity => entity.Department).WithMany(department => department.Sections).HasForeignKey(entity => entity.DepartmentCode).HasPrincipalKey(department => department.Code).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class SubSectionConfiguration : AuditableEntityConfiguration<SubSection>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<SubSection> builder)
+    {
+        builder.ToTable("SubSections");
+        builder.Property(entity => entity.Code).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.Name).HasMaxLength(200).IsRequired();
+        builder.Property(entity => entity.SectionCode).HasMaxLength(50).IsRequired();
+        builder.HasAlternateKey(entity => entity.Code);
+        builder.HasOne(entity => entity.Section).WithMany(section => section.SubSections).HasForeignKey(entity => entity.SectionCode).HasPrincipalKey(section => section.Code).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 internal sealed class DesignationConfiguration : AuditableEntityConfiguration<Designation>
 {
     protected override void ConfigureEntity(EntityTypeBuilder<Designation> builder)
@@ -101,13 +127,19 @@ internal sealed class EmployeeConfiguration : AuditableEntityConfiguration<Emplo
         builder.Property(entity => entity.DesignationCode).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.FactoryCode).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.DepartmentCode).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.SectionCode).HasMaxLength(50);
+        builder.Property(entity => entity.SubSectionCode).HasMaxLength(50);
         builder.Property(entity => entity.DefaultResponsibility).HasConversion<string>().HasMaxLength(50);
-        builder.HasAlternateKey(entity => entity.EPF);
+        // The same EPF number can be used in different factories, so EPF is unique only together with the factory.
+        builder.HasIndex(entity => new { entity.FactoryCode, entity.EPF }).IsUnique();
+        builder.HasIndex(entity => entity.EPF);
         builder.HasIndex(entity => entity.IsActive);
         builder.HasOne(entity => entity.Category).WithMany(category => category.Employees).HasForeignKey(entity => entity.CategoryCode).HasPrincipalKey(category => category.Code).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(entity => entity.Designation).WithMany(designation => designation.Employees).HasForeignKey(entity => entity.DesignationCode).HasPrincipalKey(designation => designation.Code).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(entity => entity.Factory).WithMany(factory => factory.Employees).HasForeignKey(entity => entity.FactoryCode).HasPrincipalKey(factory => factory.Code).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(entity => entity.Department).WithMany(department => department.Employees).HasForeignKey(entity => entity.DepartmentCode).HasPrincipalKey(department => department.Code).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(entity => entity.Section).WithMany(section => section.Employees).HasForeignKey(entity => entity.SectionCode).HasPrincipalKey(section => section.Code).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(entity => entity.SubSection).WithMany(subSection => subSection.Employees).HasForeignKey(entity => entity.SubSectionCode).HasPrincipalKey(subSection => subSection.Code).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -121,13 +153,17 @@ internal sealed class MobileAccountConfiguration : AuditableEntityConfiguration<
             table.HasCheckConstraint("CK_MobileAccounts_MonthlyRental", "[MonthlyRental] >= 0");
         });
         builder.Property(entity => entity.MobileNumber).HasMaxLength(30).IsRequired();
-        builder.Property(entity => entity.EmployeeEpf).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.MonthlyCreditLimit).HasPrecision(18, 2);
         builder.Property(entity => entity.MonthlyRental).HasPrecision(18, 2);
         builder.HasIndex(entity => entity.MobileNumber).IsUnique().HasFilter("[IsActive] = 1");
-        builder.HasIndex(entity => entity.EmployeeEpf);
+        builder.HasIndex(entity => entity.EmployeeId);
+        builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(50).HasDefaultValue(SimStatus.Assigned).HasSentinel(SimStatus.Assigned);
+        builder.Property(entity => entity.PooledOn).HasColumnType("date");
+        builder.Property(entity => entity.StatusReason).HasMaxLength(500);
+        builder.Property(entity => entity.DisconnectedOn).HasColumnType("date");
+        builder.HasIndex(entity => entity.Status);
         builder.HasOne(entity => entity.Employee).WithMany(employee => employee.MobileAccounts)
-            .HasForeignKey(entity => entity.EmployeeEpf).HasPrincipalKey(employee => employee.EPF).OnDelete(DeleteBehavior.Restrict);
+            .HasForeignKey(entity => entity.EmployeeId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 internal sealed class BillBatchConfiguration : AuditableEntityConfiguration<BillBatch>
@@ -194,8 +230,11 @@ internal sealed class MonthlyBillConfiguration : AuditableEntityConfiguration<Mo
         builder.Property(entity => entity.FactoryNameSnapshot).HasMaxLength(200);
         builder.Property(entity => entity.DepartmentCodeSnapshot).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.DepartmentNameSnapshot).HasMaxLength(200);
-        builder.Property(entity => entity.MobileNumberSnapshot).HasMaxLength(30).IsRequired();
-        builder.Property(entity => entity.EntitlementEffectiveFromSnapshot).HasColumnType("date");
+        builder.Property(entity => entity.SectionCodeSnapshot).HasMaxLength(50);
+        builder.Property(entity => entity.SectionNameSnapshot).HasMaxLength(200);
+        builder.Property(entity => entity.SubSectionCodeSnapshot).HasMaxLength(50);
+        builder.Property(entity => entity.SubSectionNameSnapshot).HasMaxLength(200);
+        builder.Property(entity => entity.MobileNumberSnapshot).HasMaxLength(30).IsRequired();        builder.Property(entity => entity.EntitlementEffectiveFromSnapshot).HasColumnType("date");
         builder.Property(entity => entity.EntitlementEffectiveToSnapshot).HasColumnType("date");
         builder.Property(entity => entity.AllocationMatchMethod).HasConversion<string>().HasMaxLength(50);
         builder.Property(entity => entity.EntitlementMatchMethod).HasConversion<string>().HasMaxLength(50);

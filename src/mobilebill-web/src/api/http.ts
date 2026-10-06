@@ -18,6 +18,7 @@ const statusMessages: Record<number, string> = {
   403: 'You are not authorized to perform this action.',
   404: 'The requested information was not found.',
   409: 'The request conflicts with the current billing state.',
+  429: 'Too many attempts. Wait a minute and try again.',
 }
 
 function isSafeProblemText(value: unknown): value is string {

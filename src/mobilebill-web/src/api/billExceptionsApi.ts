@@ -9,6 +9,7 @@ export const billExceptionTypes = [
   'MULTIPLE_ENTITLEMENTS',
   'ZERO_BILL',
   'PARSER_WARNING',
+  'BILLED_AFTER_DISCONNECTION',
 ] as const
 
 export type BillExceptionType = typeof billExceptionTypes[number]

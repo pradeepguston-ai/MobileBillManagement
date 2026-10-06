@@ -35,7 +35,7 @@ describe('MonthlyBillOverviewPage', () => {
     expect(screen.getByText('Company Responsibility Amount').parentElement?.textContent).toContain('1,750.00')
     expect(screen.queryByText('Exception Count')).toBeNull()
     expect(screen.getByText('Total Calculated Excess').parentElement?.textContent).toContain('9,000.00')
-    expect(screen.queryByText('Unassessed Count')).toBeNull()
+    expect(screen.queryByText('Unassigned Count')).toBeNull()
     expect(screen.getAllByText(/^(Total Actual Bill|Total Calculated Excess|Final User Deduction|Company Responsibility Amount)$/).map(node => node.textContent)).toEqual(['Total Actual Bill', 'Total Calculated Excess', 'Final User Deduction', 'Company Responsibility Amount'])
     expect(screen.getByText('Current stage: HR Approval')).toBeTruthy()
     expect(screen.getByText('July 2026')).toBeTruthy()

@@ -2,7 +2,7 @@ import type { ReviewRow } from '../../../api/billReviewApi'
 import type { WorkflowAction } from '../../../api/billWorkflowApi'
 import type { EntityRow } from '../../../api/types'
 
-export type MasterOption = EntityRow & { name?: string }
+export type MasterOption = EntityRow & { name?: string; departmentCode?: string }
 export type SelectOption = readonly [string, string]
 export type ReviewColumn = { key: keyof ReviewRow; label: string; sortKey?: string }
 export type WorkflowDialogState = {
@@ -20,6 +20,8 @@ export const reviewColumns: ReviewColumn[] = [
   { key: 'designation', label: 'Designation', sortKey: 'designation' },
   { key: 'factory', label: 'Factory', sortKey: 'factory' },
   { key: 'department', label: 'Department', sortKey: 'department' },
+  { key: 'section', label: 'Section', sortKey: 'section' },
+  { key: 'subSection', label: 'Sub Section', sortKey: 'subSection' },
   { key: 'callingName', label: 'Calling Name', sortKey: 'callingName' },
   { key: 'creditLimit', label: 'Credit Limit', sortKey: 'creditLimit' },
   { key: 'monthlyRental', label: 'Monthly Rental', sortKey: 'monthlyRental' },

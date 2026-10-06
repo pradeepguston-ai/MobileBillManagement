@@ -87,6 +87,8 @@ describe('MasterDataPage states', () => {
       designationCode: 'DES01',
       factoryCode: 'F01',
       departmentCode: 'D01',
+      sectionCode: null,
+      subSectionCode: null,
     }))
   })
 
@@ -114,9 +116,9 @@ describe('MasterDataPage states', () => {
   })
 
   describe('mobile allocations', () => {
-    const employee = { id: 'employee-1', epf: 'EPF-100', fullName: 'Test Employee', isActive: true }
+    const employee = { id: 'employee-1', epf: 'EPF-100', fullName: 'Test Employee', factoryName: 'Head Office', isActive: true }
 
-    it('creates an allocation from an employee EPF dropdown', async () => {
+    it('creates an allocation for the employee picked by EPF, name and factory', async () => {
       let submittedBody: unknown
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
         const url = new URL(String(input))
@@ -133,12 +135,12 @@ describe('MasterDataPage states', () => {
 
       expect(screen.queryByRole('textbox', { name: /Employee ID/ })).toBeNull()
       fireEvent.change(screen.getByRole('textbox', { name: /Mobile Number/ }), { target: { value: '0771234567' } })
-      await selectSearchResult('Employee EPF', 'EPF-100', 'EPF-100 — Test Employee')
+      await selectSearchResult('Employee', 'EPF-100', 'EPF-100 — Test Employee (Head Office)')
       fireEvent.change(screen.getByRole('spinbutton', { name: 'Monthly Credit Limit' }), { target: { value: '1500.25' } })
       fireEvent.change(screen.getByRole('spinbutton', { name: 'Monthly Rental' }), { target: { value: '700' } })
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      await waitFor(() => expect(submittedBody).toEqual({ mobileNumber: '0771234567', employeeEpf: 'EPF-100', monthlyCreditLimit: 1500.25, monthlyRental: 700 }))
+      await waitFor(() => expect(submittedBody).toEqual({ mobileNumber: '0771234567', employeeId: 'employee-1', monthlyCreditLimit: 1500.25, monthlyRental: 700 }))
     })
   })
 })

@@ -9,5 +9,7 @@ public enum BillExceptionType
     MULTIPLE_ACTIVE_ALLOCATIONS,
     MULTIPLE_ENTITLEMENTS,
     ZERO_BILL,
-    PARSER_WARNING
+    PARSER_WARNING,
+    // A bill arrived for a SIM marked Disconnected; usually the provider is still charging for it.
+    BILLED_AFTER_DISCONNECTION
 }

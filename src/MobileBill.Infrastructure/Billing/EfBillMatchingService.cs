@@ -39,14 +39,28 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
                 exceptions.Add(Exception(batch.Id, line.Id, BillExceptionType.ZERO_BILL, BillExceptionSeverity.Information,
                     $"Mobile number {line.MobileNumber} has a total due amount of 0.00 and was retained for review."));
 
-            var allocations = await db.MobileAccounts.Include(x => x.Employee).ThenInclude(x => x.Category)
-                .Include(x => x.Employee).ThenInclude(x => x.Designation)
-                .Include(x => x.Employee).ThenInclude(x => x.Factory)
-                .Include(x => x.Employee).ThenInclude(x => x.Department)
+            var allocations = await WithEmployee(db.MobileAccounts)
                 .Where(x => x.MobileNumber == line.MobileNumber && x.IsActive)
                 .ToListAsync(token);
             if (allocations.Count == 0)
             {
+                // A disconnected SIM still being billed: the company pays, and the line is flagged for a provider follow-up.
+                var disconnected = await WithEmployee(db.MobileAccounts)
+                    .Where(x => x.MobileNumber == line.MobileNumber && x.Status == SimStatus.Disconnected)
+                    .OrderByDescending(x => x.DisconnectedOn).ThenByDescending(x => x.UpdatedAtUtc)
+                    .FirstOrDefaultAsync(token);
+                if (disconnected is not null)
+                {
+                    var companyBill = CreatePooledBill(line, disconnected, AllocationMatchMethod.Automatic, clock.UtcNow, currentUser.UserId,
+                        $"Billed after disconnection on {disconnected.DisconnectedOn:dd-MMM-yyyy} · previously EPF {disconnected.Employee.EPF} – {disconnected.Employee.FullName}");
+                    monthlyBills.Add(companyBill);
+                    db.AuditLogs.Add(AutoAssessmentAudit(companyBill, clock.UtcNow, currentUser.UserId)!);
+                    var flag = Exception(batch.Id, line.Id, BillExceptionType.BILLED_AFTER_DISCONNECTION, BillExceptionSeverity.Warning,
+                        $"{line.MobileNumber} was disconnected on {disconnected.DisconnectedOn:dd-MMM-yyyy} but is still billed. Check with the provider.");
+                    flag.MonthlyBillId = companyBill.Id;
+                    exceptions.Add(flag);
+                    continue;
+                }
                 exceptions.Add(Exception(batch.Id, line.Id, BillExceptionType.MOBILE_NOT_FOUND, BillExceptionSeverity.Blocking,
                     $"No active mobile allocation exists for {line.MobileNumber}."));
                 continue;
@@ -59,6 +73,13 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
             }
 
             var allocation = allocations[0];
+            if (allocation.Status == SimStatus.Pooled)
+            {
+                var pooledBill = CreateBillForPooledSim(line, allocation, batch.BillingYear, batch.BillingMonth, AllocationMatchMethod.Automatic, clock.UtcNow, currentUser.UserId);
+                monthlyBills.Add(pooledBill);
+                db.AuditLogs.Add(AutoAssessmentAudit(pooledBill, clock.UtcNow, currentUser.UserId)!);
+                continue;
+            }
             if (!allocation.Employee.IsActive)
             {
                 exceptions.Add(Exception(batch.Id, line.Id, BillExceptionType.EMPLOYEE_NOT_ACTIVE, BillExceptionSeverity.Blocking,
@@ -92,21 +113,13 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
         DesignationNameSnapshot = allocation.Employee.Designation.Name, FactoryCodeSnapshot = allocation.Employee.FactoryCode,
         FactoryNameSnapshot = allocation.Employee.Factory.Name, DepartmentCodeSnapshot = allocation.Employee.DepartmentCode,
         DepartmentNameSnapshot = allocation.Employee.Department.Name,
-        MobileNumberSnapshot = line.MobileNumber, 
+        SectionCodeSnapshot = allocation.Employee.SectionCode, SectionNameSnapshot = allocation.Employee.Section?.Name,
+        SubSectionCodeSnapshot = allocation.Employee.SubSectionCode, SubSectionNameSnapshot = allocation.Employee.SubSection?.Name,
+        MobileNumberSnapshot = line.MobileNumber,
          AllocationMatchMethod = allocationMethod,
         EntitlementMatchMethod = EntitlementMatchMethod.Automatic, CreatedAtUtc = now, CreatedBy = userId
         };
-        if (HasRoaming(line))
-        {
-            // Roaming charges are the company's responsibility. This month-specific rule wins over the
-            // employee's remembered responsibility and does not change what is remembered for them.
-            bill.Responsibility = Responsibility.ByCompany;
-            bill.FinalDeduction = 0m;
-            bill.Remark = RoamingRemark;
-            bill.AssessedAt = now;
-            bill.AssessedBy = userId;
-        }
-        else if (allocation.Employee.DefaultResponsibility is { } remembered)
+        if (allocation.Employee.DefaultResponsibility is { } remembered)
         {
             bill.Responsibility = remembered;
             bill.FinalDeduction = remembered == Responsibility.ByCompany ? 0m : calculation.CalculatedExcess;
@@ -116,14 +129,55 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
         return bill;
     }
 
-    internal const string RoamingRemark = "Roaming";
+    internal const string SimPoolEmployeeEpf = "POOL";
+    internal const string SimPoolEmployeeName = "SIM Pool (Unassigned)";
 
-    internal static bool HasRoaming(BillLine line) => line.Roaming > 0m;
+    internal static IQueryable<MobileAccount> WithEmployee(IQueryable<MobileAccount> query) => query
+        .Include(x => x.Employee).ThenInclude(x => x.Category)
+        .Include(x => x.Employee).ThenInclude(x => x.Designation)
+        .Include(x => x.Employee).ThenInclude(x => x.Factory)
+        .Include(x => x.Employee).ThenInclude(x => x.Department)
+        .Include(x => x.Employee).ThenInclude(x => x.Section)
+        .Include(x => x.Employee).ThenInclude(x => x.SubSection);
+
+    // A pooled SIM's bill: the company pays if its last holder resigned before the 10th of the billing month;
+    // otherwise it is that employee's last month and is charged to them as usual.
+    internal static MonthlyBill CreateBillForPooledSim(BillLine line, MobileAccount allocation, int billingYear, int billingMonth, AllocationMatchMethod allocationMethod, DateTimeOffset now, string userId)
+    {
+        var resignedOn = allocation.PooledOn ?? DateOnly.FromDateTime(now.UtcDateTime);
+        var previous = $"EPF {allocation.Employee.EPF} – {allocation.Employee.FullName}";
+        if (SimPoolRules.PayerFor(resignedOn, billingYear, billingMonth) == PooledBillPayer.Company)
+            return CreatePooledBill(line, allocation, allocationMethod, now, userId, $"SIM Pool since {resignedOn:dd-MMM-yyyy} · previously {previous}");
+
+        var bill = CreateMonthlyBill(line, allocation, allocationMethod, now, userId);
+        bill.Responsibility = Responsibility.ByUser;
+        bill.FinalDeduction = bill.CalculatedExcess;
+        bill.Remark = $"Resigned on {resignedOn:dd-MMM-yyyy} (on or after the {SimPoolRules.CompanyPaysIfResignedBeforeDay}th): final month charged to employee";
+        bill.AssessedAt = now;
+        bill.AssessedBy = userId;
+        return bill;
+    }
+
+    // Company-paid bill with no current holder; the organisation columns stay with the last holder so factory and department totals still include it.
+    internal static MonthlyBill CreatePooledBill(BillLine line, MobileAccount allocation, AllocationMatchMethod allocationMethod, DateTimeOffset now, string userId, string remark)
+    {
+        var bill = CreateMonthlyBill(line, allocation, allocationMethod, now, userId);
+        bill.IsPooled = true;
+        bill.EmployeeEpfSnapshot = SimPoolEmployeeEpf;
+        bill.EmployeeNameSnapshot = SimPoolEmployeeName;
+        bill.CallingNameSnapshot = null;
+        bill.Responsibility = Responsibility.ByCompany;
+        bill.FinalDeduction = 0m;
+        bill.Remark = remark;
+        bill.AssessedAt = now;
+        bill.AssessedBy = userId;
+        return bill;
+    }
 
     internal static AuditLog? AutoAssessmentAudit(MonthlyBill bill, DateTimeOffset now, string userId) => bill.Responsibility is null ? null : new AuditLog
     {
         EntityName = nameof(MonthlyBill), EntityId = bill.Id,
-        Action = bill.Remark == RoamingRemark ? "AutoAssessedRoaming" : "AutoAssessedFromPreviousBatch",
+        Action = bill.IsPooled ? "AutoAssessedSimPool" : bill.Remark?.StartsWith("Resigned on ", StringComparison.Ordinal) == true ? "AutoAssessedResignedHolder" : "AutoAssessedFromPreviousBatch",
         BeforeDataJson = "{}",
         AfterDataJson = System.Text.Json.JsonSerializer.Serialize(new { Responsibility = bill.Responsibility.ToString(), bill.FinalDeduction, bill.Remark }),
         PerformedBy = userId, PerformedAt = now, CreatedAtUtc = now, CreatedBy = userId

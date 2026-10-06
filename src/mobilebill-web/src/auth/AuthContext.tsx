@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
-import { fetchCurrentUser, login as apiLogin, type CurrentUser } from '../api/authApi'
+import { fetchCurrentUser, login as apiLogin, type CurrentUser, type UserRole } from '../api/authApi'
+import { billingPreparerRoles, masterDataEditorRoles } from './roles'
 import { clearToken, getToken, onUnauthorized, setToken } from '../api/tokenStore'
 
 type AuthContextValue = {
@@ -37,12 +38,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
 }
 
-const masterDataEditorRoles = ['Administrator', 'ITEngineer']
+export function useCanPrepareBilling() {
+  return useCanEditMasterData(billingPreparerRoles)
+}
 
-export function useCanEditMasterData() {
+export function useCanEditMasterData(roles: readonly UserRole[] = masterDataEditorRoles) {
   const context = useContext(AuthContext)
   if (!context) return true
-  return context.user !== null && masterDataEditorRoles.includes(context.user.role)
+  return context.user !== null && roles.includes(context.user.role)
 }
 
 export function useAuth() {

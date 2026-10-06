@@ -87,7 +87,7 @@ public sealed class EmployeeApiTests
             db.MobileAccounts.Add(new MobileAccount
             {
                 MobileNumber = "0771234567",
-                EmployeeEpf = employee.EPF,
+                EmployeeId = employee.Id,
                 CreatedAtUtc = DateTimeOffset.UnixEpoch
             });
             await db.SaveChangesAsync();
@@ -112,19 +112,19 @@ public sealed class EmployeeApiTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         using var factory = CreateApiFactory(connection);
-        string employeeEpf;
+        Guid employeeId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<MobileBillDbContext>();
             await CreateEmployeeTablesAsync(connection);
-            employeeEpf = (await SeedEmployeeAsync(db)).EPF;
+            employeeId = (await SeedEmployeeAsync(db)).Id;
         }
 
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
-            mobileNumber = "0771234567", employeeEpf, monthlyCreditLimit = 1500.25m, monthlyRental = 700m
+            mobileNumber = "0771234567", employeeId, monthlyCreditLimit = 1500.25m, monthlyRental = 700m
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -140,19 +140,19 @@ public sealed class EmployeeApiTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         using var factory = CreateApiFactory(connection);
-        string employeeEpf;
+        Guid employeeId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<MobileBillDbContext>();
             await CreateEmployeeTablesAsync(connection);
-            employeeEpf = (await SeedEmployeeAsync(db)).EPF;
+            employeeId = (await SeedEmployeeAsync(db)).Id;
         }
 
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, UserRole.ITEngineer);
         var response = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
-            mobileNumber = "0771234567", employeeEpf, monthlyCreditLimit = -1m, monthlyRental = 700m
+            mobileNumber = "0771234567", employeeId, monthlyCreditLimit = -1m, monthlyRental = 700m
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -169,11 +169,11 @@ public sealed class EmployeeApiTests
 
         var missingCredit = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
-            mobileNumber = "0771234567", employeeEpf = "EPF-001", monthlyRental = 700m
+            mobileNumber = "0771234567", employeeId = Guid.NewGuid(), monthlyRental = 700m
         });
         var missingRental = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
-            mobileNumber = "0771234567", employeeEpf = "EPF-001", monthlyCreditLimit = 1500m
+            mobileNumber = "0771234567", employeeId = Guid.NewGuid(), monthlyCreditLimit = 1500m
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, missingCredit.StatusCode);
@@ -271,7 +271,7 @@ public sealed class EmployeeApiTests
             var account = new MobileAccount
             {
                 MobileNumber = "0777654321",
-                EmployeeEpf = employee.EPF,
+                EmployeeId = employee.Id,
                 CreatedAtUtc = DateTimeOffset.UnixEpoch
             };
             db.MobileAccounts.Add(account);
@@ -336,13 +336,20 @@ public sealed class EmployeeApiTests
                 Id TEXT PRIMARY KEY, Code TEXT NOT NULL, Name TEXT NOT NULL, IsActive INTEGER NOT NULL,
                 CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE MobileAccounts (
-                Id TEXT PRIMARY KEY, MobileNumber TEXT NOT NULL, EmployeeEpf TEXT NOT NULL, MonthlyCreditLimit NUMERIC NOT NULL, MonthlyRental NUMERIC NOT NULL, IsActive INTEGER NOT NULL,
+                Id TEXT PRIMARY KEY, MobileNumber TEXT NOT NULL, EmployeeId TEXT NOT NULL, MonthlyCreditLimit NUMERIC NOT NULL, MonthlyRental NUMERIC NOT NULL, IsActive INTEGER NOT NULL,
+                Status TEXT NOT NULL DEFAULT 'Assigned', PooledOn TEXT NULL, DisconnectedOn TEXT NULL, StatusReason TEXT NULL,
                 CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE Employees (
                 Id TEXT PRIMARY KEY, EPF TEXT NOT NULL, FullName TEXT NOT NULL, CallingName TEXT NULL,
                 CategoryCode TEXT NOT NULL, DesignationCode TEXT NOT NULL, FactoryCode TEXT NOT NULL, DepartmentCode TEXT NOT NULL,
-                DefaultResponsibility TEXT NULL,
+                SectionCode TEXT NULL, SubSectionCode TEXT NULL, DefaultResponsibility TEXT NULL,
                 IsActive INTEGER NOT NULL, CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
+            CREATE TABLE Sections (
+                Id TEXT PRIMARY KEY, Code TEXT NOT NULL, Name TEXT NOT NULL, DepartmentCode TEXT NOT NULL, IsActive INTEGER NOT NULL,
+                CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
+            CREATE TABLE SubSections (
+                Id TEXT PRIMARY KEY, Code TEXT NOT NULL, Name TEXT NOT NULL, SectionCode TEXT NOT NULL, IsActive INTEGER NOT NULL,
+                CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             """;
         await command.ExecuteNonQueryAsync();
     }

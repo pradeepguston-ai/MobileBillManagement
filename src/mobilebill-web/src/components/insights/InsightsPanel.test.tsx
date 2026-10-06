@@ -25,7 +25,7 @@ const insights = {
   previous: kpis({ totalActualBill: 380000, totalCalculatedExcess: 10000, overLimitAccounts: 40 }),
   previousBatch: july,
   chargeMix: [{ key: 'usage', label: 'Usage', amount: 300000 }, { key: 'vat', label: 'VAT', amount: 50000 }, { key: 'discounts', label: 'Discounts', amount: -1200 }],
-  excessSplit: [{ key: 'deducted', label: 'Deducted from employees', amount: 6000 }, { key: 'companyRoaming', label: 'Company – roaming', amount: 2500 }],
+  excessSplit: [{ key: 'deducted', label: 'Deducted from employees', amount: 6000 }, { key: 'company', label: 'By Company', amount: 2500 }],
   groups: {
     factory: [{ code: 'CAL', name: 'Concord Apparel', accounts: 120, actualBill: 200000, entitlement: 190000, calculatedExcess: 10000 }],
     department: [{ code: 'IT', name: 'IT', accounts: 10, actualBill: 20000, entitlement: 18000, calculatedExcess: 2000 }],
@@ -71,7 +71,7 @@ describe('Dashboard insights', () => {
     const mix = within(screen.getByLabelText('Where the money goes'))
     expect(mix.getByTestId('pie-chart').textContent).toBe('Usage=300000 ; VAT=50000')
     expect(mix.getByText(/Credits not shown in the chart: Discounts/)).toBeTruthy()
-    expect(within(screen.getByLabelText('Who pays the excess')).getByTestId('pie-chart').textContent).toContain('Company – roaming=2500')
+    expect(within(screen.getByLabelText('Who pays the excess')).getByTestId('pie-chart').textContent).toContain('By Company=2500')
 
     expect(within(screen.getByLabelText('Cost by factory')).getByTestId('bar-chart').textContent).toContain('Concord Apparel')
     fireEvent.click(screen.getByRole('button', { name: 'Department' }))

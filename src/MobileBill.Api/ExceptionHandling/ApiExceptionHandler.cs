@@ -42,11 +42,15 @@ public sealed class ApiExceptionHandler(IProblemDetailsService problemDetailsSer
             _ => StatusCodes.Status500InternalServerError
         };
         httpContext.Response.StatusCode = statusCode;
+        // Unexpected errors can carry database, file-path or stack details, so only the known business
+        // exceptions above return their message; everything else is logged by the exception handler middleware.
+        var title = statusCode == StatusCodes.Status500InternalServerError
+            ? "The server could not complete the request."
+            : exception.Message;
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = httpContext,
-            Exception = exception,
-            ProblemDetails = new ProblemDetails { Status = statusCode, Title = exception.Message }
+            ProblemDetails = new ProblemDetails { Status = statusCode, Title = title }
         });
     }
 }

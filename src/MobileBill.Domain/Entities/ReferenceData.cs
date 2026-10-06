@@ -16,6 +16,29 @@ public sealed class Department : AuditableEntity
     public required string Name { get; set; }
     public bool IsActive { get; set; } = true;
     public ICollection<Employee> Employees { get; } = new List<Employee>();
+    public ICollection<Section> Sections { get; } = new List<Section>();
+}
+
+// Department → Section → Sub Section.
+public sealed class Section : AuditableEntity
+{
+    public required string Code { get; set; }
+    public required string Name { get; set; }
+    public required string DepartmentCode { get; set; }
+    public bool IsActive { get; set; } = true;
+    public Department Department { get; set; } = null!;
+    public ICollection<SubSection> SubSections { get; } = new List<SubSection>();
+    public ICollection<Employee> Employees { get; } = new List<Employee>();
+}
+
+public sealed class SubSection : AuditableEntity
+{
+    public required string Code { get; set; }
+    public required string Name { get; set; }
+    public required string SectionCode { get; set; }
+    public bool IsActive { get; set; } = true;
+    public Section Section { get; set; } = null!;
+    public ICollection<Employee> Employees { get; } = new List<Employee>();
 }
 
 public sealed class Designation : AuditableEntity

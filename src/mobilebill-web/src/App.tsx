@@ -4,6 +4,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { AppLayout } from './layouts/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
 import { MonthlyBillReportPage } from './pages/MonthlyBillReportPage'
+import { VasReportPage } from './pages/VasReportPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { CategoriesPage, DepartmentsPage, DesignationsPage, EmployeesPage, FactoriesPage, MobileAllocationsPage, ProvidersPage } from './pages/master-data/MasterPages'
 import { ExceptionReviewPage } from './pages/ExceptionReviewPage'
@@ -34,8 +35,7 @@ function App() {
           <Route path="mobile-allocations" element={<MobileAllocationsPage />} />
 
           <Route path="factories" element={<FactoriesPage />} />
-          <Route path="departments" element={<DepartmentsPage />} />
-          <Route path="designations" element={<DesignationsPage />} />
+          <Route path="departments" element={<DepartmentsPage />} />          <Route path="designations" element={<DesignationsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="providers" element={<ProvidersPage />} />
           <Route path="billing" element={<BillingBatchListPage />} />
@@ -47,6 +47,7 @@ function App() {
           <Route path="billing/:batchId/exceptions" element={<ExceptionReviewPage />} />
           <Route path="billing/:batchId/review" element={<MonthlyBillReviewPage />} />
           <Route path="reports/monthly-bill" element={<MonthlyBillReportPage />} />
+          <Route path="reports/vas" element={<VasReportPage />} />
           <Route path="admin/users" element={<RequireAuth roles={['Administrator']}><UserManagementPage /></RequireAuth>} />
           <Route path="admin/password-resets" element={<RequireAuth roles={['Administrator']}><PasswordResetRequestsPage /></RequireAuth>} />
         </Route>

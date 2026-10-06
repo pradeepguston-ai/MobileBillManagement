@@ -1,4 +1,4 @@
-import { Autocomplete, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material'
+import { Alert, Autocomplete, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material'
 
 export type FormFieldOption = { value: string; label: string; parentValue?: string }
 export type FormField = {
@@ -20,9 +20,10 @@ type MasterDataDialogProps = {
   onChange: (key: string, value: string) => void
   onCancel: () => void
   onSave: () => void
+  saveLabel?: string
 }
 
-export function MasterDataDialog({ open, title, fields, values, errors, onChange, onCancel, onSave }: MasterDataDialogProps) {
+export function MasterDataDialog({ open, title, fields, values, errors, onChange, onCancel, onSave, saveLabel = 'Save' }: MasterDataDialogProps) {
   return <Dialog open={open} onClose={onCancel} fullWidth maxWidth="sm">
     <DialogTitle>{title}</DialogTitle>
     <DialogContent>
@@ -43,14 +44,16 @@ export function MasterDataDialog({ open, title, fields, values, errors, onChange
               label={field.label}
               type={field.type ?? 'text'}
               required={field.required}
+              disabled={field.disabled}
               value={values[field.key] ?? ''}
               onChange={event => onChange(field.key, event.target.value)}
               error={Boolean(errors[field.key])}
               helperText={errors[field.key]}
               slotProps={{ inputLabel: field.type === 'date' ? { shrink: true } : undefined, htmlInput: field.type === 'number' ? { min: 0, step: '0.01' } : undefined }}
             />)}
+        {errors.form && <Alert severity="error">{errors.form}</Alert>}
       </Stack>
     </DialogContent>
-    <DialogActions><Button onClick={onCancel}>Cancel</Button><Button variant="contained" onClick={onSave}>Save</Button></DialogActions>
+    <DialogActions><Button onClick={onCancel}>Cancel</Button><Button variant="contained" onClick={onSave}>{saveLabel}</Button></DialogActions>
   </Dialog>
 }

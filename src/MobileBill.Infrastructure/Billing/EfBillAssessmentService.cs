@@ -80,7 +80,8 @@ public sealed class EfBillAssessmentService(MobileBillDbContext db, IBillReviewA
             bill.DeductionOverrideBy = null;
             bill.DeductionOverrideAt = null;
         }
-        var employee = await db.Employees.FindAsync([bill.EmployeeId], token);
+        // A pooled SIM's bill belongs to no one, so it does not change what is remembered for its last holder.
+        var employee = bill.IsPooled ? null : await db.Employees.FindAsync([bill.EmployeeId], token);
         if (employee is not null) employee.DefaultResponsibility = request.Responsibility;
         db.AuditLogs.Add(new AuditLog
         {

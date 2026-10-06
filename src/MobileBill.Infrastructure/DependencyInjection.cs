@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddDbContext<MobileBillDbContext>(options =>
             options.UseSqlServer(connectionString));
         services.AddScoped<IMasterDataService, EfMasterDataService>();
+        services.AddScoped<IMasterDataImportService, ClosedXmlMasterDataImportService>();
         services.Configure<BillStorageOptions>(options =>
         {
             var section = configuration.GetSection(BillStorageOptions.SectionName);
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasherService, PasswordHasherService>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddScoped<IAuthService, EfAuthService>();
+        services.AddScoped<IUserSessionValidator, EfUserSessionValidator>();
         services.AddScoped<IUserManagementService, EfUserManagementService>();
         services.AddSingleton<IBillFileStorage, FileSystemBillFileStorage>();
         services.AddScoped<IBillBatchService, EfBillBatchService>();
@@ -50,6 +52,8 @@ public static class DependencyInjection
         services.AddScoped<IBillAssessmentService, EfBillAssessmentService>();
         services.AddScoped<IBillApprovalWorkflowService, EfBillApprovalWorkflowService>();
         services.AddScoped<IBillBatchReviewQueryService, EfBillBatchReviewQueryService>();
+        services.AddScoped<IBillTrendService, EfBillTrendService>();
+        services.AddScoped<IVasReportService, VasReportService>();
         services.AddScoped<IBillingExcelReportService, ClosedXmlBillingExcelReportService>();
         services.AddScoped<IBillingPdfReportService, PdfBillingReportService>();
         services.AddScoped<IBillLinesExcelExportService, ClosedXmlBillLinesExcelExportService>();

@@ -41,7 +41,13 @@ public sealed partial class EfMasterDataService
     public Task<ReferenceDataDto> GetDepartmentAsync(Guid id, CancellationToken cancellationToken) => GetReferenceAsync(_dbContext.Departments, id, "Department", department => new ReferenceDataDto(department.Id, department.Code, department.Name, department.IsActive), cancellationToken);
     public Task<ReferenceDataDto> CreateDepartmentAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.Departments, request, () => new Department { Code = string.Empty, Name = string.Empty }, "Department", cancellationToken);
     public Task<ReferenceDataDto> UpdateDepartmentAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.Departments, id, request, "Department", cancellationToken);
-    public Task DeactivateDepartmentAsync(Guid id, CancellationToken cancellationToken) => DeactivateReferenceAsync(_dbContext.Departments, id, "Department", code => _dbContext.Employees.AnyAsync(employee => employee.DepartmentCode == code && employee.IsActive, cancellationToken), cancellationToken);
+    public async Task DeactivateDepartmentAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var department = await _dbContext.Departments.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken) ?? throw new MasterDataNotFoundException("Department", id);
+        if (await _dbContext.Sections.AnyAsync(section => section.DepartmentCode == department.Code && section.IsActive, cancellationToken))
+            throw new MasterDataValidationException("Department cannot be deactivated while it has active sections.");
+        await DeactivateReferenceAsync(_dbContext.Departments, id, "Department", code => _dbContext.Employees.AnyAsync(employee => employee.DepartmentCode == code && employee.IsActive, cancellationToken), cancellationToken);
+    }
 
     private static void ValidateReference(string code, string name) { MasterDataValidation.RequireText(code, "Code"); MasterDataValidation.RequireText(name, "Name"); }
 

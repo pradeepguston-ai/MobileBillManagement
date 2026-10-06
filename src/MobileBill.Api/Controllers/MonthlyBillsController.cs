@@ -4,7 +4,7 @@ using MobileBill.Application.Billing;
 
 namespace MobileBill.Api.Controllers;
 
-[ApiController]
+[ApiController, Authorize]
 [Route("api/monthly-bills")]
 public sealed class MonthlyBillsController(IBillAssessmentService service) : ControllerBase
 {

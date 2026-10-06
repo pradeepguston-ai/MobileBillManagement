@@ -5,6 +5,7 @@ import AddIcon from '@mui/icons-material/Add'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import { useCallback, useEffect, useState } from 'react'
+import { useCanPrepareBilling } from '../../auth/AuthContext'
 import { Link as RouterLink } from 'react-router-dom'
 
 import { downloadReportAs, getBatches, type BillBatchListItem, type ReportFormat } from '../../api/billingApi'
@@ -20,6 +21,7 @@ import { formatDateTime } from '../../utils/formatters'
 type SortDirection = 'asc' | 'desc'
 
 export function BillingBatchListPage() {
+  const canPrepare = useCanPrepareBilling()
   const [items, setItems] = useState<BillBatchListItem[]>([])
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(0)
@@ -40,11 +42,11 @@ export function BillingBatchListPage() {
   return <Stack spacing={2}>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
       <Box><Typography component="h1" variant="h4">Billing Batches</Typography><Typography color="text.secondary">Create and continue monthly telecom bill processing.</Typography></Box>
-      <Button component={RouterLink} to="/billing/new" variant="contained" startIcon={<AddIcon />}>New Billing Batch</Button>
+      {canPrepare && <Button component={RouterLink} to="/billing/new" variant="contained" startIcon={<AddIcon />}>New Billing Batch</Button>}
     </Stack>
     {error && <ErrorState message={error} />}
     {loading && <LoadingState label="Loading billing batches…" />}
-    {!loading && items.length === 0 && <EmptyState message="No billing batches found." action={<Button component={RouterLink} to="/billing/new" variant="contained">Create Billing Batch</Button>} />}
+    {!loading && items.length === 0 && <EmptyState message="No billing batches found." action={canPrepare ? <Button component={RouterLink} to="/billing/new" variant="contained">Create Billing Batch</Button> : undefined} />}
     {!loading && items.length > 0 && <TableContainer sx={{ overflowX: 'auto' }}><Table stickyHeader size="small" aria-label="Billing batches">
       <TableHead><TableRow>
         <Sortable label="Billing Period" column="billingYear" active={sortBy} direction={sortDirection} onSort={changeSort} />

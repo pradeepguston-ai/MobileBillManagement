@@ -121,7 +121,8 @@ public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingI
         new InsightsAmount("vat", "VAT", lines.Sum(line => line.Vat)),
     }.Where(item => item.Amount != 0m).ToList();
 
-    // Who ends up paying each rupee of calculated excess.
+    // Who ends up paying each rupee of calculated excess. The part of a By User excess waived by a deduction
+    // override is paid by the company, so it counts as By Company.
     private static IReadOnlyList<InsightsAmount> BuildExcessSplit(IReadOnlyCollection<BillFacts> bills)
     {
         var byUser = bills.Where(bill => bill.Responsibility == Responsibility.ByUser).ToList();
@@ -129,14 +130,10 @@ public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingI
         return new[]
         {
             new InsightsAmount("deducted", "Deducted from employees", byUser.Sum(bill => bill.FinalDeduction)),
-            new InsightsAmount("waived", "Waived for employees (override)", byUser.Sum(bill => bill.CalculatedExcess - bill.FinalDeduction)),
-            new InsightsAmount("companyRoaming", "Company – roaming", byCompany.Where(IsRoaming).Sum(bill => bill.CalculatedExcess)),
-            new InsightsAmount("company", "Company – other", byCompany.Where(bill => !IsRoaming(bill)).Sum(bill => bill.CalculatedExcess)),
-            new InsightsAmount("unassessed", "Not yet assessed", bills.Where(bill => bill.Responsibility is null).Sum(bill => bill.CalculatedExcess)),
+            new InsightsAmount("company", "By Company", byCompany.Sum(bill => bill.CalculatedExcess) + byUser.Sum(bill => bill.CalculatedExcess - bill.FinalDeduction)),
+            new InsightsAmount("unassessed", "Not yet assigned", bills.Where(bill => bill.Responsibility is null).Sum(bill => bill.CalculatedExcess)),
         }.Where(item => item.Amount != 0m).ToList();
     }
-
-    private static bool IsRoaming(BillFacts bill) => string.Equals(bill.Remark, EfBillMatchingService.RoamingRemark, StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyList<InsightsGroupRow> Group(IEnumerable<BillFacts> bills, Func<BillFacts, string> code, Func<BillFacts, string> name) => bills
         .GroupBy(code)

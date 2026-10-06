@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Card, CardContent, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { useState, type FormEvent, type ReactNode } from 'react'
@@ -13,7 +13,8 @@ import { ApprovalTimeline } from '../ApprovalTimeline'
 import { AuditTimeline } from '../AuditTimeline'
 import { BatchStatusChip } from '../BatchStatusChip'
 import { BillChargeBreakdown } from '../BillChargeBreakdown'
-import { ReportCategorySelect, ReportFactorySelect } from '../ReportFactorySelect'
+import { BillTrendSection } from './BillTrendSection'
+import { ReportCategorySelect, ReportFactorySelect, ReportSectionSelect } from '../ReportFactorySelect'
 import { ValidationLevelChip } from '../ValidationLevelChip'
 import { FilterBar } from '../../common/FilterBar'
 import { KpiCard } from '../../common/KpiCard'
@@ -25,7 +26,8 @@ function FinalDeductionCell({ row }: { row: ReviewRow }) {
   if (row.responsibility !== 'ByCompany') return <>{formatCurrency(row.finalDeduction)}</>
   return <>{formatCurrency(row.calculatedExcess)} <Typography component="span" variant="caption" color="text.secondary">(Company)</Typography></>
 }
-const filterDefaults: Record<string, string> = { search: '', factoryCode: '', departmentCode: '', categoryCode: '', responsibility: '', exception: 'All', calculatedExcessMin: '', calculatedExcessMax: '' }
+const excessOnlyMinimum = '0.01'
+const filterDefaults: Record<string, string> ={ search: '', factoryCode: '', departmentCode: '', sectionCode: '', categoryCode: '', responsibility: '', exception: 'All', calculatedExcessMin: '', calculatedExcessMax: '' }
 
 export function ReviewHeader({ summary, period }: { summary?: ReviewSummary; period: string }) {
   return <Box><Typography component="h1" variant="h4">Monthly Bill Review</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 0.5, alignItems: { sm: 'center' }, flexWrap: 'wrap' }}><Typography color="text.secondary">Billing Period: {period} · Provider: {summary?.provider ?? '—'} · Corporate Code: {summary?.corporateCode ?? '—'}</Typography>{summary && <><BatchStatusChip status={summary.batchStatus} /><ValidationLevelChip level={summary.validationLevel} /></>}</Stack>{summary?.batchStatus === 'Locked' && <Alert severity="info" sx={{ mt: 1 }}><strong>Locked Billing Period</strong> — billing details remain available in read-only mode.</Alert>}</Box>
@@ -34,7 +36,7 @@ export function ReviewHeader({ summary, period }: { summary?: ReviewSummary; per
 export function ReviewKpis({ summary }: { summary: ReviewSummary }) {
   // Amounts in one row (4) and counts in another (5) so the nine cards form two even rows instead of leaving one orphaned.
   const amounts: Array<[string, string]> = [['Total Actual Bill', formatCurrency(summary.totalActualBill)], ['Total Calculated Excess', formatCurrency(summary.totalCalculatedExcess)], ['Total Final Deduction', formatCurrency(summary.totalFinalDeduction)], ['Company Responsibility Amount', formatCurrency(summary.companyResponsibilityAmount)]]
-  const counts: Array<[string, number]> = [['Total Accounts', summary.totalAccounts], ['Exception Count', summary.exceptionCount], ['Unmatched Count', summary.unmatchedCount], ['Assessed Count', summary.assessedCount], ['Unassessed Count', summary.unassessedCount]]
+  const counts: Array<[string, number]> = [['Total Accounts', summary.totalAccounts], ['Exception Count', summary.exceptionCount], ['Unmatched Count', summary.unmatchedCount], ['Assigned Count', summary.assessedCount], ['Unassigned Count', summary.unassessedCount]]
   const grid = (columns: number) => ({ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: `repeat(${columns}, minmax(0, 1fr))` }, gap: 2 })
   return <Box sx={{ display: 'grid', gap: 2 }}>
     <Box sx={grid(4)}>{amounts.map(([label, value]) => <KpiCard key={label} label={label} value={value} />)}</Box>
@@ -42,16 +44,22 @@ export function ReviewKpis({ summary }: { summary: ReviewSummary }) {
   </Box>
 }
 
-export function ReviewFilters({ filters, options, onChange }: { filters: Record<string, string>; options: { factories: MasterOption[]; departments: MasterOption[]; categories: MasterOption[] }; onChange: (key: string, value: string) => void }) {
+export function ReviewFilters({ filters, options, onChange }: { filters: Record<string, string>; options: { factories: MasterOption[]; departments: MasterOption[]; sections?: MasterOption[]; categories: MasterOption[] }; onChange: (key: string, value: string) => void }) {
+  // Sections narrow to the chosen department.
+  const sections = (options.sections ?? []).filter(section => !filters.departmentCode || section.departmentCode === filters.departmentCode)
   const activeCount = Object.entries(filterDefaults).filter(([key, fallback]) => (filters[key] ?? fallback) !== fallback).length
   const clear = () => Object.entries(filterDefaults).forEach(([key, fallback]) => onChange(key, fallback))
+  // Calculated excess is in cents, so a minimum of 0.01 keeps exactly the numbers that have an excess.
+  const excessOnly = filters.calculatedExcessMin === excessOnlyMinimum && !filters.calculatedExcessMax
+  const toggleExcessOnly = () => { onChange('calculatedExcessMin', excessOnly ? '' : excessOnlyMinimum); onChange('calculatedExcessMax', '') }
   return <Stack spacing={1.5}>
     <FilterBar activeCount={activeCount} onClear={clear}>
       <TextField size="small" label="Search mobile / EPF / employee / calling name" value={filters.search ?? ''} onChange={event => onChange('search', event.target.value)} />
       <MasterFilter label="Factory" value={filters.factoryCode ?? ''} onChange={value => onChange('factoryCode', value)} options={options.factories} />
-      <MasterFilter label="Department" value={filters.departmentCode ?? ''} onChange={value => onChange('departmentCode', value)} options={options.departments} />
+      <MasterFilter label="Department" value={filters.departmentCode ?? ''} onChange={value => { onChange('departmentCode', value); onChange('sectionCode', '') }} options={options.departments} />
+      <MasterFilter label="Section" value={filters.sectionCode ?? ''} onChange={value => onChange('sectionCode', value)} options={sections} />
       <MasterFilter label="Category" value={filters.categoryCode ?? ''} onChange={value => onChange('categoryCode', value)} options={options.categories} />
-      <FilterSelect label="Responsibility" value={filters.responsibility ?? ''} onChange={value => onChange('responsibility', value)} options={[['', 'All responsibilities'], ['Unassessed', 'Unassessed'], ['ByUser', 'By User'], ['ByCompany', 'By Company']]} />
+      <FilterSelect label="Responsibility" value={filters.responsibility ?? ''} onChange={value => onChange('responsibility', value)} options={[['', 'All responsibilities'], ['Unassessed', 'Unassigned'], ['ByUser', 'By User'], ['ByCompany', 'By Company']]} />
       <FilterSelect label="Exception" value={filters.exception ?? 'All'} onChange={value => onChange('exception', value)} options={[['All', 'All exceptions'], ['HasException', 'Has exception'], ['NoException', 'No exception']]} />
     </FilterBar>
     <Paper variant="outlined" sx={{ p: 2 }}>
@@ -60,6 +68,7 @@ export function ReviewFilters({ filters, options, onChange }: { filters: Record<
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
           <TextField size="small" label="Min Deduction" type="number" value={filters.calculatedExcessMin ?? ''} onChange={event => onChange('calculatedExcessMin', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
           <TextField size="small" label="Max Deduction" type="number" value={filters.calculatedExcessMax ?? ''} onChange={event => onChange('calculatedExcessMax', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
+          <Button variant={excessOnly ? 'contained' : 'outlined'} aria-pressed={excessOnly} onClick={toggleExcessOnly} sx={{ alignSelf: { sm: 'center' } }}>{excessOnly ? 'Showing Numbers with Deduction' : 'Numbers with Deduction'}</Button>
         </Stack>
       </Stack>
     </Paper>
@@ -114,13 +123,14 @@ export function BulkAssignDialog({ open, selectedIds, mobileNumberById, onClose,
   </DialogActions></Dialog>
 }
 
-export function BillDetailDrawer({ detail, batchStatus, onClose, onSaved }: { detail?: ReviewDetail; batchStatus?: string; onClose: () => void; onSaved: () => Promise<void> }) {
+export function BillDetailDrawer({ batchId, detail, batchStatus, canAssess = true, onClose, onSaved }: { batchId?: string; detail?: ReviewDetail; batchStatus?: string; canAssess?: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
   return <Drawer anchor="right" open={Boolean(detail)} onClose={onClose} sx={theme => ({ zIndex: theme.zIndex.drawer + 2 })} slotProps={{ paper: { sx: { width: { xs: '100%', sm: 'min(680px, 92vw)' }, p: { xs: 2, sm: 3 } } } }}>{detail && <Stack spacing={2}><Typography variant="h5">{detail.row.mobileNumber}</Typography>
-    <Section title="Employee Snapshot"><SectionValues values={{ EPF: detail.row.employeeEpf, Name: detail.row.employeeName, 'Calling Name': detail.row.callingName, Category: detail.row.category, Designation: detail.row.designation, Factory: detail.row.factory, Department: detail.row.department }} /></Section>
+    <Section title="Employee Snapshot"><SectionValues values={{ EPF: detail.row.employeeEpf, Name: detail.row.employeeName, 'Calling Name': detail.row.callingName, Category: detail.row.category, Designation: detail.row.designation, Factory: detail.row.factory, Department: detail.row.department, Section: detail.row.section || '—', 'Sub Section': detail.row.subSection || '—' }} /></Section>
+    {batchId && <BillTrendSection key={detail.row.id} batchId={batchId} rowId={detail.row.id} />}
     <Section title="Allocation Snapshot"><SectionValues values={{ 'Credit Limit': formatCurrency(detail.row.creditLimit), 'Monthly Rental': formatCurrency(detail.row.monthlyRental) }} /></Section>
     <Section title="PDF Charge Breakdown"><BillChargeBreakdown charges={detail.charges} /></Section>
     <Section title="Calculation"><SectionValues values={{ 'Actual Bill': formatCurrency(detail.row.actualBill), 'Available Entitlement': formatCurrency(detail.row.availableEntitlement), Variance: formatCurrency(detail.row.variance), 'Calculated Excess': formatCurrency(detail.row.calculatedExcess), Responsibility: displayResponsibility(detail.row.responsibility), 'Final Deduction': detail.row.responsibility === 'ByCompany' ? `${formatCurrency(detail.row.calculatedExcess)} (borne by company)` : formatCurrency(detail.row.finalDeduction), Reason: detail.row.remark || 'None' }} /></Section>
-    <Section title="Assessment"><SectionValues values={{ 'Assessed By': detail.assessedBy ?? 'Not assessed', 'Assessed At': detail.assessedAt ? formatDateTime(detail.assessedAt) : 'Not assessed', 'Deduction Override Reason': detail.deductionOverrideReason ?? 'None'}} />{batchStatus === 'Locked' ? <Alert severity="info" sx={{ mt: 1 }}>Assessment is read-only because this billing batch is locked.</Alert> : <AssessmentSection key={detail.row.id} detail={detail} onSaved={onSaved} />}</Section>
+    <Section title="Assessment"><SectionValues values={{ 'Assessed By': detail.assessedBy ?? 'Not assessed', 'Assessed At': detail.assessedAt ? formatDateTime(detail.assessedAt) : 'Not assessed', 'Deduction Override Reason': detail.deductionOverrideReason ?? 'None'}} />{batchStatus === 'Locked' ? <Alert severity="info" sx={{ mt: 1 }}>Assessment is read-only because this billing batch is locked.</Alert> : !canAssess ? <Alert severity="info" sx={{ mt: 1 }}>Your role can view assessments but not change them.</Alert> : <AssessmentSection key={detail.row.id} detail={detail} onSaved={onSaved} />}</Section>
     <Section title="Exceptions"><TextTimeline entries={detail.exceptions} empty="None" /></Section>
     <Section title="Approval History"><TextTimeline entries={detail.approvalHistory} empty="No approval history yet" /></Section>
     <Section title="Audit History"><AuditTimeline entries={detail.auditHistory} /></Section>
@@ -172,8 +182,10 @@ export function WorkflowActionDialog({ state, comment, error, saving, onComment,
 export function ReportCard({ summary, period, downloading, onDownload }: { summary: ReviewSummary; period: string; downloading: boolean; onDownload: (format: ReportFormat, filters: ReportFilters) => void }) {
   const [factoryCodes, setFactoryCodes] = useState<string[]>([])
   const [categoryCodes, setCategoryCodes] = useState<string[]>([])
-  const filters: ReportFilters = { factoryCodes, categoryCodes }
-  return <Card variant="outlined"><CardContent><Stack spacing={1} sx={{ alignItems: 'flex-start' }}><Typography variant="h6">Monthly Bill Report</Typography><SectionValues values={{ 'Billing Period': period, 'Account Count': String(summary.totalAccounts), 'Actual Bill Total': formatCurrency(summary.totalActualBill), 'Final Deduction Total': formatCurrency(summary.totalFinalDeduction), 'Batch Status': summary.batchStatus }} /><Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}><ReportFactorySelect value={factoryCodes} onChange={setFactoryCodes} disabled={downloading} /><ReportCategorySelect value={categoryCodes} onChange={setCategoryCodes} disabled={downloading} /><Button variant="contained" startIcon={<DownloadIcon />} disabled={downloading} onClick={() => onDownload('excel', filters)}>{downloading ? 'Downloading…' : 'Download Excel Report'}</Button><Button variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={downloading} onClick={() => onDownload('pdf', filters)}>Download PDF Report</Button></Stack></Stack></CardContent></Card>
+  const [sectionCodes, setSectionCodes] = useState<string[]>([])
+  const [includeVas, setIncludeVas] = useState(false)
+  const filters: ReportFilters = { factoryCodes, categoryCodes, sectionCodes, includeVas }
+  return <Card variant="outlined"><CardContent><Stack spacing={1} sx={{ alignItems: 'flex-start' }}><Typography variant="h6">Monthly Bill Report</Typography><SectionValues values={{ 'Billing Period': period, 'Account Count': String(summary.totalAccounts), 'Actual Bill Total': formatCurrency(summary.totalActualBill), 'Final Deduction Total': formatCurrency(summary.totalFinalDeduction), 'Batch Status': summary.batchStatus }} /><Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1, alignItems: 'center' }}><ReportFactorySelect value={factoryCodes} onChange={setFactoryCodes} disabled={downloading} /><ReportCategorySelect value={categoryCodes} onChange={setCategoryCodes} disabled={downloading} /><ReportSectionSelect value={sectionCodes} onChange={setSectionCodes} disabled={downloading} /><FormControlLabel control={<Checkbox checked={includeVas} disabled={downloading} onChange={event => setIncludeVas(event.target.checked)} />} label="Include VAS sheet (Excel)" /><Button variant="contained" startIcon={<DownloadIcon />} disabled={downloading} onClick={() => onDownload('excel', filters)}>{downloading ? 'Downloading…' : 'Download Excel Report'}</Button><Button variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={downloading} onClick={() => onDownload('pdf', filters)}>Download PDF Report</Button></Stack></Stack></CardContent></Card>
 }
 
 export function ApprovalHistorySection({ summary }: { summary: ReviewSummary }) { return <Card variant="outlined"><CardContent><Typography variant="h6" sx={{ mb: 1 }}>Approval History</Typography><ApprovalTimeline history={summary.approvalHistory ?? []} /></CardContent></Card> }

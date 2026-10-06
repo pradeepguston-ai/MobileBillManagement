@@ -17,15 +17,18 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
     private const string HeaderColor = "#1F4E78";
     private const string RuleColor = "#D9E2F3";
 
-    // Widths in millimetres for the 16 report columns; they add up to the 277mm printable width of A4 landscape.
-    private static readonly double[] ColumnWidths = [9, 17, 11, 34, 17, 27, 21, 21, 16, 14, 13, 15, 15, 15, 15, 17];
-    private static readonly HashSet<int> NumericColumns = [9, 10, 11, 12, 13];
+    // Widths in millimetres for the 18 report columns; they add up to the 277mm printable width of A4 landscape.
+    private static readonly double[] ColumnWidths = [7, 15, 10, 30, 14, 22, 17, 17, 16, 16, 13, 13, 12, 14, 14, 14, 15, 18];
+    // 0-based positions of the columns written below; they follow BillingReportData.Headers.
+    private const int SectionColumn = 8, SubSectionColumn = 9, CallingNameColumn = 10, CreditLimitColumn = 11, MonthlyRentalColumn = 12,
+        ActualBillColumn = 13, VarianceColumn = 14, DeductionColumn = 15, ResponsibilityColumn = 16, RemarkColumn = 17;
+    private static readonly HashSet<int> NumericColumns = [CreditLimitColumn, MonthlyRentalColumn, ActualBillColumn, VarianceColumn, DeductionColumn];
 
     static PdfBillingReportService() => ReportFonts.Configure();
 
     public async Task<BillingExcelReportResult> ExportAsync(BillingExcelReportRequest request, CancellationToken cancellationToken)
     {
-        var data = await BillingReportData.LoadAsync(db, request.BatchId, cancellationToken, request.FactoryCodes, request.CategoryCodes);
+        var data = await BillingReportData.LoadAsync(db, request.BatchId, cancellationToken, request.FactoryCodes, request.CategoryCodes, request.SectionCodes);
         var content = Render(BuildDocument(data));
 
         return new BillingExcelReportResult(
@@ -74,6 +77,7 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
         AddLabelled(info, "    Corporate Code: ", data.CorporateCode);
         AddLabelled(info, "    Factory: ", data.FactoryLabel);
         AddLabelled(info, "    Category: ", data.CategoryLabel);
+        AddLabelled(info, "    Section: ", data.SectionLabel);
         AddLabelled(info, "    Generated (UTC): ", clock.UtcNow.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture));
 
         var notice = section.AddParagraph(BillingReportData.SystemGeneratedNotice);
@@ -125,7 +129,7 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
             row.KeepWith = 0;
             Set(row, 0, (index + 1).ToString(CultureInfo.InvariantCulture));
             Set(row, 1, entry.MobileNumber);
-            Set(row, 11, Money(entry.ActualBill));
+            Set(row, ActualBillColumn, Money(entry.ActualBill));
             if (entry.Bill is not { } bill) continue;
             Set(row, 2, bill.EmployeeEpf);
             Set(row, 3, bill.EmployeeName);
@@ -133,13 +137,15 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
             Set(row, 5, bill.Designation);
             Set(row, 6, bill.Factory);
             Set(row, 7, bill.Department);
-            Set(row, 8, bill.CallingName);
-            Set(row, 9, Money(bill.CreditLimit));
-            Set(row, 10, Money(bill.MonthlyRental));
-            Set(row, 12, Money(bill.Variance));
-            Set(row, 13, Money(bill.DisplayedDeduction));
-            Set(row, 14, bill.ResponsibilityLabel);
-            Set(row, 15, bill.Remark);
+            Set(row, SectionColumn, bill.Section);
+            Set(row, SubSectionColumn, bill.SubSection);
+            Set(row, CallingNameColumn, bill.CallingName);
+            Set(row, CreditLimitColumn, Money(bill.CreditLimit));
+            Set(row, MonthlyRentalColumn, Money(bill.MonthlyRental));
+            Set(row, VarianceColumn, Money(bill.Variance));
+            Set(row, DeductionColumn, Money(bill.DisplayedDeduction));
+            Set(row, ResponsibilityColumn, bill.ResponsibilityLabel);
+            Set(row, RemarkColumn, bill.Remark);
         }
 
         var totals = table.AddRow();
@@ -147,11 +153,11 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
         totals.Borders.Top.Width = 1;
         totals.Borders.Top.Style = BorderStyle.Single;
         Set(totals, 0, "Totals");
-        Set(totals, 9, Money(data.Entries.Sum(item => item.Bill?.CreditLimit ?? 0m)));
-        Set(totals, 10, Money(data.Entries.Sum(item => item.Bill?.MonthlyRental ?? 0m)));
-        Set(totals, 11, Money(data.ExportedActualBillTotal));
-        Set(totals, 12, Money(data.Entries.Sum(item => item.Bill?.Variance ?? 0m)));
-        Set(totals, 13, Money(data.TotalDisplayedDeduction));
+        Set(totals, CreditLimitColumn, Money(data.Entries.Sum(item => item.Bill?.CreditLimit ?? 0m)));
+        Set(totals, MonthlyRentalColumn, Money(data.Entries.Sum(item => item.Bill?.MonthlyRental ?? 0m)));
+        Set(totals, ActualBillColumn, Money(data.ExportedActualBillTotal));
+        Set(totals, VarianceColumn, Money(data.Entries.Sum(item => item.Bill?.Variance ?? 0m)));
+        Set(totals, DeductionColumn, Money(data.TotalDisplayedDeduction));
     }
 
     private static void AddSummary(Section section, BillingReportData data)
@@ -165,6 +171,7 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
         }
         lines.Add(("Deducted from Employees (By User)", data.DeductedFromEmployees));
         lines.Add(("Borne by Company (By Company)", data.BorneByCompany));
+        if (data.SimPoolCost > 0m) lines.Add(("SIM Pool cost (numbers with no holder)", data.SimPoolCost));
 
         var spacer = section.AddParagraph();
         spacer.Format.SpaceAfter = Unit.FromPoint(6);

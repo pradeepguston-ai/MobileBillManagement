@@ -122,12 +122,15 @@ export async function getAllBillLines(batchId: string, search: string) {
 
 export type ReportFormat = 'excel' | 'pdf'
 
-export type ReportFilters = { factoryCodes?: string[]; categoryCodes?: string[] }
+// includeVas adds a "VAS" sheet to the Excel report (ignored for PDF).
+export type ReportFilters = { factoryCodes?: string[]; categoryCodes?: string[]; sectionCodes?: string[]; includeVas?: boolean }
 
 async function downloadReport(batchId: string, format: ReportFormat, filters: ReportFilters = {}) {
   const params = new URLSearchParams()
   for (const code of filters.factoryCodes ?? []) params.append('factoryCode', code)
   for (const code of filters.categoryCodes ?? []) params.append('categoryCode', code)
+  for (const code of filters.sectionCodes ?? []) params.append('sectionCode', code)
+  if (filters.includeVas && format === 'excel') params.set('includeVas', 'true')
   const query = params.toString() ? `?${params}` : ''
   const response = await apiResponse(`/api/reports/billing/${batchId}/${format}${query}`)
   const blob = await response.blob()

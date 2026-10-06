@@ -164,7 +164,7 @@ function ChargeMixChart({ data }: { data: BillingInsights }) {
 }
 
 function ExcessSplitChart({ data }: { data: BillingInsights }) {
-  const colors: Record<string, string> = { deducted: brand.purple, waived: brand.indigo, companyRoaming: brand.orange, company: brand.red, unassessed: '#9CA3AF' }
+  const colors: Record<string, string> = { deducted: brand.purple, company: brand.orange, unassessed: '#9CA3AF' }
   if (data.excessSplit.length === 0) return <Typography color="text.secondary">No excess in this batch – every number stayed within its entitlement.</Typography>
   return <Box sx={{ width: '100%', height: 300 }}>
     <PieChart height={300} series={[{ innerRadius: 60, paddingAngle: 1, cornerRadius: 3, valueFormatter: item => money(item.value), data: data.excessSplit.map(item => ({ id: item.key, value: item.amount, label: item.label, color: colors[item.key] ?? brand.magenta })) }]} />

@@ -58,3 +58,7 @@ export function ReportFactorySelect(props: MultiSelectProps) {
 export function ReportCategorySelect(props: MultiSelectProps) {
   return <ReportMultiSelect {...props} path="/api/categories" label="Report category" allLabel="All categories" />
 }
+
+export function ReportSectionSelect(props: MultiSelectProps) {
+  return <ReportMultiSelect {...props} path="/api/sections" label="Report section" allLabel="All sections" />
+}

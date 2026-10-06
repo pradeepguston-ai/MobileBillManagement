@@ -96,6 +96,8 @@ public sealed class BillExceptionReadApiTests
                 services.AddDbContext<MobileBillDbContext>(options => options.UseInMemoryDatabase(databaseName));
             }));
             Client = factory.CreateClient();
+            // Read endpoints need a signed-in user; any role may read.
+            TestAuth.Authorize(Client, MobileBill.Domain.Enums.UserRole.Cfo);
         }
 
         public async Task<Guid> SeedBatchAsync()

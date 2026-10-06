@@ -726,6 +726,14 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("SectionCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SubSectionCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -741,9 +749,16 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DesignationCode");
 
-                    b.HasIndex("FactoryCode");
+                    b.HasIndex("EPF");
 
                     b.HasIndex("IsActive");
+
+                    b.HasIndex("SectionCode");
+
+                    b.HasIndex("SubSectionCode");
+
+                    b.HasIndex("FactoryCode", "EPF")
+                        .IsUnique();
 
                     b.ToTable("Employees", (string)null);
                 });
@@ -840,10 +855,11 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<string>("EmployeeEpf")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<DateOnly?>("DisconnectedOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -861,6 +877,20 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateOnly?>("PooledOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("Assigned");
+
+                    b.Property<string>("StatusReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -870,11 +900,13 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EmployeeEpf");
+                    b.HasIndex("EmployeeId");
 
                     b.HasIndex("MobileNumber")
                         .IsUnique()
                         .HasFilter("[IsActive] = 1");
+
+                    b.HasIndex("Status");
 
                     b.ToTable("MobileAccounts", null, t =>
                         {
@@ -1008,6 +1040,9 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("IsPooled")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("MobileAccountId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1028,10 +1063,26 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("SectionCodeSnapshot")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SectionNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SubSectionCodeSnapshot")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("SubSectionNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("datetimeoffset");
@@ -1106,6 +1157,98 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId", "Status");
 
                     b.ToTable("PasswordResetRequests", (string)null);
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.Section", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("DepartmentCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentCode");
+
+                    b.ToTable("Sections", (string)null);
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.SubSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SectionCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SectionCode");
+
+                    b.ToTable("SubSections", (string)null);
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.TelecomProvider", b =>
@@ -1305,6 +1448,18 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MobileBill.Domain.Entities.Section", "Section")
+                        .WithMany("Employees")
+                        .HasForeignKey("SectionCode")
+                        .HasPrincipalKey("Code")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MobileBill.Domain.Entities.SubSection", "SubSection")
+                        .WithMany("Employees")
+                        .HasForeignKey("SubSectionCode")
+                        .HasPrincipalKey("Code")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Category");
 
                     b.Navigation("Department");
@@ -1312,14 +1467,17 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Navigation("Designation");
 
                     b.Navigation("Factory");
+
+                    b.Navigation("Section");
+
+                    b.Navigation("SubSection");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.MobileAccount", b =>
                 {
                     b.HasOne("MobileBill.Domain.Entities.Employee", "Employee")
                         .WithMany("MobileAccounts")
-                        .HasForeignKey("EmployeeEpf")
-                        .HasPrincipalKey("EPF")
+                        .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1364,6 +1522,30 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.Section", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.Department", "Department")
+                        .WithMany("Sections")
+                        .HasForeignKey("DepartmentCode")
+                        .HasPrincipalKey("Code")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.SubSection", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.Section", "Section")
+                        .WithMany("SubSections")
+                        .HasForeignKey("SectionCode")
+                        .HasPrincipalKey("Code")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Section");
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.BillBatch", b =>
                 {
                     b.Navigation("ApprovalHistory");
@@ -1388,6 +1570,8 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MobileBill.Domain.Entities.Department", b =>
                 {
                     b.Navigation("Employees");
+
+                    b.Navigation("Sections");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.Designation", b =>
@@ -1420,6 +1604,18 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MobileBill.Domain.Entities.MonthlyBill", b =>
                 {
                     b.Navigation("Exceptions");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.Section", b =>
+                {
+                    b.Navigation("Employees");
+
+                    b.Navigation("SubSections");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.SubSection", b =>
+                {
+                    b.Navigation("Employees");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.TelecomProvider", b =>

@@ -6,9 +6,12 @@ using MobileBill.Infrastructure.Persistence;
 
 namespace MobileBill.Infrastructure.MasterData;
 
-public sealed partial class EfMasterDataService(MobileBillDbContext dbContext) : IMasterDataService
+// currentUser and clock record who made SIM Pool changes and when; they are optional so simple callers can omit them.
+public sealed partial class EfMasterDataService(MobileBillDbContext dbContext, ICurrentUserService? currentUser = null, IClock? clock = null) : IMasterDataService
 {
     private readonly MobileBillDbContext _dbContext = dbContext;
+    private DateTimeOffset Now => clock?.UtcNow ?? DateTimeOffset.UtcNow;
+    private string PerformedBy => currentUser?.UserId ?? "system";
 
     private static async Task<PagedResult<T>> ToPagedResultAsync<T>(
         IQueryable<T> query,

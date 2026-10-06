@@ -6,21 +6,27 @@ using MobileBill.Infrastructure.Persistence;
 
 namespace MobileBill.Infrastructure.Reports;
 
-public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, IClock clock)
+public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, IClock clock, IVasReportService vasReports)
     : IBillingExcelReportService
 {
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private const string WorksheetName = "Monthly Bill Report";
     private const int HeaderRow = 5;
-    private const int ColumnCount = 16;
+    private const int ColumnCount = 18;
+    // 1-based positions of the columns written below; they follow BillingReportData.Headers.
+    private const int CallingNameColumn = 11, CreditLimitColumn = 12, MonthlyRentalColumn = 13, ActualBillColumn = 14,
+        VarianceColumn = 15, DeductionColumn = 16, ResponsibilityColumn = 17, RemarkColumn = 18;
     private const string MoneyFormat = "#,##0.00";
 
     public async Task<BillingExcelReportResult> ExportAsync(
         BillingExcelReportRequest request,
         CancellationToken cancellationToken)
     {
-        var data = await BillingReportData.LoadAsync(db, request.BatchId, cancellationToken, request.FactoryCodes, request.CategoryCodes);
-        var content = BuildWorkbook(data);
+        var data = await BillingReportData.LoadAsync(db, request.BatchId, cancellationToken, request.FactoryCodes, request.CategoryCodes, request.SectionCodes);
+        var vas = request.IncludeVas
+            ? await vasReports.GetAsync(new VasReportRequest(request.BatchId, request.FactoryCodes, request.CategoryCodes, request.SectionCodes), cancellationToken)
+            : null;
+        var content = BuildWorkbook(data, vas);
 
         return new BillingExcelReportResult(
             data.BatchId,
@@ -35,7 +41,7 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
             data.Difference);
     }
 
-    private byte[] BuildWorkbook(BillingReportData data)
+    private byte[] BuildWorkbook(BillingReportData data, VasReportDto? vas)
     {
         var rows = data.Entries;
         using var workbook = new XLWorkbook();
@@ -67,6 +73,9 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
         sheet.Cell(2, 7).Value = "Category";
         sheet.Cell(2, 8).Value = data.CategoryLabel;
         sheet.Cell(2, 7).Style.Font.Bold = true;
+        sheet.Cell(3, 7).Value = "Section";
+        sheet.Cell(3, 8).Value = data.SectionLabel;
+        sheet.Cell(3, 7).Style.Font.Bold = true;
         sheet.Cell(4, 4).Value = BillingReportData.SystemGeneratedNotice;
         sheet.Cell(4, 4).Style.Font.Italic = true;
 
@@ -80,7 +89,7 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
             var targetRow = firstDataRow + index;
             sheet.Cell(targetRow, 1).Value = index + 1;
             sheet.Cell(targetRow, 2).Value = entry.MobileNumber;
-            sheet.Cell(targetRow, 12).Value = entry.ActualBill;
+            sheet.Cell(targetRow, ActualBillColumn).Value = entry.ActualBill;
             if (entry.Bill is not { } row) continue;
             sheet.Cell(targetRow, 3).Value = row.EmployeeEpf;
             sheet.Cell(targetRow, 4).Value = row.EmployeeName;
@@ -88,13 +97,15 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
             sheet.Cell(targetRow, 6).Value = row.Designation ?? string.Empty;
             sheet.Cell(targetRow, 7).Value = row.Factory ?? string.Empty;
             sheet.Cell(targetRow, 8).Value = row.Department ?? string.Empty;
-            sheet.Cell(targetRow, 9).Value = row.CallingName ?? string.Empty;
-            sheet.Cell(targetRow, 10).Value = row.CreditLimit;
-            sheet.Cell(targetRow, 11).Value = row.MonthlyRental;
-            sheet.Cell(targetRow, 13).Value = row.Variance;
-            sheet.Cell(targetRow, 14).Value = row.DisplayedDeduction;
-            sheet.Cell(targetRow, 15).Value = row.ResponsibilityLabel;
-            sheet.Cell(targetRow, 16).Value = row.Remark ?? string.Empty;
+            sheet.Cell(targetRow, 9).Value = row.Section ?? string.Empty;
+            sheet.Cell(targetRow, 10).Value = row.SubSection ?? string.Empty;
+            sheet.Cell(targetRow, CallingNameColumn).Value = row.CallingName ?? string.Empty;
+            sheet.Cell(targetRow, CreditLimitColumn).Value = row.CreditLimit;
+            sheet.Cell(targetRow, MonthlyRentalColumn).Value = row.MonthlyRental;
+            sheet.Cell(targetRow, VarianceColumn).Value = row.Variance;
+            sheet.Cell(targetRow, DeductionColumn).Value = row.DisplayedDeduction;
+            sheet.Cell(targetRow, ResponsibilityColumn).Value = row.ResponsibilityLabel;
+            sheet.Cell(targetRow, RemarkColumn).Value = row.Remark ?? string.Empty;
         }
 
         var lastDataRow = HeaderRow + rows.Count;
@@ -120,20 +131,20 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
             body.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
             body.Style.Border.BottomBorder = XLBorderStyleValues.Hair;
             body.Style.Border.BottomBorderColor = XLColor.FromHtml("#D9E2F3");
-            sheet.Range(firstDataRow, 10, lastDataRow, 14).Style.NumberFormat.Format = MoneyFormat;
+            sheet.Range(firstDataRow, CreditLimitColumn, lastDataRow, DeductionColumn).Style.NumberFormat.Format = MoneyFormat;
             sheet.Range(firstDataRow, 2, lastDataRow, 3).Style.NumberFormat.Format = "@";
         }
 
         var totalsRow = lastDataRow + 1;
         sheet.Cell(totalsRow, 1).Value = "Totals";
-        sheet.Cell(totalsRow, 10).Value = rows.Sum(item => item.Bill?.CreditLimit ?? 0m);
-        sheet.Cell(totalsRow, 11).Value = rows.Sum(item => item.Bill?.MonthlyRental ?? 0m);
-        sheet.Cell(totalsRow, 12).Value = data.ExportedActualBillTotal;
-        sheet.Cell(totalsRow, 13).Value = rows.Sum(item => item.Bill?.Variance ?? 0m);
-        sheet.Cell(totalsRow, 14).Value = data.TotalDisplayedDeduction;
+        sheet.Cell(totalsRow, CreditLimitColumn).Value = rows.Sum(item => item.Bill?.CreditLimit ?? 0m);
+        sheet.Cell(totalsRow, MonthlyRentalColumn).Value = rows.Sum(item => item.Bill?.MonthlyRental ?? 0m);
+        sheet.Cell(totalsRow, ActualBillColumn).Value = data.ExportedActualBillTotal;
+        sheet.Cell(totalsRow, VarianceColumn).Value = rows.Sum(item => item.Bill?.Variance ?? 0m);
+        sheet.Cell(totalsRow, DeductionColumn).Value = data.TotalDisplayedDeduction;
         sheet.Range(totalsRow, 1, totalsRow, ColumnCount).Style.Font.Bold = true;
         sheet.Range(totalsRow, 1, totalsRow, ColumnCount).Style.Border.TopBorder = XLBorderStyleValues.Double;
-        sheet.Range(totalsRow, 10, totalsRow, 14).Style.NumberFormat.Format = MoneyFormat;
+        sheet.Range(totalsRow, CreditLimitColumn, totalsRow, DeductionColumn).Style.NumberFormat.Format = MoneyFormat;
 
         if (data.ExcludedActualBillTotal > 0m)
         {
@@ -148,10 +159,16 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
         var splitRow = data.ExcludedActualBillTotal > 0m ? totalsRow + 6 : totalsRow + 2;
         WriteDeductionSplitRow(sheet, splitRow, "Deducted from Employees (By User)", data.DeductedFromEmployees);
         WriteDeductionSplitRow(sheet, splitRow + 1, "Borne by Company (By Company)", data.BorneByCompany);
-        sheet.Range(splitRow, 1, splitRow + 1, 1).Style.Font.Bold = true;
+        var lastSummaryRow = splitRow + 1;
+        if (data.SimPoolCost > 0m)
+        {
+            lastSummaryRow++;
+            WriteReconciliationRow(sheet, lastSummaryRow, "SIM Pool cost (numbers with no holder)", data.SimPoolCost);
+        }
+        sheet.Range(splitRow, 1, lastSummaryRow, 1).Style.Font.Bold = true;
 
-        sheet.Cell(splitRow + 3, 1).Value = BillingReportData.SystemGeneratedNotice;
-        sheet.Cell(splitRow + 3, 1).Style.Font.Italic = true;
+        sheet.Cell(lastSummaryRow + 2, 1).Value = BillingReportData.SystemGeneratedNotice;
+        sheet.Cell(lastSummaryRow + 2, 1).Style.Font.Italic = true;
 
         sheet.SheetView.FreezeRows(HeaderRow);
         ApplyColumnWidths(sheet);
@@ -159,6 +176,9 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
         sheet.PageSetup.FitToPages(1, 0);
         sheet.PageSetup.SetRowsToRepeatAtTop(HeaderRow, HeaderRow);
         sheet.PageSetup.Footer.Center.AddText(BillingReportData.SystemGeneratedNotice);
+
+        if (vas is not null)
+            VasReportService.AddVasSheet(workbook, vas, "VAS", clock.UtcNow, $"Factory: {data.FactoryLabel}; Category: {data.CategoryLabel}; Section: {data.SectionLabel}");
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -168,20 +188,20 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
     private static void WriteDeductionSplitRow(IXLWorksheet sheet, int row, string label, decimal amount)
     {
         sheet.Cell(row, 1).Value = label;
-        sheet.Cell(row, 14).Value = amount;
-        sheet.Cell(row, 14).Style.NumberFormat.Format = MoneyFormat;
+        sheet.Cell(row, DeductionColumn).Value = amount;
+        sheet.Cell(row, DeductionColumn).Style.NumberFormat.Format = MoneyFormat;
     }
 
     private static void WriteReconciliationRow(IXLWorksheet sheet, int row, string label, decimal amount)
     {
         sheet.Cell(row, 1).Value = label;
-        sheet.Cell(row, 12).Value = amount;
-        sheet.Cell(row, 12).Style.NumberFormat.Format = MoneyFormat;
+        sheet.Cell(row, ActualBillColumn).Value = amount;
+        sheet.Cell(row, ActualBillColumn).Style.NumberFormat.Format = MoneyFormat;
     }
 
     private static void ApplyColumnWidths(IXLWorksheet sheet)
     {
-        var widths = new[] { 9d, 16d, 12d, 30d, 22d, 28d, 14d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d };
+        var widths = new[] { 9d, 16d, 12d, 30d, 22d, 28d, 14d, 20d, 20d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d };
         for (var column = 1; column <= widths.Length; column++)
             sheet.Column(column).Width = widths[column - 1];
     }

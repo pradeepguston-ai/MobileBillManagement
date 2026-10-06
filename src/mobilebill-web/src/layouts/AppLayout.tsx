@@ -35,6 +35,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import SmartphoneIcon from '@mui/icons-material/Smartphone'
 import SummarizeIcon from '@mui/icons-material/Summarize'
+import AppsIcon from '@mui/icons-material/Apps'
 import { type ReactNode, useState } from 'react'
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
@@ -59,6 +60,7 @@ const iconByPath: Record<string, ReactNode> = {
   '/categories': <CategoryIcon fontSize="small" />,
   '/providers': <CellTowerIcon fontSize="small" />,
   '/reports/monthly-bill': <SummarizeIcon fontSize="small" />,
+  '/reports/vas': <AppsIcon fontSize="small" />,
   '/admin/users': <ManageAccountsIcon fontSize="small" />,
   '/admin/password-resets': <LockResetIcon fontSize="small" />,
 }
@@ -140,7 +142,7 @@ function NavigationContent({ isAdministrator, onNavigate }: { isAdministrator?: 
     <NavigationLink to="/" label="Dashboard" onNavigate={onNavigate} />
     <NavigationGroup label="Billing" links={[["/monthly-bill-review", "Monthly Bill Review"], ["/billing", "Billing Batches"], ["/exception-review", "Exception Review"]]} onNavigate={onNavigate} />
     <NavigationGroup label="Masters" links={[["/employees", "Employees"], ["/mobile-allocations", "Mobile Allocations"], ["/factories", "Factories"], ["/departments", "Departments"], ["/designations", "Designations"], ["/categories", "Categories"], ["/providers", "Telecom Providers"]]} onNavigate={onNavigate} />
-    <NavigationGroup label="Reports" links={[["/reports/monthly-bill", "Monthly Bill Report"]]} onNavigate={onNavigate} />
+    <NavigationGroup label="Reports" links={[["/reports/monthly-bill", "Monthly Bill Report"], ["/reports/vas", "VAS Report"]]} onNavigate={onNavigate} />
     {isAdministrator && <NavigationGroup label="Administration" links={[["/admin/users", "User Management"], ["/admin/password-resets", "Password Resets"]]} onNavigate={onNavigate} />}
   </List>
   <Box sx={{ mt: 'auto', mx: 2, py: 2, borderTop: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 700, letterSpacing: '0.02em', textAlign: 'center' }}>

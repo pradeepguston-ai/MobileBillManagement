@@ -8,6 +8,7 @@ const summary = { batchId: 'batch-1', billingYear: 2026, billingMonth: 8, provid
 const row = { id: 'bill-1', mobileNumber: '768791861', employeeEpf: 'EPF-1', employeeName: 'Employee One', callingName: 'Sam', category: 'Executive', designation: 'Manager', factory: 'Main Factory', department: 'IT', creditLimit: 100, monthlyRental: 10, availableEntitlement: 110, actualBill: 150, variance: -40, calculatedExcess: 40, responsibility: null, finalDeduction: 0, remark: null, status: 'Pending', hasException: true, isAssessed: false }
 const charges = { previousDue: 1, payments: -2, totalUsage: 3, idd: 4, roaming: 5, vas: 6, discounts: -7, billAdjustments: 8, commitmentCharges: 9, latePaymentCharges: 10, addToBill: 11, instalmentPlans: 12, governmentTaxesLevies: 13, vat: 14, chargesForBillPeriod: 149, totalDueAmount: 150 }
 const detail = { row, entitlementEffectiveFrom: '2026-08-01', entitlementEffectiveTo: null, charges, exceptions: ['ZERO_BILL'], approvalHistory: [], auditHistory: ['Matched by dev-user'], assessedBy: null, assessedAt: null, deductionOverrideReason: null }
+const trend = { monthlyBillId: 'bill-1', mobileNumber: '768791861', employeeEpf: 'EPF-1', employeeName: 'Employee One', scope: 'ThisNumber', months: 12, points: [{ billingYear: 2026, billingMonth: 8, actualBill: 150, entitlement: 110, calculatedExcess: 40, finalDeduction: 0, vas: 6, responsibility: null, isOverLimit: true, isPreliminary: true, isCurrent: true, numbers: 1, holderEpf: 'EPF-1', holderName: 'Employee One', isOtherHolder: false }], currentActualBill: 150, average: null, changePercent: null, isAboveUsual: false, monthsOverLimit: 1, highestYear: 2026, highestMonth: 8, highestActualBill: 150, aboveUsualThresholdPercent: 30 }
 const paged = (items: Array<Record<string, unknown>> = [row], totalPages = 1) => ({ items, pageNumber: 1, pageSize: 20, totalCount: items.length, totalPages })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json' } })
 
@@ -28,6 +29,7 @@ function mockReview(options: { rows?: Array<Record<string, unknown>>; status?: s
       saved = true
       return json({ monthlyBillId: 'bill-1', responsibility: 'ByUser', actualBill: 150, availableEntitlement: 110, variance: -40, calculatedExcess: 40, finalDeduction: 40, assessedAt: '2026-09-09T05:00:00Z', assessedBy: 'dev-user', deductionOverrideAmount: null, deductionOverrideReason: null, deductionOverrideBy: null, deductionOverrideAt: null })
     }
+    if (url.includes('/rows/bill-1/trend')) return json(trend)
     if (url.includes('/rows/bill-1')) return json(saved && options.detailAfterSave ? options.detailAfterSave : detail)
     if (url.includes('/rows?')) {
       if (options.pageTwoGate && url.includes('pageNumber=2')) await options.pageTwoGate
@@ -49,7 +51,7 @@ describe('MonthlyBillReviewPage', () => {
     mockReview(); renderPage()
 
     expect(await screen.findByText('Employee One')).toBeTruthy()
-    for (const label of ['Total Accounts', 'Total Actual Bill', 'Total Calculated Excess', 'Total Final Deduction', 'Company Responsibility Amount', 'Exception Count', 'Unmatched Count', 'Assessed Count', 'Unassessed Count']) expect(screen.getByText(label)).toBeTruthy()
+    for (const label of ['Total Accounts', 'Total Actual Bill', 'Total Calculated Excess', 'Total Final Deduction', 'Company Responsibility Amount', 'Exception Count', 'Unmatched Count', 'Assigned Count', 'Unassigned Count']) expect(screen.getByText(label)).toBeTruthy()
     expect(screen.getByText('Billing Period: August 2026', { exact: false })).toBeTruthy()
     expect(screen.getByText('Sam')).toBeTruthy()
     expect(screen.getAllByText('Unassessed').length).toBeGreaterThan(0)
@@ -142,6 +144,24 @@ describe('MonthlyBillReviewPage', () => {
     })).toBe(true))
   })
 
+  it('shows only numbers with an excess at the press of a button, and toggles back', async () => {
+    const fetchMock = mockReview(); renderPage()
+    await screen.findByText('Employee One')
+
+    fireEvent.change(screen.getByLabelText('Max Deduction'), { target: { value: '500' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Numbers with Deduction' }))
+
+    expect((screen.getByLabelText('Min Deduction') as HTMLInputElement).value).toBe('0.01')
+    expect((screen.getByLabelText('Max Deduction') as HTMLInputElement).value).toBe('')
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
+      const url = String(input)
+      return url.includes('/rows?') && url.includes('calculatedExcessMin=0.01') && !url.includes('calculatedExcessMax=')
+    })).toBe(true))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Showing Numbers with Deduction' }))
+    expect((screen.getByLabelText('Min Deduction') as HTMLInputElement).value).toBe('')
+  })
+
   it('opens a structured snapshot, charge, calculation and history drawer', async () => {
     mockReview(); renderPage()
     await openDrawer()
@@ -164,7 +184,7 @@ describe('MonthlyBillReviewPage', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Save Assessment' }))
 
     expect(await screen.findByText('dev-user')).toBeTruthy()
-    expect(screen.getByText('Assessed Count').parentElement?.textContent).toContain('1')
+    expect(screen.getByText('Assigned Count').parentElement?.textContent).toContain('1')
     const assessmentCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/assessment'))
     expect(JSON.parse(String(assessmentCall?.[1]?.body))).toEqual({ responsibility: 'ByUser', finalDeduction: 40, reason: null })
   })
