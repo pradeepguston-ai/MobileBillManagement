@@ -6,7 +6,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { MonthlyBillReportPage } from './pages/MonthlyBillReportPage'
 import { VasReportPage } from './pages/VasReportPage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { CategoriesPage, DepartmentsPage, DesignationsPage, EmployeesPage, FactoriesPage, MobileAllocationsPage, ProvidersPage } from './pages/master-data/MasterPages'
+import { CategoriesPage, DepartmentsPage, DesignationsPage, EmployeesPage, FactoriesPage, MobileAllocationsPage, MobileDevicesPage, MobilePackagesPage, ProvidersPage } from './pages/master-data/MasterPages'
 import { ExceptionReviewPage } from './pages/ExceptionReviewPage'
 import { MonthlyBillReviewPage } from './pages/MonthlyBillReviewPage'
 import { BillingBatchListPage } from './pages/billing/BillingBatchListPage'
@@ -33,11 +33,13 @@ function App() {
           <Route index element={<DashboardPage />} />
           <Route path="employees" element={<EmployeesPage />} />
           <Route path="mobile-allocations" element={<MobileAllocationsPage />} />
+          <Route path="devices" element={<MobileDevicesPage />} />
 
           <Route path="factories" element={<FactoriesPage />} />
           <Route path="departments" element={<DepartmentsPage />} />          <Route path="designations" element={<DesignationsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="providers" element={<ProvidersPage />} />
+          <Route path="packages" element={<MobilePackagesPage />} />
           <Route path="billing" element={<BillingBatchListPage />} />
           <Route path="monthly-bill-review" element={<MonthlyBillOverviewPage />} />
           <Route path="billing/new" element={<CreateBillingBatchPage />} />

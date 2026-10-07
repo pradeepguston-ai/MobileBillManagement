@@ -119,19 +119,33 @@ public sealed class EmployeeApiTests
             await CreateEmployeeTablesAsync(connection);
             employeeId = (await SeedEmployeeAsync(db)).Id;
         }
+        var packageId = Guid.NewGuid();
+        await using (var insert = connection.CreateCommand())
+        {
+            insert.CommandText = "INSERT INTO MobilePackages (Id, Code, ProviderId, Description, MonthlyRental, TotalWithTax, DefaultCreditLimit, IsActive) VALUES ($id, 'PPU23_700', $provider, 'Package', 700, 940, 1000, 1)";
+            insert.Parameters.AddWithValue("$id", packageId.ToString().ToUpperInvariant());
+            insert.Parameters.AddWithValue("$provider", Guid.NewGuid().ToString().ToUpperInvariant());
+            await insert.ExecuteNonQueryAsync();
+        }
 
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, UserRole.ITEngineer);
-        var response = await client.PostAsJsonAsync("/api/mobile-accounts", new
+        var withoutPackage = await client.PostAsJsonAsync("/api/mobile-accounts", new
         {
             mobileNumber = "0771234567", employeeId, monthlyCreditLimit = 1500.25m, monthlyRental = 700m
         });
+        var response = await client.PostAsJsonAsync("/api/mobile-accounts", new
+        {
+            mobileNumber = "0771234567", employeeId, monthlyCreditLimit = 1500.25m, monthlyRental = 700m, packageId
+        });
 
+        Assert.Equal(HttpStatusCode.BadRequest, withoutPackage.StatusCode);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var allocation = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal("EPF-001", allocation.GetProperty("epf").GetString());
         Assert.Equal(1500.25m, allocation.GetProperty("monthlyCreditLimit").GetDecimal());
         Assert.Equal(700m, allocation.GetProperty("monthlyRental").GetDecimal());
+        Assert.Equal("PPU23_700", allocation.GetProperty("packageCode").GetString());
     }
 
     [Fact]
@@ -337,12 +351,21 @@ public sealed class EmployeeApiTests
                 CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE MobileAccounts (
                 Id TEXT PRIMARY KEY, MobileNumber TEXT NOT NULL, EmployeeId TEXT NOT NULL, MonthlyCreditLimit NUMERIC NOT NULL, MonthlyRental NUMERIC NOT NULL, IsActive INTEGER NOT NULL,
-                Status TEXT NOT NULL DEFAULT 'Assigned', PooledOn TEXT NULL, DisconnectedOn TEXT NULL, StatusReason TEXT NULL,
+                Status TEXT NOT NULL DEFAULT 'Assigned', PooledOn TEXT NULL, DisconnectedOn TEXT NULL, StatusReason TEXT NULL, PackageId TEXT NULL, SimType TEXT NULL,
+                CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
+            CREATE TABLE MobileDevices (
+                Id TEXT PRIMARY KEY, AssetTag TEXT NOT NULL, Imei1 TEXT NOT NULL, Imei2 TEXT NULL, Brand TEXT NOT NULL, Model TEXT NOT NULL, SerialNumber TEXT NULL,
+                PurchaseDate TEXT NOT NULL, PurchaseCost NUMERIC NOT NULL, WarrantyUntil TEXT NULL, Supplier TEXT NULL, Notes TEXT NULL, Status TEXT NOT NULL,
+                StatusSince TEXT NOT NULL, CurrentEmployeeId TEXT NULL,
+                CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
+            CREATE TABLE MobilePackages (
+                Id TEXT PRIMARY KEY, Code TEXT NOT NULL, ProviderId TEXT NOT NULL, Description TEXT NOT NULL, MonthlyRental NUMERIC NOT NULL, TotalWithTax NUMERIC NOT NULL,
+                DefaultCreditLimit NUMERIC NOT NULL, IsActive INTEGER NOT NULL,
                 CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE Employees (
                 Id TEXT PRIMARY KEY, EPF TEXT NOT NULL, FullName TEXT NOT NULL, CallingName TEXT NULL,
                 CategoryCode TEXT NOT NULL, DesignationCode TEXT NOT NULL, FactoryCode TEXT NOT NULL, DepartmentCode TEXT NOT NULL,
-                SectionCode TEXT NULL, SubSectionCode TEXT NULL, DefaultResponsibility TEXT NULL,
+                SectionCode TEXT NULL, SubSectionCode TEXT NULL, DefaultResponsibility TEXT NULL, ResignedOn TEXT NULL, ResignationReason TEXT NULL,
                 IsActive INTEGER NOT NULL, CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE Sections (
                 Id TEXT PRIMARY KEY, Code TEXT NOT NULL, Name TEXT NOT NULL, DepartmentCode TEXT NOT NULL, IsActive INTEGER NOT NULL,

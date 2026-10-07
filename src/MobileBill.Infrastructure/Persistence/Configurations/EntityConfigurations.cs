@@ -130,6 +130,8 @@ internal sealed class EmployeeConfiguration : AuditableEntityConfiguration<Emplo
         builder.Property(entity => entity.SectionCode).HasMaxLength(50);
         builder.Property(entity => entity.SubSectionCode).HasMaxLength(50);
         builder.Property(entity => entity.DefaultResponsibility).HasConversion<string>().HasMaxLength(50);
+        builder.Property(entity => entity.ResignationReason).HasMaxLength(250);
+        builder.HasIndex(entity => entity.ResignedOn);
         // The same EPF number can be used in different factories, so EPF is unique only together with the factory.
         builder.HasIndex(entity => new { entity.FactoryCode, entity.EPF }).IsUnique();
         builder.HasIndex(entity => entity.EPF);
@@ -161,9 +163,80 @@ internal sealed class MobileAccountConfiguration : AuditableEntityConfiguration<
         builder.Property(entity => entity.PooledOn).HasColumnType("date");
         builder.Property(entity => entity.StatusReason).HasMaxLength(500);
         builder.Property(entity => entity.DisconnectedOn).HasColumnType("date");
+        builder.Property(entity => entity.SimType).HasConversion<string>().HasMaxLength(20);
         builder.HasIndex(entity => entity.Status);
         builder.HasOne(entity => entity.Employee).WithMany(employee => employee.MobileAccounts)
             .HasForeignKey(entity => entity.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(entity => entity.Package).WithMany(package => package.MobileAccounts)
+            .HasForeignKey(entity => entity.PackageId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class MobileDeviceConfiguration : AuditableEntityConfiguration<MobileDevice>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<MobileDevice> builder)
+    {
+        builder.ToTable("MobileDevices", table => table.HasCheckConstraint("CK_MobileDevices_PurchaseCost", "[PurchaseCost] >= 0"));
+        builder.Property(entity => entity.AssetTag).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.Imei1).HasMaxLength(15).IsRequired();
+        builder.Property(entity => entity.Imei2).HasMaxLength(15);
+        builder.Property(entity => entity.Brand).HasMaxLength(100).IsRequired();
+        builder.Property(entity => entity.Model).HasMaxLength(100).IsRequired();
+        builder.Property(entity => entity.SerialNumber).HasMaxLength(100);
+        builder.Property(entity => entity.PurchaseDate).HasColumnType("date");
+        builder.Property(entity => entity.PurchaseCost).HasPrecision(18, 2);
+        builder.Property(entity => entity.WarrantyUntil).HasColumnType("date");
+        builder.Property(entity => entity.Supplier).HasMaxLength(200);
+        builder.Property(entity => entity.Notes).HasMaxLength(1000);
+        builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(50);
+        builder.Property(entity => entity.StatusSince).HasColumnType("date");
+        builder.HasIndex(entity => entity.AssetTag).IsUnique();
+        builder.HasIndex(entity => entity.Imei1).IsUnique();
+        builder.HasIndex(entity => entity.Imei2).IsUnique().HasFilter("[Imei2] IS NOT NULL");
+        builder.HasIndex(entity => entity.Status);
+        builder.HasIndex(entity => entity.CurrentEmployeeId);
+        builder.HasOne(entity => entity.CurrentEmployee).WithMany().HasForeignKey(entity => entity.CurrentEmployeeId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class DeviceIssueConfiguration : AuditableEntityConfiguration<DeviceIssue>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<DeviceIssue> builder)
+    {
+        builder.ToTable("DeviceIssues");
+        builder.Property(entity => entity.IssuedOn).HasColumnType("date");
+        builder.Property(entity => entity.ReturnedOn).HasColumnType("date");
+        builder.Property(entity => entity.IssueNotes).HasMaxLength(1000);
+        builder.Property(entity => entity.ReturnNotes).HasMaxLength(1000);
+        builder.Property(entity => entity.ReturnCondition).HasConversion<string>().HasMaxLength(50);
+        builder.Property(entity => entity.ReturnReason).HasConversion<string>().HasMaxLength(50);
+        builder.Property(entity => entity.RecoverableAmount).HasPrecision(18, 2);
+        builder.HasIndex(entity => new { entity.DeviceId, entity.IssuedOn });
+        builder.HasIndex(entity => entity.EmployeeId);
+        builder.HasOne(entity => entity.Device).WithMany(device => device.Issues).HasForeignKey(entity => entity.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(entity => entity.Employee).WithMany().HasForeignKey(entity => entity.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(entity => entity.ReplacementDevice).WithMany().HasForeignKey(entity => entity.ReplacementDeviceId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class MobilePackageConfiguration : AuditableEntityConfiguration<MobilePackage>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<MobilePackage> builder)
+    {
+        builder.ToTable("MobilePackages", table =>
+        {
+            table.HasCheckConstraint("CK_MobilePackages_MonthlyRental", "[MonthlyRental] >= 0");
+            table.HasCheckConstraint("CK_MobilePackages_TotalWithTax", "[TotalWithTax] >= 0");
+            table.HasCheckConstraint("CK_MobilePackages_DefaultCreditLimit", "[DefaultCreditLimit] >= 0");
+        });
+        builder.Property(entity => entity.Code).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.Description).HasMaxLength(500).IsRequired();
+        builder.Property(entity => entity.MonthlyRental).HasPrecision(18, 2);
+        builder.Property(entity => entity.TotalWithTax).HasPrecision(18, 2);
+        builder.Property(entity => entity.DefaultCreditLimit).HasPrecision(18, 2);
+        // A package code is unique for its provider.
+        builder.HasIndex(entity => new { entity.ProviderId, entity.Code }).IsUnique();
+        builder.HasOne(entity => entity.Provider).WithMany().HasForeignKey(entity => entity.ProviderId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 internal sealed class BillBatchConfiguration : AuditableEntityConfiguration<BillBatch>
@@ -234,7 +307,9 @@ internal sealed class MonthlyBillConfiguration : AuditableEntityConfiguration<Mo
         builder.Property(entity => entity.SectionNameSnapshot).HasMaxLength(200);
         builder.Property(entity => entity.SubSectionCodeSnapshot).HasMaxLength(50);
         builder.Property(entity => entity.SubSectionNameSnapshot).HasMaxLength(200);
-        builder.Property(entity => entity.MobileNumberSnapshot).HasMaxLength(30).IsRequired();        builder.Property(entity => entity.EntitlementEffectiveFromSnapshot).HasColumnType("date");
+        builder.Property(entity => entity.MobileNumberSnapshot).HasMaxLength(30).IsRequired();
+        builder.Property(entity => entity.PackageCodeSnapshot).HasMaxLength(50);
+        builder.Property(entity => entity.EntitlementEffectiveFromSnapshot).HasColumnType("date");
         builder.Property(entity => entity.EntitlementEffectiveToSnapshot).HasColumnType("date");
         builder.Property(entity => entity.AllocationMatchMethod).HasConversion<string>().HasMaxLength(50);
         builder.Property(entity => entity.EntitlementMatchMethod).HasConversion<string>().HasMaxLength(50);

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MobileBill.Application.Billing;
+using MobileBill.Application.Common;
 using MobileBill.Application.Insights;
+using MobileBill.Domain.Calculations;
 using MobileBill.Domain.Entities;
 using MobileBill.Domain.Enums;
 using MobileBill.Infrastructure.Billing;
@@ -8,10 +10,11 @@ using MobileBill.Infrastructure.Persistence;
 
 namespace MobileBill.Infrastructure.Insights;
 
-public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingInsightsService
+public sealed class EfBillingInsightsService(MobileBillDbContext db, IClock clock) : IBillingInsightsService
 {
     private const int TopAccounts = 10;
     private const int MaxTrendMonths = 24;
+    private const int RepeatAccountsShown = 20;
 
     public async Task<BillingInsightsDto> GetAsync(Guid? batchId, int months, CancellationToken cancellationToken)
     {
@@ -26,7 +29,8 @@ public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingI
         var selected = batchId is null ? options.FirstOrDefault() : options.SingleOrDefault(option => option.Id == batchId)
             ?? throw new BillBatchNotFoundException(batchId.Value);
         if (selected is null)
-            return new BillingInsightsDto(options, null, null, null, null, [], [], new InsightsGroups([], [], []), [], []);
+            return new BillingInsightsDto(options, null, null, null, null, [], [], new InsightsGroups([], [], []), [], [], [],
+                new InsightsRepeatOverLimit(InsightsRules.RepeatWindowMonths, InsightsRules.RepeatOverLimitMonths, 0, []), await BuildAssetsAsync(cancellationToken));
 
         // Comparisons use approved figures only: the latest approved batch before the selected period.
         var previousBatch = options.FirstOrDefault(option => option.IsApproved && Period(option) < Period(selected));
@@ -41,7 +45,12 @@ public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingI
         var lines = await db.BillLines.AsNoTracking()
             .Where(line => line.BillBatchId == selected.Id && line.ExtractionStatus == BillLineExtractionStatus.Extracted)
             .ToListAsync(cancellationToken);
-        var comparisonIds = trendBatches.Select(option => option.Id).Append(previousBatch?.Id ?? Guid.Empty).Where(id => id != Guid.Empty && id != selected.Id).Distinct().ToList();
+        // The repeat over-limit window: approved batches (and the selected one) in the last six billing months.
+        var windowBatches = options
+            .Where(option => (option.IsApproved || option.Id == selected.Id) && Period(option) <= Period(selected) && Period(option) > Period(selected) - InsightsRules.RepeatWindowMonths)
+            .ToList();
+        var comparisonIds = trendBatches.Select(option => option.Id).Concat(windowBatches.Select(option => option.Id)).Append(previousBatch?.Id ?? Guid.Empty)
+            .Where(id => id != Guid.Empty && id != selected.Id).Distinct().ToList();
         var otherBills = await LoadBillsAsync(comparisonIds, cancellationToken);
         var roamingByBatch = await db.BillLines.AsNoTracking()
             .Where(line => (comparisonIds.Contains(line.BillBatchId) || line.BillBatchId == selected.Id) && line.ExtractionStatus == BillLineExtractionStatus.Extracted)
@@ -72,11 +81,17 @@ public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingI
             trendBatches.Select(option =>
             {
                 var kpis = Kpis(option.Id);
-                return new InsightsTrendPoint(option.Id, option.BillingYear, option.BillingMonth, option.IsApproved, kpis.TotalActualBill, kpis.TotalCalculatedExcess, kpis.DeductedFromEmployees, kpis.BorneByCompany, kpis.Accounts);
-            }).ToList());
+                // The part of a By User excess that a deduction override let off.
+                var waived = allBills[option.Id].Where(bill => bill.Responsibility == Responsibility.ByUser).Sum(bill => bill.CalculatedExcess - bill.FinalDeduction);
+                return new InsightsTrendPoint(option.Id, option.BillingYear, option.BillingMonth, option.IsApproved, kpis.TotalActualBill, kpis.TotalCalculatedExcess,
+                    kpis.DeductedFromEmployees, kpis.BorneByCompany, kpis.Accounts, waived, kpis.UnassessedExcess);
+            }).ToList(),
+            BuildBillRanges(bills),
+            BuildRepeatOverLimit(windowBatches.ToDictionary(option => option.Id, Period), allBills, selected.Id),
+            await BuildAssetsAsync(cancellationToken));
     }
 
-    private static int Period(InsightsBatchOption option) => option.BillingYear * 12 + option.BillingMonth;
+    private static int Period(InsightsBatchOption option) => InsightsRules.Period(option.BillingYear, option.BillingMonth);
 
     // Excluded bills are left out, as they are in the monthly bill report.
     private async Task<List<BillFacts>> LoadBillsAsync(IReadOnlyCollection<Guid> batchIds, CancellationToken cancellationToken)
@@ -89,7 +104,7 @@ public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingI
                 bill.FactoryCodeSnapshot, bill.FactoryNameSnapshot ?? bill.FactoryCodeSnapshot,
                 bill.DepartmentCodeSnapshot, bill.DepartmentNameSnapshot ?? bill.DepartmentCodeSnapshot,
                 bill.CategoryCodeSnapshot, bill.CategoryNameSnapshot ?? bill.CategoryCodeSnapshot,
-                bill.ActualBill, bill.CreditLimit + bill.MonthlyRental, bill.CalculatedExcess, bill.FinalDeduction, bill.Responsibility, bill.Remark))
+                bill.ActualBill, bill.CreditLimit + bill.MonthlyRental, bill.CalculatedExcess, bill.FinalDeduction, bill.Responsibility, bill.Remark, bill.PackageCodeSnapshot))
             .ToListAsync(cancellationToken);
     }
 
@@ -141,8 +156,70 @@ public sealed class EfBillingInsightsService(MobileBillDbContext db) : IBillingI
         .OrderByDescending(row => row.ActualBill)
         .ToList();
 
+    private static IReadOnlyList<InsightsBand> BuildBillRanges(IReadOnlyCollection<BillFacts> bills)
+    {
+        var byBand = bills.ToLookup(bill => InsightsRules.ExcessBand(bill.CalculatedExcess));
+        return InsightsRules.ExcessBands
+            .Select((band, index) => new InsightsBand(band.Key, band.Label, byBand[index].Count(), byBand[index].Sum(bill => bill.CalculatedExcess)))
+            .ToList();
+    }
+
+    // Counts billing months, not batches, so two batches in one month count once.
+    private static InsightsRepeatOverLimit BuildRepeatOverLimit(IReadOnlyDictionary<Guid, int> windowPeriods, ILookup<Guid, BillFacts> allBills, Guid selectedId)
+    {
+        var repeats = windowPeriods
+            .SelectMany(batch => allBills[batch.Key].Select(bill => (Period: batch.Value, Bill: bill)))
+            .GroupBy(item => item.Bill.MobileNumber)
+            .Select(group =>
+            {
+                var latest = group.OrderByDescending(item => item.Period).First().Bill;
+                var over = group.Where(item => item.Bill.CalculatedExcess > 0m).ToList();
+                var monthsOver = over.Select(item => item.Period).Distinct().Count();
+                var totalExcess = over.Sum(item => item.Bill.CalculatedExcess);
+                return new InsightsRepeatAccount(group.Key, latest.Epf, latest.EmployeeName, latest.FactoryName, latest.PackageCode,
+                    monthsOver, group.Select(item => item.Period).Distinct().Count(), totalExcess,
+                    monthsOver == 0 ? 0m : decimal.Round(totalExcess / monthsOver, 2, MidpointRounding.AwayFromZero),
+                    allBills[selectedId].Where(bill => bill.MobileNumber == group.Key).Sum(bill => bill.CalculatedExcess));
+            })
+            .Where(account => InsightsRules.IsRepeatOverLimit(account.MonthsOverLimit))
+            .OrderByDescending(account => account.MonthsOverLimit).ThenByDescending(account => account.TotalExcess).ThenBy(account => account.MobileNumber, StringComparer.Ordinal)
+            .ToList();
+        return new InsightsRepeatOverLimit(InsightsRules.RepeatWindowMonths, InsightsRules.RepeatOverLimitMonths, repeats.Count, repeats.Take(RepeatAccountsShown).ToList());
+    }
+
+    private static readonly Dictionary<SimType, string> SimTypeLabels = new() { [SimType.Voice] = "Voice", [SimType.VoiceData] = "Voice + Data", [SimType.Data] = "Data", [SimType.ESim] = "eSIM" };
+
+    private static readonly Dictionary<DeviceStatus, string> DeviceStatusLabels = new()
+    {
+        [DeviceStatus.InStock] = "In Stock", [DeviceStatus.Issued] = "Issued", [DeviceStatus.ReturnPending] = "Return Pending", [DeviceStatus.UnderRepair] = "Under Repair",
+        [DeviceStatus.Damaged] = "Damaged", [DeviceStatus.Lost] = "Lost", [DeviceStatus.Retired] = "Retired",
+    };
+
+    // Active allocations (pooled SIMs included) by SIM type, and devices by status with the depreciated value still with employees.
+    private async Task<InsightsAssets> BuildAssetsAsync(CancellationToken cancellationToken)
+    {
+        var simTypes = await db.MobileAccounts.AsNoTracking().Where(account => account.IsActive)
+            .GroupBy(account => account.SimType).Select(group => new { group.Key, Count = group.Count() })
+            .ToListAsync(cancellationToken);
+        var devices = await db.MobileDevices.AsNoTracking()
+            .Select(device => new { device.Status, device.PurchaseCost, device.PurchaseDate })
+            .ToListAsync(cancellationToken);
+        var today = DateOnly.FromDateTime(clock.UtcNow.UtcDateTime);
+
+        return new InsightsAssets(
+            Enum.GetValues<SimType>().Select(type => (SimType?)type).Append(null)
+                .Select(type => new InsightsCount(type?.ToString() ?? "NotSet", type is { } known ? SimTypeLabels[known] : "Not set", simTypes.Where(item => item.Key == type).Sum(item => item.Count)))
+                .Where(item => item.Count > 0).ToList(),
+            Enum.GetValues<DeviceStatus>()
+                .Select(status => new InsightsCount(status.ToString(), DeviceStatusLabels[status], devices.Count(device => device.Status == status)))
+                .Where(item => item.Count > 0).ToList(),
+            devices.Count,
+            devices.Where(device => device.Status is DeviceStatus.Issued or DeviceStatus.ReturnPending)
+                .Sum(device => DeviceRules.RecoverableAmount(device.PurchaseCost, device.PurchaseDate, today)));
+    }
+
     private sealed record BillFacts(
         Guid BatchId, string MobileNumber, string Epf, string EmployeeName, string? CallingName,
         string FactoryCode, string FactoryName, string DepartmentCode, string DepartmentName, string CategoryCode, string CategoryName,
-        decimal ActualBill, decimal Entitlement, decimal CalculatedExcess, decimal FinalDeduction, Responsibility? Responsibility, string? Remark);
+        decimal ActualBill, decimal Entitlement, decimal CalculatedExcess, decimal FinalDeduction, Responsibility? Responsibility, string? Remark, string? PackageCode);
 }

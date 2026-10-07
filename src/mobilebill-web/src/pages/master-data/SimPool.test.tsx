@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-// Signed in as an HR User.
-vi.mock('../../auth/AuthContext', () => ({ useCanEditMasterData: (roles: readonly string[] = ['Administrator', 'ITEngineer']) => roles.includes('HrUser') }))
+// Signed in as an IT Engineer (SIM Pool actions are for Administrator and IT Engineer).
+vi.mock('../../auth/AuthContext', () => ({ useCanEditMasterData: (roles: readonly string[] = ['Administrator', 'ITEngineer']) => roles.includes('ITEngineer') }))
 
 import { EmployeesPage, MobileAllocationsPage } from './MasterPages'
 
@@ -33,7 +33,7 @@ describe('SIM Pool', () => {
     await waitFor(() => expect(posted).toEqual([{ url: expect.stringContaining('/api/mobile-accounts/m1/release-to-pool'), body: { resignedOn: '2026-10-03', reason: 'Resigned' } }]))
   })
 
-  it('assigns a pooled number on its existing amounts for HR users', async () => {
+  it('assigns a pooled number starting from its existing amounts, which can be changed', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       const url = String(input)
       if (url.includes('/api/employees')) return page([{ id: 'e2', epf: 'EPF-2', fullName: 'Joiner', isActive: true }])
@@ -43,10 +43,9 @@ describe('SIM Pool', () => {
 
     expect(await screen.findByText('SIM Pool since 2026-08-01')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Release to Pool' })).toBeNull()
-    expect((screen.getByRole('button', { name: 'Reassign' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Assign from Pool' }))
     const dialog = await screen.findByRole('dialog')
-    expect((within(dialog).getByRole('spinbutton', { name: 'Monthly Credit Limit' }) as HTMLInputElement).disabled).toBe(true)
+    expect((within(dialog).getByRole('spinbutton', { name: 'Monthly Credit Limit' }) as HTMLInputElement).disabled).toBe(false)
     expect((within(dialog).getByRole('spinbutton', { name: 'Monthly Credit Limit' }) as HTMLInputElement).value).toBe('1500')
   })
 

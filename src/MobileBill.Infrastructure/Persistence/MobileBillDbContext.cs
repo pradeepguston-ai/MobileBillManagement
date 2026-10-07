@@ -8,6 +8,9 @@ public sealed class MobileBillDbContext(DbContextOptions<MobileBillDbContext> op
 {
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<MobileAccount> MobileAccounts => Set<MobileAccount>();
+    public DbSet<MobilePackage> MobilePackages => Set<MobilePackage>();
+    public DbSet<MobileDevice> MobileDevices => Set<MobileDevice>();
+    public DbSet<DeviceIssue> DeviceIssues => Set<DeviceIssue>();
 
     public DbSet<Factory> Factories => Set<Factory>();
     public DbSet<Department> Departments => Set<Department>();

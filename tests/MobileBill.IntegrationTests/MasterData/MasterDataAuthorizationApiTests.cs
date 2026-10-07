@@ -47,6 +47,15 @@ public sealed class MasterDataAuthorizationApiTests
         { "POST", "/api/mobile-accounts", new { mobileNumber = "0771234567", employeeId = Guid.NewGuid(), monthlyCreditLimit = 1m, monthlyRental = 1m } },
         { "PUT", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001", new { mobileNumber = "0771234567", employeeId = Guid.NewGuid(), monthlyCreditLimit = 1m, monthlyRental = 1m } },
         { "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/deactivate", null },
+        { "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/reassign", new { employeeId = Guid.NewGuid() } },
+        { "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/release-to-pool", new { resignedOn = "2026-10-01", reason = "Resigned" } },
+        { "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/assign-from-pool", new { employeeId = Guid.NewGuid() } },
+        { "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/disconnect", new { disconnectedOn = "2026-10-01" } },
+        { "POST", "/api/mobile-packages", new { code = "X", providerId = Guid.NewGuid(), description = "X", monthlyRental = 1m, totalWithTax = 1m, defaultCreditLimit = 1m } },
+        { "POST", "/api/mobile-devices", new { assetTag = "X", imei1 = "356789010000014", brand = "X", model = "X", purchaseDate = "2026-01-01", purchaseCost = 1m } },
+        { "POST", "/api/mobile-devices/00000000-0000-0000-0000-000000000001/issue", new { employeeId = Guid.NewGuid(), issuedOn = "2026-01-01" } },
+        { "POST", "/api/mobile-devices/00000000-0000-0000-0000-000000000001/return", new { returnedOn = "2026-01-01", condition = "InStock", reason = "Other" } },
+        { "POST", "/api/mobile-devices/00000000-0000-0000-0000-000000000001/lost", new { lostOn = "2026-01-01" } },
         { "POST", "/api/bill-batches", new { providerId = Guid.NewGuid(), corporateCode = "C", billingYear = 2026, billingMonth = 9 } },
     };
 
@@ -60,8 +69,6 @@ public sealed class MasterDataAuthorizationApiTests
         { "POST", "/api/sub-sections", new { code = "", name = "", sectionCode = "" } },
         { "POST", "/api/designations", new { code = "", name = "" } },
         { "POST", "/api/categories", new { code = "", name = "" } },
-        { "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/reassign", new { employeeId = Guid.Empty } },
-        { "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/assign-from-pool", new { employeeId = Guid.Empty } },
     };
 
     public static TheoryData<string, object?> SimPoolActions => new()
@@ -86,21 +93,7 @@ public sealed class MasterDataAuthorizationApiTests
     [Theory]
     [InlineData(UserRole.HrUser)]
     [InlineData(UserRole.FinanceUser)]
-    public async Task Hr_and_finance_users_cannot_set_new_amounts_when_assigning_from_the_pool(UserRole role)
-    {
-        using var factory = new WebApplicationFactory<Program>();
-        using var client = factory.CreateClient();
-        TestAuth.Authorize(client, role);
-
-        var response = await Send(client, "POST", "/api/mobile-accounts/00000000-0000-0000-0000-000000000001/assign-from-pool", new { employeeId = Guid.NewGuid(), monthlyCreditLimit = 5000m });
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData(UserRole.HrUser)]
-    [InlineData(UserRole.FinanceUser)]
-    public async Task Hr_and_finance_users_cannot_change_providers_allocation_amounts_or_billing(UserRole role)
+    public async Task Hr_and_finance_users_cannot_change_providers_packages_allocations_or_billing(UserRole role)
     {
         using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();
@@ -113,7 +106,7 @@ public sealed class MasterDataAuthorizationApiTests
     [Theory]
     [InlineData(UserRole.HrUser)]
     [InlineData(UserRole.FinanceUser)]
-    public async Task Hr_and_finance_users_may_maintain_organisation_masters_and_reassign_numbers(UserRole role)
+    public async Task Hr_and_finance_users_may_maintain_organisation_masters(UserRole role)
     {
         using var factory = new WebApplicationFactory<Program>();
         using var client = factory.CreateClient();

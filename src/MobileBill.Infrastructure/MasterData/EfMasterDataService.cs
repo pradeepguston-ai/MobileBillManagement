@@ -11,7 +11,10 @@ public sealed partial class EfMasterDataService(MobileBillDbContext dbContext, I
 {
     private readonly MobileBillDbContext _dbContext = dbContext;
     private DateTimeOffset Now => clock?.UtcNow ?? DateTimeOffset.UtcNow;
-    private string PerformedBy => currentUser?.UserId ?? "system";
+    // Automatic work (completing resignations on their date) is recorded as "system", also when no request is active.
+    private string? _performedByOverride;
+    private string PerformedBy => _performedByOverride ?? currentUser?.UserId ?? SystemUser;
+    private const string SystemUser = "system";
 
     private static async Task<PagedResult<T>> ToPagedResultAsync<T>(
         IQueryable<T> query,

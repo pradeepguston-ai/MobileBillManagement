@@ -1,11 +1,12 @@
 import { Alert, Box, Card, CardContent, FormControl, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
-import { BarChart, LineChart, PieChart } from '@mui/x-charts'
+import { BarChart, LineChart } from '@mui/x-charts'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 
-import { getBillingInsights, type BillingInsights, type InsightsBatchOption, type InsightsGroupRow, type InsightsKpis } from '../../api/insightsApi'
+import { getBillingInsights, type BillingInsights, type InsightsBatchOption, type InsightsCount, type InsightsGroupRow, type InsightsKpis, type InsightsRepeatOverLimit } from '../../api/insightsApi'
 import { billingPeriod } from '../../billing/billingRoutes'
 import { brand } from '../../theme/theme'
 import { formatCurrency } from '../../utils/formatters'
+import { DonutChart } from '../common/DonutChart'
 import { EmptyState } from '../common/EmptyState'
 import { ErrorState } from '../common/ErrorState'
 import { LoadingState } from '../common/LoadingState'
@@ -66,11 +67,29 @@ export function InsightsPanel() {
     </ChartCard>
 
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 3 }}>
+      <ChartCard title="Deductions recovered per month" subtitle="How each month's calculated excess was settled; * marks a batch that is not yet approved.">
+        <RecoveryChart data={data} />
+      </ChartCard>
+      <ChartCard title="Bill range" subtitle={`How far each of the ${current.accounts} numbers in this batch went over its entitlement.`}>
+        <BillRangeChart data={data} />
+      </ChartCard>
+    </Box>
+
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 3 }}>
       <ChartCard title="Where the money goes" subtitle="Charges on the PDF for this batch, by type.">
         <ChargeMixChart data={data} />
       </ChartCard>
       <ChartCard title="Who pays the excess" subtitle={`Calculated excess ${money(current.totalCalculatedExcess)}, split by responsibility.`}>
         <ExcessSplitChart data={data} />
+      </ChartCard>
+    </Box>
+
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: 3 }}>
+      <ChartCard title="SIM type mix" subtitle="Active allocations today, pooled SIMs included.">
+        <CountDonut ariaLabel="SIM type chart" centerLabel="active SIMs" items={data.assets.simTypes} colors={simTypeColors} empty="No active allocations." />
+      </ChartCard>
+      <ChartCard title="Device status" subtitle={`${data.assets.devices} company devices; ${money(data.assets.devicesWithEmployeesValue)} depreciated value still with employees (Issued and Return Pending).`}>
+        <CountDonut ariaLabel="Device status chart" centerLabel="devices" items={data.assets.deviceStatuses} colors={deviceStatusColors} empty="No company devices recorded." />
       </ChartCard>
     </Box>
 
@@ -89,8 +108,18 @@ export function InsightsPanel() {
     <ChartCard title="Top 10 over-limit numbers" subtitle="Highest calculated excess in this batch.">
       <TopOverLimitTable data={data} />
     </ChartCard>
+
+    <ChartCard
+      title="Repeat over-limit numbers"
+      subtitle={`Over the limit in ${data.repeatOverLimit.minMonthsOver} or more of the last ${data.repeatOverLimit.windowMonths} billing months (approved batches and this one) – candidates for a bigger package or a reminder.`}
+    >
+      <RepeatOverLimitTable repeat={data.repeatOverLimit} />
+    </ChartCard>
   </Stack>
 }
+
+const simTypeColors: Record<string, string> = { Voice: brand.purple, VoiceData: brand.red, Data: brand.orange, ESim: brand.indigo, NotSet: '#9CA3AF' }
+const deviceStatusColors: Record<string, string> = { InStock: '#16823A', Issued: brand.indigo, ReturnPending: brand.orange, UnderRepair: brand.yellow, Damaged: brand.red, Lost: '#9B111E', Retired: '#9CA3AF' }
 
 function ChartCard({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
   return <Card variant="outlined" aria-label={title}><CardContent>
@@ -151,14 +180,76 @@ function TrendChart({ data }: { data: BillingInsights }) {
   </Box>
 }
 
+// Stacked: the four parts add up to the month's calculated excess.
+function RecoveryChart({ data }: { data: BillingInsights }) {
+  const labels = data.trend.map(point => `${shortMonth(point.billingYear, point.billingMonth)}${point.isApproved ? '' : '*'}`)
+  const series = [
+    { label: 'Deducted from employees', data: data.trend.map(point => point.deductedFromEmployees), color: brand.purple },
+    { label: 'Waived for employees', data: data.trend.map(point => point.waivedForEmployees), color: brand.magenta },
+    { label: 'By Company', data: data.trend.map(point => point.borneByCompany), color: brand.orange },
+    { label: 'Not yet assigned', data: data.trend.map(point => point.unassessedExcess), color: '#9CA3AF' },
+  ].filter(item => item.data.some(value => value !== 0))
+  if (series.length === 0) return <Typography color="text.secondary">No excess in these months.</Typography>
+  return <Box sx={{ width: '100%', height: 320 }}>
+    <BarChart
+      height={320}
+      xAxis={[{ scaleType: 'band', data: labels }]}
+      yAxis={[{ width: 80, valueFormatter: (value: number) => value.toLocaleString('en-US') }]}
+      series={series.map(item => ({ ...item, stack: 'excess', valueFormatter: (value: number | null) => money(value ?? 0) }))}
+    />
+  </Box>
+}
+
+function BillRangeChart({ data }: { data: BillingInsights }) {
+  if (data.billRanges.every(band => band.accounts === 0)) return <Typography color="text.secondary">No bills in this batch.</Typography>
+  return <Box sx={{ width: '100%', height: 320 }}>
+    <BarChart
+      height={320}
+      xAxis={[{ scaleType: 'band', data: data.billRanges.map(band => band.label) }]}
+      yAxis={[{ width: 50, tickMinStep: 1 }]}
+      series={[{ label: 'Numbers', data: data.billRanges.map(band => band.accounts), color: brand.red, valueFormatter: (value, { dataIndex }) => `${value ?? 0} numbers · excess ${money(data.billRanges[dataIndex].calculatedExcess)}` }]}
+      hideLegend
+    />
+  </Box>
+}
+
+function RepeatOverLimitTable({ repeat }: { repeat: InsightsRepeatOverLimit }) {
+  if (repeat.accounts.length === 0) return <Alert severity="success">No number has gone over its limit in {repeat.minMonthsOver} or more of the last {repeat.windowMonths} months.</Alert>
+  return <Stack spacing={1}>
+    {repeat.totalCount > repeat.accounts.length && <Typography variant="body2" color="text.secondary">Showing the {repeat.accounts.length} with the most months over the limit, of {repeat.totalCount}.</Typography>}
+    <TableContainer sx={{ overflowX: 'auto' }}>
+      <Table size="small" aria-label="Repeat over-limit numbers">
+        <TableHead><TableRow>
+          <TableCell>Mobile</TableCell><TableCell>EPF</TableCell><TableCell>Employee</TableCell><TableCell>Factory</TableCell><TableCell>Package</TableCell>
+          <TableCell align="right">Months over Limit</TableCell><TableCell align="right">Total Excess</TableCell><TableCell align="right">Average Excess</TableCell><TableCell align="right">This Batch</TableCell>
+        </TableRow></TableHead>
+        <TableBody>{repeat.accounts.map(item => <TableRow key={item.mobileNumber} hover>
+          <TableCell>{item.mobileNumber}</TableCell>
+          <TableCell>{item.epf}</TableCell>
+          <TableCell>{item.employeeName}</TableCell>
+          <TableCell>{item.factory}</TableCell>
+          <TableCell>{item.packageCode ?? '—'}</TableCell>
+          <TableCell align="right" sx={{ fontWeight: 700 }}>{item.monthsOverLimit} of {item.monthsBilled}</TableCell>
+          <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.main' }}>{money(item.totalExcess)}</TableCell>
+          <TableCell align="right">{money(item.averageExcess)}</TableCell>
+          <TableCell align="right">{item.selectedBatchExcess > 0 ? money(item.selectedBatchExcess) : 'Within limit'}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table>
+    </TableContainer>
+  </Stack>
+}
+
+function CountDonut({ items, colors, ariaLabel, centerLabel, empty }: { items: InsightsCount[]; colors: Record<string, string>; ariaLabel: string; centerLabel: string; empty: string }) {
+  if (items.length === 0) return <Typography color="text.secondary">{empty}</Typography>
+  return <DonutChart ariaLabel={ariaLabel} centerLabel={centerLabel} formatTotal={value => String(value)} data={items.map((item, index) => ({ value: item.count, label: item.label, color: colors[item.key] ?? palette[index % palette.length] }))} />
+}
+
 function ChargeMixChart({ data }: { data: BillingInsights }) {
   const charges = data.chargeMix.filter(item => item.amount > 0)
   const credits = data.chargeMix.filter(item => item.amount < 0)
   if (charges.length === 0) return <Typography color="text.secondary">No charges recorded.</Typography>
   return <Stack spacing={1}>
-    <Box sx={{ width: '100%', height: 300 }}>
-      <PieChart height={300} series={[{ innerRadius: 60, paddingAngle: 1, cornerRadius: 3, valueFormatter: item => money(item.value), data: charges.map((item, index) => ({ id: item.key, value: item.amount, label: item.label, color: palette[index % palette.length] })) }]} />
-    </Box>
+    <DonutChart ariaLabel="Charge mix chart" centerLabel="LKR total charges" formatValue={money} data={charges.map((item, index) => ({ value: item.amount, label: item.label, color: palette[index % palette.length] }))} />
     {credits.length > 0 && <Typography variant="body2" color="text.secondary">Credits not shown in the chart: {credits.map(item => `${item.label} ${money(item.amount)}`).join(', ')}</Typography>}
   </Stack>
 }
@@ -166,9 +257,7 @@ function ChargeMixChart({ data }: { data: BillingInsights }) {
 function ExcessSplitChart({ data }: { data: BillingInsights }) {
   const colors: Record<string, string> = { deducted: brand.purple, company: brand.orange, unassessed: '#9CA3AF' }
   if (data.excessSplit.length === 0) return <Typography color="text.secondary">No excess in this batch – every number stayed within its entitlement.</Typography>
-  return <Box sx={{ width: '100%', height: 300 }}>
-    <PieChart height={300} series={[{ innerRadius: 60, paddingAngle: 1, cornerRadius: 3, valueFormatter: item => money(item.value), data: data.excessSplit.map(item => ({ id: item.key, value: item.amount, label: item.label, color: colors[item.key] ?? brand.magenta })) }]} />
-  </Box>
+  return <DonutChart ariaLabel="Excess split chart" centerLabel="LKR total excess" formatValue={money} data={data.excessSplit.map(item => ({ value: item.amount, label: item.label, color: colors[item.key] ?? brand.magenta }))} />
 }
 
 function GroupChart({ rows }: { rows: InsightsGroupRow[] }) {

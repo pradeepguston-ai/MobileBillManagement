@@ -27,7 +27,7 @@ internal sealed record BillingReportData(
     [
         "Serial", "Mobile Phone", "EPF", "Name", "Category", "Designation", "Factory", "Department",
         "Section", "Sub Section", "Calling Name", "Monthly Credit Limit", "Monthly Rental", "Actual Bill", "Variance", "Deduction",
-        "Deduction Responsibility", "Remark"
+        "Deduction Responsibility", "Remark", "Package"
     ];
 
     // By User rows show the deduction taken from the employee; By Company rows show the excess the company absorbs.
@@ -96,7 +96,8 @@ internal sealed record BillingReportData(
                 item.CalculatedExcess,
                 item.FinalDeduction,
                 item.Remark,
-                item.IsPooled))
+                item.IsPooled,
+                item.PackageCodeSnapshot))
             .ToListAsync(cancellationToken);
 
         var includedRows = rows.Where(item => item.Status != MonthlyBillStatus.Excluded).ToList();
@@ -226,7 +227,8 @@ internal sealed record ReportRow(
     decimal CalculatedExcess,
     decimal FinalDeduction,
     string? Remark,
-    bool IsPooled = false)
+    bool IsPooled = false,
+    string? PackageCode = null)
 {
     public decimal DisplayedDeduction => Responsibility == Domain.Enums.Responsibility.ByCompany ? CalculatedExcess : FinalDeduction;
     public string ResponsibilityLabel => Responsibility == Domain.Enums.Responsibility.ByUser ? "By User" : "By Company";

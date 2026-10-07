@@ -12,7 +12,9 @@ namespace MobileBill.UnitTests.Application;
 public sealed class MasterDataImportServiceTests
 {
     private static readonly string[] EmployeeHeadings = ["Factory Code *", "EPF *", "Full Name *", "Calling Name", "Category Code *", "Designation Code *", "Department Code *", "Section Code", "Sub Section Code"];
-    private static readonly string[] AllocationHeadings = ["Mobile Number *", "Factory Code *", "EPF *", "Monthly Credit Limit *", "Monthly Rental *"];
+    private static readonly string[] AllocationHeadings = ["Mobile Number *", "Factory Code *", "EPF *", "Package Code *", "SIM Type", "Monthly Credit Limit *", "Monthly Rental *"];
+    // Files made before Package Code was added still import for numbers that are already allocated.
+    private static readonly string[] LegacyAllocationHeadings = ["Mobile Number *", "Factory Code *", "EPF *", "Monthly Credit Limit *", "Monthly Rental *"];
 
     [Fact]
     public async Task Checking_employees_saves_nothing_and_counts_new_updated_and_unchanged()
@@ -79,13 +81,62 @@ public sealed class MasterDataImportServiceTests
         await using var db = await SeedAsync();
         db.Employees.Add(new Employee { EPF = "100", FullName = "Twin In F2", FactoryCode = "F2", CategoryCode = "C", DesignationCode = "DS", DepartmentCode = "D" });
         await db.SaveChangesAsync();
-        var file = Workbook(AllocationHeadings, [771000001m, "F2", 100m, 1500m, 250.5m]);
+        var file = Workbook(AllocationHeadings, [771000001m, "F2", 100m, "PPU23_700", "voice and data", 1500m, 250.5m]);
 
         var result = await Service(db).ImportMobileAccountsAsync(file, commit: true, default);
 
         Assert.True(result.Committed);
         var allocation = await db.MobileAccounts.Include(x => x.Employee).SingleAsync();
-        Assert.Equal(("771000001", "Twin In F2", 1500m, 250.5m), (allocation.MobileNumber, allocation.Employee.FullName, allocation.MonthlyCreditLimit, allocation.MonthlyRental));
+        Assert.Equal(("771000001", "Twin In F2", 1500m, 250.5m, TestPackages.PackageId), (allocation.MobileNumber, allocation.Employee.FullName, allocation.MonthlyCreditLimit, allocation.MonthlyRental, allocation.PackageId!.Value));
+        Assert.Equal(SimType.VoiceData, allocation.SimType);
+    }
+
+    [Theory]
+    [InlineData("Voice", SimType.Voice)]
+    [InlineData("Voice + Data", SimType.VoiceData)]
+    [InlineData("DATA", SimType.Data)]
+    [InlineData("eSIM", SimType.ESim)]
+    [InlineData("E-SIM", SimType.ESim)]
+    public async Task Sim_type_is_read_however_it_is_written(string text, SimType expected)
+    {
+        await using var db = await SeedAsync();
+        var file = Workbook(AllocationHeadings, ["0790", "F1", "100", "PPU23_700", text, 1000m, 100m]);
+
+        Assert.True((await Service(db).ImportMobileAccountsAsync(file, commit: true, default)).Committed);
+        Assert.Equal(expected, (await db.MobileAccounts.SingleAsync()).SimType);
+    }
+
+    [Fact]
+    public async Task An_unknown_sim_type_is_rejected_and_a_blank_one_keeps_the_existing_type()
+    {
+        await using var db = await SeedAsync();
+        var holder = await db.Employees.SingleAsync(x => x.EPF == "100");
+        db.Add(new MobileAccount { MobileNumber = "0791", EmployeeId = holder.Id, MonthlyCreditLimit = 1000m, MonthlyRental = 100m, SimType = SimType.Data, PackageId = TestPackages.PackageId });
+        await db.SaveChangesAsync();
+
+        var bad = await Service(db).ImportMobileAccountsAsync(Workbook(AllocationHeadings, ["0792", "F1", "100", "PPU23_700", "4G", 1000m, 100m]), commit: false, default);
+        var blank = await Service(db).ImportMobileAccountsAsync(Workbook(AllocationHeadings, ["0791", "F1", "100", "", "", 1500m, 100m]), commit: true, default);
+
+        Assert.Contains(bad.Errors, error => error.Message == "SIM Type '4G' is not one of Voice, Voice + Data, Data or eSIM.");
+        Assert.True(blank.Committed);
+        Assert.Equal((SimType.Data, 1500m), ((await db.MobileAccounts.SingleAsync()).SimType!.Value, (await db.MobileAccounts.SingleAsync()).MonthlyCreditLimit));
+    }
+
+    [Fact]
+    public async Task A_new_allocation_needs_an_active_package_code()
+    {
+        await using var db = await SeedAsync();
+        var file = Workbook(AllocationHeadings,
+            ["0781", "F1", "100", "", "", 1000m, 100m],
+            ["0782", "F1", "100", "NOPE", "", 1000m, 100m],
+            ["0783", "F1", "100", "ppu23_700", "", 1000m, 100m]);
+
+        var check = await Service(db).ImportMobileAccountsAsync(file, commit: false, default);
+
+        Assert.Contains(check.Errors, error => error.Row == 2 && error.Message == "Package Code is required for a new allocation.");
+        Assert.Contains(check.Errors, error => error.Row == 3 && error.Message.Contains("'NOPE' is not an active package"));
+        Assert.DoesNotContain(check.Errors, error => error.Row == 4);
+        Assert.Equal(1, check.NewCount);
     }
 
     [Fact]
@@ -99,7 +150,7 @@ public sealed class MasterDataImportServiceTests
             new MobileAccount { MobileNumber = "0772", EmployeeId = holder.Id, MonthlyCreditLimit = 1000m, MonthlyRental = 100m },
             new MobileAccount { MobileNumber = "0773", EmployeeId = holder.Id, MonthlyCreditLimit = 1000m, MonthlyRental = 100m, Status = SimStatus.Pooled, PooledOn = new DateOnly(2026, 9, 1) });
         await db.SaveChangesAsync();
-        var file = Workbook(AllocationHeadings,
+        var file = Workbook(LegacyAllocationHeadings,
             ["0771", "F1", "100", 2000m, 150m],
             ["0772", "F1", "101", 1000m, 100m],
             ["0773", "F1", "101", 1000m, 100m],
@@ -115,7 +166,7 @@ public sealed class MasterDataImportServiceTests
         Assert.Contains(check.Errors, error => error.Row == 6 && error.Message.Contains("two decimal places"));
         Assert.Equal(1, check.UpdatedCount);
 
-        var valid = await Service(db).ImportMobileAccountsAsync(Workbook(AllocationHeadings, ["0771", "F1", "100", 2000m, 150m]), commit: true, default);
+        var valid = await Service(db).ImportMobileAccountsAsync(Workbook(LegacyAllocationHeadings, ["0771", "F1", "100", 2000m, 150m]), commit: true, default);
         Assert.Equal((1, true), (valid.UpdatedCount, valid.Committed));
         Assert.Equal(2000m, (await db.MobileAccounts.SingleAsync(x => x.MobileNumber == "0771")).MonthlyCreditLimit);
     }
@@ -169,6 +220,7 @@ public sealed class MasterDataImportServiceTests
             new Section { Code = "S1", Name = "Section", DepartmentCode = "D" }, new SubSection { Code = "SS1", Name = "Sub Section", SectionCode = "S1" },
             new Employee { EPF = "100", FullName = "Existing Same", FactoryCode = "F1", CategoryCode = "C", DesignationCode = "DS", DepartmentCode = "D" },
             new Employee { EPF = "101", FullName = "Existing Two", FactoryCode = "F1", CategoryCode = "C", DesignationCode = "DS", DepartmentCode = "D" });
+        TestPackages.Add(db);
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
         return db;

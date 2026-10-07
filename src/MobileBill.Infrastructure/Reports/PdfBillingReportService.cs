@@ -17,11 +17,11 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
     private const string HeaderColor = "#1F4E78";
     private const string RuleColor = "#D9E2F3";
 
-    // Widths in millimetres for the 18 report columns; they add up to the 277mm printable width of A4 landscape.
-    private static readonly double[] ColumnWidths = [7, 15, 10, 30, 14, 22, 17, 17, 16, 16, 13, 13, 12, 14, 14, 14, 15, 18];
+    // Widths in millimetres for the 19 report columns; they add up to the 277mm printable width of A4 landscape.
+    private static readonly double[] ColumnWidths = [7, 15, 10, 26, 14, 19, 15, 15, 16, 15, 13, 13, 12, 14, 14, 14, 15, 15, 15];
     // 0-based positions of the columns written below; they follow BillingReportData.Headers.
     private const int SectionColumn = 8, SubSectionColumn = 9, CallingNameColumn = 10, CreditLimitColumn = 11, MonthlyRentalColumn = 12,
-        ActualBillColumn = 13, VarianceColumn = 14, DeductionColumn = 15, ResponsibilityColumn = 16, RemarkColumn = 17;
+        ActualBillColumn = 13, VarianceColumn = 14, DeductionColumn = 15, ResponsibilityColumn = 16, RemarkColumn = 17, PackageColumn = 18;
     private static readonly HashSet<int> NumericColumns = [CreditLimitColumn, MonthlyRentalColumn, ActualBillColumn, VarianceColumn, DeductionColumn];
 
     static PdfBillingReportService() => ReportFonts.Configure();
@@ -146,6 +146,7 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
             Set(row, DeductionColumn, Money(bill.DisplayedDeduction));
             Set(row, ResponsibilityColumn, bill.ResponsibilityLabel);
             Set(row, RemarkColumn, bill.Remark);
+            Set(row, PackageColumn, bill.PackageCode);
         }
 
         var totals = table.AddRow();

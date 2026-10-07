@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // Signed in as an HR User: allowed only where the page's role list includes HrUser.
@@ -27,23 +27,20 @@ describe('HR and Finance user master-data access', () => {
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
   })
 
-  it('can only reassign a mobile allocation to another employee', async () => {
+  it('sees mobile allocations view-only, with no actions on assigned or pooled numbers', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       const path = new URL(String(input), 'http://localhost').pathname
       if (path === '/api/employees') return page([{ id: 'e1', epf: 'EPF-1', fullName: 'First Employee', isActive: true }])
-      return page([{ id: 'm1', mobileNumber: '0771234567', epf: 'EPF-1', employeeName: 'First Employee', monthlyCreditLimit: 1500, monthlyRental: 700, factory: 'F', department: 'D', isActive: true }])
+      return page([
+        { id: 'm1', mobileNumber: '0771234567', epf: 'EPF-1', employeeName: 'First Employee', monthlyCreditLimit: 1500, monthlyRental: 700, factory: 'F', department: 'D', isActive: true, status: 'Assigned' },
+        { id: 'm2', mobileNumber: '0771234568', epf: 'EPF-2', employeeName: 'Leaver', monthlyCreditLimit: 1500, monthlyRental: 700, factory: 'F', department: 'D', isActive: true, status: 'Pooled', pooledOn: '2026-09-01' },
+      ])
     })
     render(<MobileAllocationsPage />)
 
     expect(await screen.findByText('0771234567')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Create' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Deactivate' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Reassign' }))
-
-    expect(await screen.findByText('Reassign Mobile Number')).toBeTruthy()
-    expect((screen.getByRole('textbox', { name: 'Mobile Number' }) as HTMLInputElement).disabled).toBe(true)
-    expect((screen.getByRole('spinbutton', { name: 'Monthly Credit Limit' }) as HTMLInputElement).disabled).toBe(true)
-    expect((screen.getByRole('spinbutton', { name: 'Monthly Rental' }) as HTMLInputElement).disabled).toBe(true)
-    expect((screen.getByRole('combobox', { name: 'Employee' }) as HTMLInputElement).disabled).toBe(false)
+    expect(screen.getByText('0771234568')).toBeTruthy()
+    for (const name of ['Create', 'Import', 'Edit', 'Reassign', 'Deactivate', 'Release to Pool', 'Assign from Pool', 'Disconnect'])
+      expect(screen.queryByRole('button', { name })).toBeNull()
   })
 })

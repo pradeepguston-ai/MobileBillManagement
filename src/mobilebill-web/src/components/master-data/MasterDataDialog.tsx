@@ -1,6 +1,7 @@
 import { Alert, Autocomplete, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material'
 
-export type FormFieldOption = { value: string; label: string; parentValue?: string }
+// data: the record behind the option, for filling in other fields when it is chosen.
+export type FormFieldOption = { value: string; label: string; parentValue?: string; data?: Record<string, unknown> }
 export type FormField = {
   key: string
   label: string
@@ -9,6 +10,8 @@ export type FormField = {
   options?: FormFieldOption[]
   dependsOn?: string
   disabled?: boolean
+  // Shown under the field when it has no error.
+  helperText?: string
 }
 
 type MasterDataDialogProps = {
@@ -48,7 +51,7 @@ export function MasterDataDialog({ open, title, fields, values, errors, onChange
               value={values[field.key] ?? ''}
               onChange={event => onChange(field.key, event.target.value)}
               error={Boolean(errors[field.key])}
-              helperText={errors[field.key]}
+              helperText={errors[field.key] ?? field.helperText}
               slotProps={{ inputLabel: field.type === 'date' ? { shrink: true } : undefined, htmlInput: field.type === 'number' ? { min: 0, step: '0.01' } : undefined }}
             />)}
         {errors.form && <Alert severity="error">{errors.form}</Alert>}

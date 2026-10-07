@@ -16,6 +16,10 @@ public sealed class Employee : AuditableEntity
     public string? SubSectionCode { get; set; }
     public bool IsActive { get; set; } = true;
     public Responsibility? DefaultResponsibility { get; set; }
+    // The resignation date. While it is in the future the resignation is pending and the employee stays active
+    // (see ResignationRules); once it is reached the employee is inactive and their numbers are in the SIM Pool.
+    public DateOnly? ResignedOn { get; set; }
+    public string? ResignationReason { get; set; }
     public EmployeeCategory Category { get; set; } = null!;
     public Designation Designation { get; set; } = null!;
     public Factory Factory { get; set; } = null!;

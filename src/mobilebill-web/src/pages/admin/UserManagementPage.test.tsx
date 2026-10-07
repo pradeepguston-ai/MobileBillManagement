@@ -30,21 +30,21 @@ const renderPage = () => render(<AuthProvider><UserManagementPage /></AuthProvid
 describe('UserManagementPage', () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear() })
 
-  it('shows pending registrations first and all users on the second tab', async () => {
+  it('shows all users first and pending registrations on the second tab', async () => {
     mockApi(); renderPage()
 
     expect(screen.getByRole('heading', { name: 'User Management' })).toBeTruthy()
-    expect(await screen.findByText('New Person')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('tab', { name: 'All Users' }))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['All Users', 'Pending Users'])
     expect(await screen.findByText('Engineer Two')).toBeTruthy()
     expect(screen.getByText('Former User')).toBeTruthy()
-    expect(screen.queryByText('New Person')).toBeNull()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Pending Users' }))
+    expect(await screen.findByText('New Person')).toBeTruthy()
+    expect(screen.queryByText('Engineer Two')).toBeNull()
   })
 
   it('changes a role, confirms before deactivating, and protects the signed-in administrator', async () => {
     const fetchMock = mockApi(); renderPage()
-    fireEvent.click(screen.getByRole('tab', { name: 'All Users' }))
     const engineerRow = (await screen.findByText('Engineer Two')).closest('tr')!
 
     fireEvent.mouseDown(within(engineerRow).getByRole('combobox'))

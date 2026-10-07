@@ -671,6 +671,73 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.ToTable("Designations", (string)null);
                 });
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.DeviceIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("IssueNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateOnly>("IssuedOn")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("RecoverableAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("ReplacementDeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReturnCondition")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ReturnNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateOnly?>("ReturnedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("ReplacementDeviceId");
+
+                    b.HasIndex("DeviceId", "IssuedOn");
+
+                    b.ToTable("DeviceIssues", (string)null);
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.Employee", b =>
                 {
                     b.Property<Guid>("Id")
@@ -726,6 +793,13 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<string>("ResignationReason")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<DateOnly?>("ResignedOn")
+                        .HasColumnType("date");
+
                     b.Property<string>("SectionCode")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -752,6 +826,8 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.HasIndex("EPF");
 
                     b.HasIndex("IsActive");
+
+                    b.HasIndex("ResignedOn");
 
                     b.HasIndex("SectionCode");
 
@@ -877,8 +953,15 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<Guid?>("PackageId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateOnly?>("PooledOn")
                         .HasColumnType("date");
+
+                    b.Property<string>("SimType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -906,6 +989,8 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[IsActive] = 1");
 
+                    b.HasIndex("PackageId");
+
                     b.HasIndex("Status");
 
                     b.ToTable("MobileAccounts", null, t =>
@@ -913,6 +998,170 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_MobileAccounts_MonthlyCreditLimit", "[MonthlyCreditLimit] >= 0");
 
                             t.HasCheckConstraint("CK_MobileAccounts_MonthlyRental", "[MonthlyRental] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.MobileDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AssetTag")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Brand")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("CurrentEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Imei1")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)");
+
+                    b.Property<string>("Imei2")
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("PurchaseCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateOnly>("PurchaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SerialNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateOnly>("StatusSince")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Supplier")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateOnly?>("WarrantyUntil")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetTag")
+                        .IsUnique();
+
+                    b.HasIndex("CurrentEmployeeId");
+
+                    b.HasIndex("Imei1")
+                        .IsUnique();
+
+                    b.HasIndex("Imei2")
+                        .IsUnique()
+                        .HasFilter("[Imei2] IS NOT NULL");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("MobileDevices", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MobileDevices_PurchaseCost", "[PurchaseCost] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.MobilePackage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<decimal>("DefaultCreditLimit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("MonthlyRental")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("TotalWithTax")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderId", "Code")
+                        .IsUnique();
+
+                    b.ToTable("MobilePackages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MobilePackages_DefaultCreditLimit", "[DefaultCreditLimit] >= 0");
+
+                            t.HasCheckConstraint("CK_MobilePackages_MonthlyRental", "[MonthlyRental] >= 0");
+
+                            t.HasCheckConstraint("CK_MobilePackages_TotalWithTax", "[TotalWithTax] >= 0");
                         });
                 });
 
@@ -1054,6 +1303,10 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("MonthlyRental")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PackageCodeSnapshot")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Remark")
                         .HasMaxLength(2000)
@@ -1418,6 +1671,32 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Navigation("BillBatch");
                 });
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.DeviceIssue", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.MobileDevice", "Device")
+                        .WithMany("Issues")
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MobileBill.Domain.Entities.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MobileBill.Domain.Entities.MobileDevice", "ReplacementDevice")
+                        .WithMany()
+                        .HasForeignKey("ReplacementDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Device");
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("ReplacementDevice");
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.Employee", b =>
                 {
                     b.HasOne("MobileBill.Domain.Entities.EmployeeCategory", "Category")
@@ -1481,7 +1760,35 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MobileBill.Domain.Entities.MobilePackage", "Package")
+                        .WithMany("MobileAccounts")
+                        .HasForeignKey("PackageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Employee");
+
+                    b.Navigation("Package");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.MobileDevice", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.Employee", "CurrentEmployee")
+                        .WithMany()
+                        .HasForeignKey("CurrentEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CurrentEmployee");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.MobilePackage", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.TelecomProvider", "Provider")
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Provider");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.MonthlyBill", b =>
@@ -1599,6 +1906,16 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MobileBill.Domain.Entities.MobileAccount", b =>
                 {
                     b.Navigation("MonthlyBills");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.MobileDevice", b =>
+                {
+                    b.Navigation("Issues");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.MobilePackage", b =>
+                {
+                    b.Navigation("MobileAccounts");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.MonthlyBill", b =>

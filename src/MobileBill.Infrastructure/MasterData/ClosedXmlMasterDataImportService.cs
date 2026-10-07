@@ -19,7 +19,16 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
 
     private static readonly string[] EmployeeColumns = ["Factory Code", "EPF", "Full Name", "Calling Name", "Category Code", "Designation Code", "Department Code", "Section Code", "Sub Section Code"];
     private static readonly string[] EmployeeRequired = ["Factory Code", "EPF", "Full Name", "Category Code", "Designation Code", "Department Code"];
-    private static readonly string[] AllocationColumns = ["Mobile Number", "Factory Code", "EPF", "Monthly Credit Limit", "Monthly Rental"];
+    private static readonly string[] AllocationRequired = ["Mobile Number", "Factory Code", "EPF", "Monthly Credit Limit", "Monthly Rental"];
+    // Package Code is checked per row (required for new allocations), so files made before it was added still read.
+    private static readonly string[] AllocationColumns = ["Mobile Number", "Factory Code", "EPF", "Package Code", "SIM Type", "Monthly Credit Limit", "Monthly Rental"];
+    private static readonly string[] AllocationTemplateRequired = ["Mobile Number", "Factory Code", "EPF", "Package Code", "Monthly Credit Limit", "Monthly Rental"];
+    // SIM Type values as people write them, matched on letters only ("Voice + Data", "voice and data", "E-SIM").
+    private static readonly Dictionary<string, SimType> SimTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["voice"] = SimType.Voice, ["voicedata"] = SimType.VoiceData, ["voiceanddata"] = SimType.VoiceData,
+        ["data"] = SimType.Data, ["esim"] = SimType.ESim,
+    };
 
     public ImportTemplate EmployeeTemplate() => new("Employees_Import_Template.xlsx", Template("Employees", EmployeeColumns, EmployeeRequired, ["Factory Code", "EPF"],
     [
@@ -30,13 +39,15 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
         "Columns marked * are required. Keep the heading row as it is.",
     ]));
 
-    public ImportTemplate MobileAccountTemplate() => new("Mobile_Allocations_Import_Template.xlsx", Template("Mobile Allocations", AllocationColumns, AllocationColumns, ["Mobile Number", "Factory Code", "EPF"],
+    public ImportTemplate MobileAccountTemplate() => new("Mobile_Allocations_Import_Template.xlsx", Template("Mobile Allocations", AllocationColumns, AllocationTemplateRequired, ["Mobile Number", "Factory Code", "EPF", "Package Code", "SIM Type"],
     [
         "One row per mobile number. The holder is identified by Factory Code + EPF and must be an active employee.",
         "A number with no active allocation is allocated to the holder.",
-        "A number already allocated to the same holder has its credit limit and rental updated.",
+        "A number already allocated to the same holder has its package, credit limit and rental updated.",
         "A number allocated to someone else, or in the SIM Pool, is rejected: use Reassign or Assign from Pool on the screen.",
-        "Amounts must be 0 or more, with at most two decimal places. All columns are required.",
+        "Package Code must match an active package in Mobile Packages.",
+        "SIM Type is optional: Voice, Voice + Data, Data or eSIM. Left blank, an existing number keeps its SIM type.",
+        "Amounts must be 0 or more, with at most two decimal places. Columns marked * are required.",
     ]));
 
     public async Task<MasterDataImportResult> ImportEmployeesAsync(Stream workbook, bool commit, CancellationToken cancellationToken)
@@ -109,9 +120,12 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
 
     public async Task<MasterDataImportResult> ImportMobileAccountsAsync(Stream workbook, bool commit, CancellationToken cancellationToken)
     {
-        var sheet = await ReadSheetAsync(workbook, AllocationColumns, cancellationToken);
+        var sheet = await ReadSheetAsync(workbook, AllocationRequired, cancellationToken);
         var employees = (await db.Employees.AsNoTracking().Select(x => new { x.Id, x.FactoryCode, x.EPF, x.FullName, x.IsActive }).ToListAsync(cancellationToken))
             .ToDictionary(x => Key(x.FactoryCode, x.EPF), StringComparer.OrdinalIgnoreCase);
+        // The same code can exist for two providers; such a code cannot be used here.
+        var packages = (await db.MobilePackages.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Id, x.Code }).ToListAsync(cancellationToken))
+            .GroupBy(x => x.Code, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Count() == 1 ? group.Single().Id : (Guid?)null, StringComparer.OrdinalIgnoreCase);
         var activeByNumber = (await db.MobileAccounts.Include(x => x.Employee).Where(x => x.IsActive).ToListAsync(cancellationToken))
             .GroupBy(x => x.MobileNumber, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
@@ -126,6 +140,21 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
             var epf = Required(row.Text("EPF"), "EPF", 50, rowErrors);
             var creditLimit = Amount(row.Cell("Monthly Credit Limit"), "Monthly Credit Limit", rowErrors);
             var rental = Amount(row.Cell("Monthly Rental"), "Monthly Rental", rowErrors);
+            Guid? packageId = null;
+            var packageCode = row.Text("Package Code");
+            if (packageCode.Length > 0)
+            {
+                if (!packages.TryGetValue(packageCode, out var found)) rowErrors.Add($"Package Code '{packageCode}' is not an active package.");
+                else if (found is null) rowErrors.Add($"Package Code '{packageCode}' exists for more than one provider; choose the package on the screen.");
+                else packageId = found;
+            }
+            SimType? simType = null;
+            var simTypeText = row.Text("SIM Type");
+            if (simTypeText.Length > 0)
+            {
+                if (SimTypes.TryGetValue(new string(simTypeText.Where(char.IsLetter).ToArray()), out var parsed)) simType = parsed;
+                else rowErrors.Add($"SIM Type '{simTypeText}' is not one of Voice, Voice + Data, Data or eSIM.");
+            }
             Guid? employeeId = null;
             if (factory is not null && epf is not null)
             {
@@ -144,18 +173,22 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
                 if (current.Status == SimStatus.Pooled) rowErrors.Add($"Mobile number {number} is in the SIM Pool. Use Assign from Pool to give it to a new holder.");
                 else if (current.EmployeeId != employeeId) rowErrors.Add($"Mobile number {number} is already allocated to EPF {current.Employee.EPF} ({current.Employee.FullName}). Use Reassign to move it.");
             }
+            // A new allocation needs a package; an existing one keeps its package when the cell is blank.
+            if (packageCode.Length == 0 && number is not null && current is null) rowErrors.Add("Package Code is required for a new allocation.");
             if (rowErrors.Count > 0) { errors.AddRange(rowErrors.Select(message => new ImportRowError(row.Number, message))); continue; }
 
             if (current is not null)
             {
-                if (current.MonthlyCreditLimit == creditLimit && current.MonthlyRental == rental) { unchanged++; continue; }
-                current.MonthlyCreditLimit = creditLimit!.Value; current.MonthlyRental = rental!.Value;
+                var package = packageId ?? current.PackageId;
+                var sim = simType ?? current.SimType;
+                if (current.MonthlyCreditLimit == creditLimit && current.MonthlyRental == rental && current.PackageId == package && current.SimType == sim) { unchanged++; continue; }
+                current.MonthlyCreditLimit = creditLimit!.Value; current.MonthlyRental = rental!.Value; current.PackageId = package; current.SimType = sim;
                 current.UpdatedAtUtc = clock.UtcNow; current.UpdatedBy = currentUser.UserId;
                 updated++;
             }
             else
             {
-                db.MobileAccounts.Add(new MobileAccount { MobileNumber = number!, EmployeeId = employeeId!.Value, MonthlyCreditLimit = creditLimit!.Value, MonthlyRental = rental!.Value, CreatedAtUtc = clock.UtcNow, CreatedBy = currentUser.UserId });
+                db.MobileAccounts.Add(new MobileAccount { MobileNumber = number!, EmployeeId = employeeId!.Value, MonthlyCreditLimit = creditLimit!.Value, MonthlyRental = rental!.Value, PackageId = packageId, SimType = simType, CreatedAtUtc = clock.UtcNow, CreatedBy = currentUser.UserId });
                 created++;
             }
         }

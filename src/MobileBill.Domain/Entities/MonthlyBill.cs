@@ -39,6 +39,8 @@ public sealed class MonthlyBill : AuditableEntity
     public string? SubSectionCodeSnapshot { get; set; }
     public string? SubSectionNameSnapshot { get; set; }
     public required string MobileNumberSnapshot { get; set; }
+    // The allocation's package when the bill was matched.
+    public string? PackageCodeSnapshot { get; set; }
     // A company-paid bill for a SIM in the pool (or billed after disconnection); EmployeeId is the last holder.
     public bool IsPooled { get; set; }
     public DateOnly? EntitlementEffectiveFromSnapshot { get; set; }

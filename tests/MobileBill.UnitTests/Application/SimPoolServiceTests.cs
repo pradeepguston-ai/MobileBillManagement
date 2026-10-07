@@ -17,8 +17,8 @@ public sealed class SimPoolServiceTests
     {
         await using var db = CreateContext(); var service = Service(db);
         var (leaver, _) = await SeedEmployeesAsync(db);
-        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000001", leaver.Id, 1000m, 100m), default);
-        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000002", leaver.Id, 500m, 50m), default);
+        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000001", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
+        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000002", leaver.Id, 500m, 50m, TestPackages.PackageId), default);
 
         var pooled = await service.ResignEmployeeAsync(leaver.Id, new ResignEmployeeRequest(new DateOnly(2026, 10, 3), null), default);
 
@@ -34,7 +34,7 @@ public sealed class SimPoolServiceTests
     {
         await using var db = CreateContext(); var service = Service(db);
         var (leaver, _) = await SeedEmployeesAsync(db);
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000003", leaver.Id, 1000m, 100m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000003", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
 
         var blocked = await Assert.ThrowsAsync<MasterDataValidationException>(() => service.DeactivateEmployeeAsync(leaver.Id, default));
         Assert.Contains("SIM Pool", blocked.Message);
@@ -49,7 +49,7 @@ public sealed class SimPoolServiceTests
     {
         await using var db = CreateContext(); var service = Service(db);
         var (leaver, joiner) = await SeedEmployeesAsync(db);
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000004", leaver.Id, 1000m, 100m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000004", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
         await service.ReleaseToPoolAsync(account.Id, new ReleaseToPoolRequest(new DateOnly(2026, 8, 1), null), default);
 
         var assigned = await service.AssignFromPoolAsync(account.Id, new AssignFromPoolRequest(joiner.Id), default);
@@ -66,7 +66,7 @@ public sealed class SimPoolServiceTests
     {
         await using var db = CreateContext(); var service = Service(db);
         var (leaver, joiner) = await SeedEmployeesAsync(db);
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000005", leaver.Id, 1000m, 100m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000005", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
         await service.ReleaseToPoolAsync(account.Id, new ReleaseToPoolRequest(new DateOnly(2026, 8, 1), null), default);
 
         var assigned = await service.AssignFromPoolAsync(account.Id, new AssignFromPoolRequest(joiner.Id, 2500m, 250m), default);
@@ -79,12 +79,12 @@ public sealed class SimPoolServiceTests
     {
         await using var db = CreateContext(); var service = Service(db);
         var (leaver, joiner) = await SeedEmployeesAsync(db);
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000006", leaver.Id, 1000m, 100m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000006", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
 
         await Assert.ThrowsAsync<MasterDataValidationException>(() => service.AssignFromPoolAsync(account.Id, new AssignFromPoolRequest(joiner.Id), default));
         await service.ReleaseToPoolAsync(account.Id, new ReleaseToPoolRequest(new DateOnly(2026, 8, 1), null), default);
 
-        var duplicate = await Assert.ThrowsAsync<MasterDataConflictException>(() => service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000006", joiner.Id, 1000m, 100m), default));
+        var duplicate = await Assert.ThrowsAsync<MasterDataConflictException>(() => service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000006", joiner.Id, 1000m, 100m, TestPackages.PackageId), default));
         Assert.Contains("SIM Pool", duplicate.Message);
         await Assert.ThrowsAsync<MasterDataValidationException>(() => service.ReassignMobileAccountAsync(account.Id, new MobileAccountReassignRequest(joiner.Id), default));
         await Assert.ThrowsAsync<MasterDataValidationException>(() => service.ReleaseToPoolAsync(account.Id, new ReleaseToPoolRequest(new DateOnly(2026, 8, 1), null), default));
@@ -95,7 +95,7 @@ public sealed class SimPoolServiceTests
     {
         await using var db = CreateContext(); var service = Service(db);
         var (leaver, joiner) = await SeedEmployeesAsync(db);
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000007", leaver.Id, 1000m, 100m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000007", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
         await service.ReleaseToPoolAsync(account.Id, new ReleaseToPoolRequest(new DateOnly(2026, 8, 1), null), default);
 
         var disconnected = await service.DisconnectSimAsync(account.Id, new DisconnectSimRequest(new DateOnly(2026, 10, 4), "Not needed"), default);
@@ -110,8 +110,8 @@ public sealed class SimPoolServiceTests
     {
         await using var db = CreateContext(); var service = Service(db);
         var (leaver, _) = await SeedEmployeesAsync(db);
-        var old = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000008", leaver.Id, 1000m, 100m), default);
-        var recent = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000009", leaver.Id, 1000m, 100m), default);
+        var old = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000008", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
+        var recent = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771000009", leaver.Id, 1000m, 100m, TestPackages.PackageId), default);
         await service.ReleaseToPoolAsync(old.Id, new ReleaseToPoolRequest(new DateOnly(2026, 7, 1), null), default);
         await service.ReleaseToPoolAsync(recent.Id, new ReleaseToPoolRequest(new DateOnly(2026, 9, 20), null), default);
 
@@ -131,7 +131,7 @@ public sealed class SimPoolServiceTests
         var category = new EmployeeCategory { Code = "C", Name = "Category" }; var designation = new Designation { Code = "DS", Name = "Designation" };
         var leaver = new Employee { EPF = "EPF-L", FullName = "Leaver", CategoryCode = "C", DesignationCode = "DS", FactoryCode = "F", DepartmentCode = "D" };
         var joiner = new Employee { EPF = "EPF-J", FullName = "Joiner", CategoryCode = "C", DesignationCode = "DS", FactoryCode = "F", DepartmentCode = "D" };
-        context.AddRange(factory, department, category, designation, leaver, joiner);
+        context.AddRange(factory, department, category, designation, leaver, joiner); TestPackages.Add(context);
         await context.SaveChangesAsync();
         return (leaver, joiner);
     }

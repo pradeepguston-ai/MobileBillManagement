@@ -19,6 +19,11 @@ public sealed class MobileAccount : AuditableEntity
     public DateOnly? DisconnectedOn { get; set; }
     // Why the SIM was pooled or disconnected, for example "Resigned".
     public string? StatusReason { get; set; }
+    // Optional; older allocations may not have one yet.
+    public SimType? SimType { get; set; }
+    // Required for new allocations; older allocations may not have one yet.
+    public Guid? PackageId { get; set; }
+    public MobilePackage? Package { get; set; }
     public Employee Employee { get; set; } = null!;
     public ICollection<MonthlyBill> MonthlyBills { get; } = new List<MonthlyBill>();
 }

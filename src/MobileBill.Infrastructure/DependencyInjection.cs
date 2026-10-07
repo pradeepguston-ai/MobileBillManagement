@@ -31,7 +31,7 @@ public static class DependencyInjection
         services.AddDbContext<MobileBillDbContext>(options =>
             options.UseSqlServer(connectionString));
         services.AddScoped<IMasterDataService, EfMasterDataService>();
-        services.AddScoped<IMasterDataImportService, ClosedXmlMasterDataImportService>();
+        services.AddScoped<MobileBill.Application.Devices.IDeviceService, MobileBill.Infrastructure.Devices.EfDeviceService>();        services.AddScoped<IMasterDataImportService, ClosedXmlMasterDataImportService>();
         services.Configure<BillStorageOptions>(options =>
         {
             var section = configuration.GetSection(BillStorageOptions.SectionName);

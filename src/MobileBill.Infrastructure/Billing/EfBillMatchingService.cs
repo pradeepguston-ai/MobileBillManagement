@@ -115,8 +115,8 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
         DepartmentNameSnapshot = allocation.Employee.Department.Name,
         SectionCodeSnapshot = allocation.Employee.SectionCode, SectionNameSnapshot = allocation.Employee.Section?.Name,
         SubSectionCodeSnapshot = allocation.Employee.SubSectionCode, SubSectionNameSnapshot = allocation.Employee.SubSection?.Name,
-        MobileNumberSnapshot = line.MobileNumber,
-         AllocationMatchMethod = allocationMethod,
+        MobileNumberSnapshot = line.MobileNumber, PackageCodeSnapshot = allocation.Package?.Code,
+        AllocationMatchMethod = allocationMethod,
         EntitlementMatchMethod = EntitlementMatchMethod.Automatic, CreatedAtUtc = now, CreatedBy = userId
         };
         if (allocation.Employee.DefaultResponsibility is { } remembered)
@@ -133,6 +133,7 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
     internal const string SimPoolEmployeeName = "SIM Pool (Unassigned)";
 
     internal static IQueryable<MobileAccount> WithEmployee(IQueryable<MobileAccount> query) => query
+        .Include(x => x.Package)
         .Include(x => x.Employee).ThenInclude(x => x.Category)
         .Include(x => x.Employee).ThenInclude(x => x.Designation)
         .Include(x => x.Employee).ThenInclude(x => x.Factory)

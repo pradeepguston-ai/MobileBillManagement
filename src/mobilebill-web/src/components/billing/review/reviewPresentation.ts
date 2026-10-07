@@ -23,6 +23,7 @@ export const reviewColumns: ReviewColumn[] = [
   { key: 'section', label: 'Section', sortKey: 'section' },
   { key: 'subSection', label: 'Sub Section', sortKey: 'subSection' },
   { key: 'callingName', label: 'Calling Name', sortKey: 'callingName' },
+  { key: 'packageCode', label: 'Package' },
   { key: 'creditLimit', label: 'Credit Limit', sortKey: 'creditLimit' },
   { key: 'monthlyRental', label: 'Monthly Rental', sortKey: 'monthlyRental' },
   { key: 'actualBill', label: 'Actual Bill', sortKey: 'actualBill' },

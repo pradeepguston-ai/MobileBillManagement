@@ -140,7 +140,7 @@ describe('MasterDataPage states', () => {
       fireEvent.change(screen.getByRole('spinbutton', { name: 'Monthly Rental' }), { target: { value: '700' } })
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-      await waitFor(() => expect(submittedBody).toEqual({ mobileNumber: '0771234567', employeeId: 'employee-1', monthlyCreditLimit: 1500.25, monthlyRental: 700 }))
+      await waitFor(() => expect(submittedBody).toEqual({ mobileNumber: '0771234567', employeeId: 'employee-1', monthlyCreditLimit: 1500.25, monthlyRental: 700, packageId: null, simType: null }))
     })
   })
 })

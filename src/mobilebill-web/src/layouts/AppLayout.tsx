@@ -36,6 +36,8 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import SmartphoneIcon from '@mui/icons-material/Smartphone'
 import SummarizeIcon from '@mui/icons-material/Summarize'
 import AppsIcon from '@mui/icons-material/Apps'
+import SimCardIcon from '@mui/icons-material/SimCard'
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid'
 import { type ReactNode, useState } from 'react'
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
@@ -59,6 +61,8 @@ const iconByPath: Record<string, ReactNode> = {
   '/designations': <BadgeIcon fontSize="small" />,
   '/categories': <CategoryIcon fontSize="small" />,
   '/providers': <CellTowerIcon fontSize="small" />,
+  '/packages': <SimCardIcon fontSize="small" />,
+  '/devices': <PhoneAndroidIcon fontSize="small" />,
   '/reports/monthly-bill': <SummarizeIcon fontSize="small" />,
   '/reports/vas': <AppsIcon fontSize="small" />,
   '/admin/users': <ManageAccountsIcon fontSize="small" />,
@@ -141,7 +145,7 @@ function NavigationContent({ isAdministrator, onNavigate }: { isAdministrator?: 
   <List aria-label="Primary navigation" sx={{ px: 1 }}>
     <NavigationLink to="/" label="Dashboard" onNavigate={onNavigate} />
     <NavigationGroup label="Billing" links={[["/monthly-bill-review", "Monthly Bill Review"], ["/billing", "Billing Batches"], ["/exception-review", "Exception Review"]]} onNavigate={onNavigate} />
-    <NavigationGroup label="Masters" links={[["/employees", "Employees"], ["/mobile-allocations", "Mobile Allocations"], ["/factories", "Factories"], ["/departments", "Departments"], ["/designations", "Designations"], ["/categories", "Categories"], ["/providers", "Telecom Providers"]]} onNavigate={onNavigate} />
+    <NavigationGroup label="Masters" links={[["/employees", "Employees"], ["/mobile-allocations", "Mobile Allocations"], ["/devices", "Mobile Devices"],["/factories", "Factories"], ["/departments", "Departments"], ["/designations", "Designations"], ["/categories", "Categories"], ["/packages", "Mobile Packages"], ["/providers", "Telecom Providers"]]} onNavigate={onNavigate} />
     <NavigationGroup label="Reports" links={[["/reports/monthly-bill", "Monthly Bill Report"], ["/reports/vas", "VAS Report"]]} onNavigate={onNavigate} />
     {isAdministrator && <NavigationGroup label="Administration" links={[["/admin/users", "User Management"], ["/admin/password-resets", "Password Resets"]]} onNavigate={onNavigate} />}
   </List>

@@ -76,6 +76,7 @@ builder.Services.AddRateLimiter(options =>
 });
 builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
 builder.Services.AddScoped<IBillReviewAuthorizationService, RoleBasedBillReviewAuthorizationService>();
+builder.Services.AddHostedService<MobileBill.Api.BackgroundJobs.ResignationCompletionService>();
 
 var app = builder.Build();
 

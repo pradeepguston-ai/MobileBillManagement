@@ -134,6 +134,22 @@ public sealed class BillMatchingServiceTests
     }
 
     [Fact]
+    public async Task Match_snapshots_the_allocations_package_code()
+    {
+        await using var db = CreateDb();
+        var setup = await SeedAsync(db);
+        var provider = new TelecomProvider { Code = "P01", Name = "Dialog" };
+        var package = new MobilePackage { Code = "PPU23_700", ProviderId = provider.Id, Description = "Plan", MonthlyRental = 700m, TotalWithTax = 940m, DefaultCreditLimit = 1000m };
+        db.AddRange(provider, package);
+        setup.Account.PackageId = package.Id;
+        await db.SaveChangesAsync();
+
+        await new EfBillMatchingService(db, new TestClock(), new TestUser("matcher"), new FixedAuthorization(true)).MatchAsync(setup.Batch.Id, default);
+
+        Assert.Equal("PPU23_700", (await db.MonthlyBills.SingleAsync()).PackageCodeSnapshot);
+    }
+
+    [Fact]
     public async Task Match_leaves_a_roaming_bill_unassessed_when_nothing_is_remembered()
     {
         await using var db = CreateDb();

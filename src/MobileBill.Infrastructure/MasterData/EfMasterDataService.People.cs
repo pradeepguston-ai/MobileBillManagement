@@ -46,7 +46,7 @@ public sealed partial class EfMasterDataService
         var query = _dbContext.MobileAccounts.AsNoTracking();
         if (request.IsActive is not null) query = query.Where(account => account.IsActive == request.IsActive.Value);
         if (status is not null) query = query.Where(account => account.Status == status.Value);
-        if (!string.IsNullOrWhiteSpace(request.Search)) { var search = request.Search.Trim(); query = query.Where(account => account.MobileNumber.Contains(search) || account.Employee.EPF.Contains(search) || account.Employee.FullName.Contains(search)); }
+        if (!string.IsNullOrWhiteSpace(request.Search)) { var search = request.Search.Trim(); query = query.Where(account => account.MobileNumber.Contains(search) || account.Employee.EPF.Contains(search) || account.Employee.FullName.Contains(search) || (account.Package != null && account.Package.Code.Contains(search))); }
         return await ToPagedResultAsync(MobileAccountProjection(query.OrderBy(account => account.MobileNumber).ThenBy(account => account.Id)), request, cancellationToken);
     }
     public async Task<MobileAccountDto> GetMobileAccountAsync(Guid id, CancellationToken cancellationToken) => await MobileAccountProjection(_dbContext.MobileAccounts.AsNoTracking().Where(account => account.Id == id)).SingleOrDefaultAsync(cancellationToken) ?? throw new MasterDataNotFoundException("Mobile account", id);
@@ -55,12 +55,15 @@ public sealed partial class EfMasterDataService
         ValidateMobileAccount(request);
         await RequireActiveEmployeeAsync(request.EmployeeId, cancellationToken);
         await EnsureNoActiveMobileAccountAsync(request.MobileNumber, null, cancellationToken);
+        if (request.PackageId is null || request.PackageId == Guid.Empty) throw new MasterDataValidationException("Select the package.");
         var entity = new MobileAccount
         {
             MobileNumber = request.MobileNumber.Trim(),
             EmployeeId = request.EmployeeId,
             MonthlyCreditLimit = request.MonthlyCreditLimit,
-            MonthlyRental = request.MonthlyRental
+            MonthlyRental = request.MonthlyRental,
+            SimType = request.SimType,
+            PackageId = await ResolveAllocationPackageAsync(request.PackageId, null, cancellationToken)
         };
         _dbContext.MobileAccounts.Add(entity);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -79,6 +82,8 @@ public sealed partial class EfMasterDataService
         entity.EmployeeId = request.EmployeeId;
         entity.MonthlyCreditLimit = request.MonthlyCreditLimit;
         entity.MonthlyRental = request.MonthlyRental;
+        entity.SimType = request.SimType;
+        entity.PackageId = await ResolveAllocationPackageAsync(request.PackageId, entity.PackageId, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return await GetMobileAccountAsync(id, cancellationToken);
     }
@@ -104,8 +109,9 @@ public sealed partial class EfMasterDataService
         return await GetMobileAccountAsync(id, cancellationToken);
     }
 
-    private static IQueryable<EmployeeDto> EmployeeProjection(IQueryable<Employee> query) => query.Select(employee => new EmployeeDto(employee.Id, employee.EPF, employee.FullName, employee.CallingName, employee.CategoryCode, employee.Category.Name, employee.DesignationCode, employee.Designation.Name, employee.FactoryCode, employee.Factory.Name, employee.DepartmentCode, employee.Department.Name, employee.IsActive, employee.SectionCode, employee.Section != null ? employee.Section.Name : null, employee.SubSectionCode, employee.SubSection != null ? employee.SubSection.Name : null));
-    private static IQueryable<MobileAccountDto> MobileAccountProjection(IQueryable<MobileAccount> query) => query.Select(account => new MobileAccountDto(account.Id, account.MobileNumber, account.Employee.EPF, account.Employee.FullName, account.Employee.Factory.Name, account.Employee.Department.Name, account.MonthlyCreditLimit, account.MonthlyRental, account.IsActive, account.Status, account.PooledOn, account.DisconnectedOn, account.StatusReason, account.EmployeeId, account.Employee.FactoryCode));
+    private static IQueryable<EmployeeDto> EmployeeProjection(IQueryable<Employee> query) => query.Select(employee => new EmployeeDto(employee.Id, employee.EPF, employee.FullName, employee.CallingName, employee.CategoryCode, employee.Category.Name, employee.DesignationCode, employee.Designation.Name, employee.FactoryCode, employee.Factory.Name, employee.DepartmentCode, employee.Department.Name, employee.IsActive, employee.SectionCode, employee.Section != null ? employee.Section.Name : null, employee.SubSectionCode, employee.SubSection != null ? employee.SubSection.Name : null, employee.ResignedOn));
+    private static IQueryable<MobileAccountDto> MobileAccountProjection(IQueryable<MobileAccount> query) => query.Select(account => new MobileAccountDto(account.Id, account.MobileNumber, account.Employee.EPF, account.Employee.FullName, account.Employee.Factory.Name, account.Employee.Department.Name, account.MonthlyCreditLimit, account.MonthlyRental, account.IsActive, account.Status, account.PooledOn, account.DisconnectedOn, account.StatusReason, account.EmployeeId, account.Employee.FactoryCode,
+        account.PackageId, account.Package != null ? account.Package.Code : null, account.Package != null && account.MonthlyRental != account.Package.MonthlyRental, account.SimType));
     private static string? TrimOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void ValidateEmployee(EmployeeUpsertRequest request) { MasterDataValidation.RequireText(request.Epf, "EPF"); MasterDataValidation.RequireText(request.FullName, "Full Name"); }
     private static void ValidateMobileAccount(MobileAccountUpsertRequest request) { MasterDataValidation.RequireText(request.MobileNumber, "Mobile Number"); MasterDataValidation.RequireCurrencyAmount(request.MonthlyCreditLimit, "Monthly Credit Limit"); MasterDataValidation.RequireCurrencyAmount(request.MonthlyRental, "Monthly Rental"); }

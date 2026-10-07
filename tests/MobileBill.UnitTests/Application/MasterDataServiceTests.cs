@@ -26,8 +26,8 @@ public sealed class MasterDataServiceTests
     public async Task Mobile_account_rejects_a_second_active_allocation_for_the_same_number()
     {
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var employee = await SeedEmployeeAsync(context);
-        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234567", employee.Id, 1000m, 100m), default);
-        var exception = await Assert.ThrowsAsync<MasterDataConflictException>(() => service.CreateMobileAccountAsync(new MobileAccountUpsertRequest(" 0771234567 ", employee.Id, 1000m, 100m), default));
+        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234567", employee.Id, 1000m, 100m, TestPackages.PackageId), default);
+        var exception = await Assert.ThrowsAsync<MasterDataConflictException>(() => service.CreateMobileAccountAsync(new MobileAccountUpsertRequest(" 0771234567 ", employee.Id, 1000m, 100m, TestPackages.PackageId), default));
         Assert.Contains("already has an active allocation", exception.Message);
     }
 
@@ -35,10 +35,10 @@ public sealed class MasterDataServiceTests
     public async Task Mobile_account_number_can_be_allocated_again_after_the_previous_allocation_is_deactivated()
     {
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var employee = await SeedEmployeeAsync(context);
-        var first = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234567", employee.Id, 1000m, 100m), default);
+        var first = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234567", employee.Id, 1000m, 100m, TestPackages.PackageId), default);
         await service.DeactivateMobileAccountAsync(first.Id, default);
 
-        var second = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234567", employee.Id, 1000m, 100m), default);
+        var second = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234567", employee.Id, 1000m, 100m, TestPackages.PackageId), default);
 
         Assert.NotEqual(first.Id, second.Id);
     }
@@ -47,9 +47,9 @@ public sealed class MasterDataServiceTests
     public async Task Mobile_account_updates_both_monthly_amounts()
     {
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var employee = await SeedEmployeeAsync(context);
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234568", employee.Id, 1000m, 100m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234568", employee.Id, 1000m, 100m, TestPackages.PackageId), default);
 
-        var updated = await service.UpdateMobileAccountAsync(account.Id, new MobileAccountUpsertRequest("0771234568", employee.Id, 1500.25m, 200m), default);
+        var updated = await service.UpdateMobileAccountAsync(account.Id, new MobileAccountUpsertRequest("0771234568", employee.Id, 1500.25m, 200m, TestPackages.PackageId), default);
 
         Assert.Equal(1500.25m, updated.MonthlyCreditLimit);
         Assert.Equal(200m, updated.MonthlyRental);
@@ -61,7 +61,7 @@ public sealed class MasterDataServiceTests
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var employee = await SeedEmployeeAsync(context);
 
         await Assert.ThrowsAsync<MasterDataValidationException>(() =>
-            service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234570", employee.Id, 1000.001m, 100m), default));
+            service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234570", employee.Id, 1000.001m, 100m, TestPackages.PackageId), default));
         Assert.Empty(context.MobileAccounts);
     }
 
@@ -69,7 +69,7 @@ public sealed class MasterDataServiceTests
     public async Task Employee_deactivation_does_not_cascade_and_rejects_invalid_current_state()
     {
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var employee = await SeedEmployeeAsync(context);
-        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234569", employee.Id, 1000m, 100m), default);
+        await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234569", employee.Id, 1000m, 100m, TestPackages.PackageId), default);
         await Assert.ThrowsAsync<MasterDataValidationException>(() => service.DeactivateEmployeeAsync(employee.Id, default));
         Assert.True((await service.GetEmployeeAsync(employee.Id, default)).IsActive);
     }
@@ -87,7 +87,7 @@ public sealed class MasterDataServiceTests
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var first = await SeedEmployeeAsync(context);
         var second = new Employee { EPF = "EPF-2", FullName = "Second Employee", CategoryCode = first.CategoryCode, DesignationCode = first.DesignationCode, FactoryCode = first.FactoryCode, DepartmentCode = first.DepartmentCode };
         context.Employees.Add(second); await context.SaveChangesAsync();
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234570", first.Id, 1200m, 300m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234570", first.Id, 1200m, 300m, TestPackages.PackageId), default);
 
         var moved = await service.ReassignMobileAccountAsync(account.Id, new MobileAccountReassignRequest(second.Id), default);
 
@@ -99,7 +99,7 @@ public sealed class MasterDataServiceTests
     public async Task Reassign_requires_an_active_allocation_and_an_active_different_employee()
     {
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var employee = await SeedEmployeeAsync(context);
-        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234571", employee.Id, 1000m, 100m), default);
+        var account = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234571", employee.Id, 1000m, 100m, TestPackages.PackageId), default);
 
         await Assert.ThrowsAsync<MasterDataValidationException>(() => service.ReassignMobileAccountAsync(account.Id, new MobileAccountReassignRequest(employee.Id), default));
         await Assert.ThrowsAsync<MasterDataValidationException>(() => service.ReassignMobileAccountAsync(account.Id, new MobileAccountReassignRequest(Guid.NewGuid()), default));
@@ -129,7 +129,7 @@ public sealed class MasterDataServiceTests
         context.Add(new Factory { Code = "F2", Name = "Factory Two" }); await context.SaveChangesAsync();
         var twin = await service.CreateEmployeeAsync(new EmployeeUpsertRequest(first.EPF, "Twin In Other Factory", null, "C", "DS", "F2", "D"), default);
 
-        var allocation = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234580", twin.Id, 1000m, 100m), default);
+        var allocation = await service.CreateMobileAccountAsync(new MobileAccountUpsertRequest("0771234580", twin.Id, 1000m, 100m, TestPackages.PackageId), default);
 
         Assert.Equal((twin.Id, "Twin In Other Factory", "Factory Two"), (allocation.EmployeeId, allocation.EmployeeName, allocation.Factory));
         await service.DeactivateEmployeeAsync(first.Id, default);   // the namesake in factory F holds no number
@@ -140,7 +140,7 @@ public sealed class MasterDataServiceTests
     private static async Task<Employee> SeedEmployeeAsync(MobileBillDbContext context)
     {
         var factory = new Factory { Code = "F", Name = "Factory" }; var department = new Department { Code = "D", Name = "Department" }; var category = new EmployeeCategory { Code = "C", Name = "Category" }; var designation = new Designation { Code = "DS", Name = "Designation" };
-        context.AddRange(factory, department, category, designation); await context.SaveChangesAsync();
+        context.AddRange(factory, department, category, designation); TestPackages.Add(context); await context.SaveChangesAsync();
         var employee = new Employee { EPF = Guid.NewGuid().ToString("N"), FullName = "Test Employee", CategoryCode = category.Code, DesignationCode = designation.Code, FactoryCode = factory.Code, DepartmentCode = department.Code }; context.Employees.Add(employee); await context.SaveChangesAsync(); return employee;
     }
 }

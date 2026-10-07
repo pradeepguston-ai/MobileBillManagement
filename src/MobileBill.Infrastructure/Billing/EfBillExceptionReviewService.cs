@@ -56,6 +56,7 @@ public sealed class EfBillExceptionReviewService(MobileBillDbContext db, IBillRe
             .Include(x => x.Employee).ThenInclude(x => x.Department)
             .Include(x => x.Employee).ThenInclude(x => x.Section)
             .Include(x => x.Employee).ThenInclude(x => x.SubSection)
+            .Include(x => x.Package)
             .SingleOrDefaultAsync(x => x.Id == request.MobileAccountId && x.MobileNumber == line.MobileNumber, token)
             ?? throw new BillReviewValidationException("The selected allocation does not belong to the bill line mobile number.");
         var batch = await db.BillBatches.SingleAsync(x => x.Id == exception.BillBatchId, token);

@@ -12,10 +12,10 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private const string WorksheetName = "Monthly Bill Report";
     private const int HeaderRow = 5;
-    private const int ColumnCount = 18;
+    private const int ColumnCount = 19;
     // 1-based positions of the columns written below; they follow BillingReportData.Headers.
     private const int CallingNameColumn = 11, CreditLimitColumn = 12, MonthlyRentalColumn = 13, ActualBillColumn = 14,
-        VarianceColumn = 15, DeductionColumn = 16, ResponsibilityColumn = 17, RemarkColumn = 18;
+        VarianceColumn = 15, DeductionColumn = 16, ResponsibilityColumn = 17, RemarkColumn = 18, PackageColumn = 19;
     private const string MoneyFormat = "#,##0.00";
 
     public async Task<BillingExcelReportResult> ExportAsync(
@@ -106,6 +106,7 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
             sheet.Cell(targetRow, DeductionColumn).Value = row.DisplayedDeduction;
             sheet.Cell(targetRow, ResponsibilityColumn).Value = row.ResponsibilityLabel;
             sheet.Cell(targetRow, RemarkColumn).Value = row.Remark ?? string.Empty;
+            sheet.Cell(targetRow, PackageColumn).Value = row.PackageCode ?? string.Empty;
         }
 
         var lastDataRow = HeaderRow + rows.Count;
@@ -201,7 +202,7 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
 
     private static void ApplyColumnWidths(IXLWorksheet sheet)
     {
-        var widths = new[] { 9d, 16d, 12d, 30d, 22d, 28d, 14d, 20d, 20d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d };
+        var widths = new[] { 9d, 16d, 12d, 30d, 22d, 28d, 14d, 20d, 20d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d, 16d };
         for (var column = 1; column <= widths.Length; column++)
             sheet.Column(column).Width = widths[column - 1];
     }

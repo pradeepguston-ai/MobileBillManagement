@@ -37,7 +37,10 @@ public sealed class EmployeesController(IMasterDataService service) : MasterData
     public Task<MasterDataImportResult> Import(IFormFile? file, [FromQuery] bool commit, [FromServices] IMasterDataImportService importer, CancellationToken token) =>
         ImportAsync(file, stream => importer.ImportEmployeesAsync(stream, commit, token));
     // Releases the employee's numbers to the SIM Pool and deactivates them; returns the pooled numbers.
+    // A future date records a pending resignation instead, returning no numbers.
     [HttpPost("{id:guid}/resign"), Authorize(Roles = MasterDataRoles.MasterEditors)] public Task<IReadOnlyList<MobileAccountDto>> Resign(Guid id, ResignEmployeeRequest request, CancellationToken token) => Service.ResignEmployeeAsync(id, request, token);
+    [HttpPost("{id:guid}/cancel-resignation"), Authorize(Roles = MasterDataRoles.MasterEditors)] public async Task<IActionResult> CancelResignation(Guid id, CancellationToken token) { await Service.CancelResignationAsync(id, token); return NoContent(); }
+    [HttpGet("resignations")] public Task<IReadOnlyList<EmployeeResignationDto>> Resignations([FromQuery] ResignationStatus status, CancellationToken token) => Service.GetResignationsAsync(status, token);
 }
 
 [Route("api/mobile-accounts")]
@@ -52,22 +55,17 @@ public sealed class MobileAccountsController(IMasterDataService service) : Maste
         ImportAsync(file, stream => importer.ImportMobileAccountsAsync(stream, commit, token));
     // Numbers waiting in the SIM Pool, oldest first, with days in pool and the long-idle flag.
     [HttpGet("pool")] public Task<IReadOnlyList<SimPoolItemDto>> Pool(CancellationToken token) => Service.GetSimPoolAsync(token);
-    [HttpPost("{id:guid}/release-to-pool"), Authorize(Roles = MasterDataRoles.MasterEditors)] public Task<MobileAccountDto> ReleaseToPool(Guid id, ReleaseToPoolRequest request, CancellationToken token) => Service.ReleaseToPoolAsync(id, request, token);
-    [HttpPost("{id:guid}/assign-from-pool"), Authorize(Roles = MasterDataRoles.MasterEditors)]
-    public async Task<ActionResult<MobileAccountDto>> AssignFromPool(Guid id, AssignFromPoolRequest request, CancellationToken token)
-    {
-        // HR and Finance users may give a pooled number to a new holder, but only on its existing credit limit and rental.
-        var changesAmounts = request.MonthlyCreditLimit is not null || request.MonthlyRental is not null;
-        if (changesAmounts && !User.IsInRole(nameof(UserRole.Administrator)) && !User.IsInRole(nameof(UserRole.ITEngineer))) return Forbid();
-        return await Service.AssignFromPoolAsync(id, request, token);
-    }
-    [HttpPost("{id:guid}/disconnect"), Authorize(Roles = MasterDataRoles.MasterEditors)] public Task<MobileAccountDto> Disconnect(Guid id, DisconnectSimRequest request, CancellationToken token) => Service.DisconnectSimAsync(id, request, token);
+    // Every change to allocations is for Administrator and IT Engineer; other roles view them only. (HR and Finance
+    // users still release an employee's numbers to the SIM Pool through Resign on the Employees screen.)
+    [HttpPost("{id:guid}/release-to-pool"), Authorize(Roles = MasterDataRoles.Editors)] public Task<MobileAccountDto> ReleaseToPool(Guid id, ReleaseToPoolRequest request, CancellationToken token) => Service.ReleaseToPoolAsync(id, request, token);
+    [HttpPost("{id:guid}/assign-from-pool"), Authorize(Roles = MasterDataRoles.Editors)] public Task<MobileAccountDto> AssignFromPool(Guid id, AssignFromPoolRequest request, CancellationToken token) => Service.AssignFromPoolAsync(id, request, token);
+    [HttpPost("{id:guid}/disconnect"), Authorize(Roles = MasterDataRoles.Editors)] public Task<MobileAccountDto> Disconnect(Guid id, DisconnectSimRequest request, CancellationToken token) => Service.DisconnectSimAsync(id, request, token);
     [HttpGet("{id:guid}")] public Task<MobileAccountDto> Get(Guid id, CancellationToken token) => Service.GetMobileAccountAsync(id, token);
     [HttpPost, Authorize(Roles = MasterDataRoles.Editors)] public async Task<ActionResult<MobileAccountDto>> Create(MobileAccountUpsertRequest request, CancellationToken token) { var item = await Service.CreateMobileAccountAsync(request, token); return CreatedAtAction(nameof(Get), new { item.Id }, item); }
     [HttpPut("{id:guid}"), Authorize(Roles = MasterDataRoles.Editors)] public Task<MobileAccountDto> Update(Guid id, MobileAccountUpsertRequest request, CancellationToken token) => Service.UpdateMobileAccountAsync(id, request, token);
     [HttpPost("{id:guid}/deactivate"), Authorize(Roles = MasterDataRoles.Editors)] public async Task<IActionResult> Deactivate(Guid id, CancellationToken token) { await Service.DeactivateMobileAccountAsync(id, token); return NoContent(); }
     // Moves the number to another employee; the number, credit limit and rental stay as they are.
-    [HttpPost("{id:guid}/reassign"), Authorize(Roles = MasterDataRoles.MasterEditors)] public Task<MobileAccountDto> Reassign(Guid id, MobileAccountReassignRequest request, CancellationToken token) => Service.ReassignMobileAccountAsync(id, request, token);
+    [HttpPost("{id:guid}/reassign"), Authorize(Roles = MasterDataRoles.Editors)] public Task<MobileAccountDto> Reassign(Guid id, MobileAccountReassignRequest request, CancellationToken token) => Service.ReassignMobileAccountAsync(id, request, token);
 }
 
 [Route("api/factories")]
@@ -128,6 +126,19 @@ public sealed class CategoriesController(IMasterDataService service) : MasterDat
     [HttpPost, Authorize(Roles = MasterDataRoles.MasterEditors)] public async Task<ActionResult<ReferenceDataDto>> Create(ReferenceDataUpsertRequest request, CancellationToken token) { var item = await Service.CreateCategoryAsync(request, token); return CreatedAtAction(nameof(Get), new { item.Id }, item); }
     [HttpPut("{id:guid}"), Authorize(Roles = MasterDataRoles.MasterEditors)] public Task<ReferenceDataDto> Update(Guid id, ReferenceDataUpsertRequest request, CancellationToken token) => Service.UpdateCategoryAsync(id, request, token);
     [HttpPost("{id:guid}/deactivate"), Authorize(Roles = MasterDataRoles.MasterEditors)] public async Task<IActionResult> Deactivate(Guid id, CancellationToken token) { await Service.DeactivateCategoryAsync(id, token); return NoContent(); }
+}
+
+// Mobile packages are maintained by Administrator and IT Engineer, like telecom providers; other roles see them read-only.
+[Route("api/mobile-packages")]
+public sealed class MobilePackagesController(IMasterDataService service) : MasterDataControllerBase(service)
+{
+    [HttpGet] public Task<PagedResult<MobilePackageDto>> Get([FromQuery] PagedRequest request, CancellationToken token) => Service.GetPackagesAsync(request, token);
+    [HttpGet("{id:guid}")] public Task<MobilePackageDto> Get(Guid id, CancellationToken token) => Service.GetPackageAsync(id, token);
+    [HttpPost, Authorize(Roles = MasterDataRoles.Editors)] public async Task<ActionResult<MobilePackageDto>> Create(MobilePackageUpsertRequest request, CancellationToken token) { var item = await Service.CreatePackageAsync(request, token); return CreatedAtAction(nameof(Get), new { item.Id }, item); }
+    [HttpPut("{id:guid}"), Authorize(Roles = MasterDataRoles.Editors)] public Task<MobilePackageDto> Update(Guid id, MobilePackageUpsertRequest request, CancellationToken token) => Service.UpdatePackageAsync(id, request, token);
+    [HttpPost("{id:guid}/deactivate"), Authorize(Roles = MasterDataRoles.Editors)] public async Task<IActionResult> Deactivate(Guid id, CancellationToken token) { await Service.DeactivatePackageAsync(id, token); return NoContent(); }
+    // Sets the package's rental on its active allocations; returns how many changed.
+    [HttpPost("{id:guid}/apply-rental"), Authorize(Roles = MasterDataRoles.Editors)] public async Task<ActionResult<int>> ApplyRental(Guid id, CancellationToken token) => await Service.ApplyPackageRentalAsync(id, token);
 }
 
 [Route("api/providers")]
