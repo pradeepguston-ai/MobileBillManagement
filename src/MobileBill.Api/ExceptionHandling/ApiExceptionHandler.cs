@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using MobileBill.Application.Assistant;
 using MobileBill.Application.Common;
 using MobileBill.Application.Billing;
 using MobileBill.Application.Reports;
@@ -39,6 +40,8 @@ public sealed class ApiExceptionHandler(IProblemDetailsService problemDetailsSer
             PasswordResetRequestNotFoundException => StatusCodes.Status404NotFound,
             PasswordResetConflictException => StatusCodes.Status409Conflict,
             UserManagementConflictException => StatusCodes.Status400BadRequest,
+            AssistantValidationException => StatusCodes.Status400BadRequest,
+            AssistantUnavailableException => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status500InternalServerError
         };
         httpContext.Response.StatusCode = statusCode;

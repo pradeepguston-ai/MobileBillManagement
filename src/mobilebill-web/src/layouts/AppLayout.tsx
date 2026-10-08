@@ -38,6 +38,7 @@ import SummarizeIcon from '@mui/icons-material/Summarize'
 import AppsIcon from '@mui/icons-material/Apps'
 import SimCardIcon from '@mui/icons-material/SimCard'
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid'
+import { AssistantChat } from '../components/assistant/AssistantChat'
 import { type ReactNode, useState } from 'react'
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
@@ -109,6 +110,7 @@ export function AppLayout() {
         <Toolbar />
         <Outlet />
       </Box>
+      <AssistantChat />
     </Box>
   )
 }

@@ -24,6 +24,8 @@ services:
       Jwt__AccessTokenLifetimeMinutes: ${JWT_LIFETIME_MINUTES:-480}
       BillStorage__RootPath: /data/bill-uploads
       BillStorage__MaximumFileSizeBytes: "20971520"
+      # AI assistant (OpenRouter). Leave OPENROUTER_API_KEY empty to hide the assistant.
+      OpenRouter__ApiKey: ${OPENROUTER_API_KEY:-}
       # Only used when the database has no Administrator yet; leave empty to never write anything on start-up.
       Bootstrap__AdminEmail: ${BOOTSTRAP_ADMIN_EMAIL:-}
       Bootstrap__AdminPassword: ${BOOTSTRAP_ADMIN_PASSWORD:-}

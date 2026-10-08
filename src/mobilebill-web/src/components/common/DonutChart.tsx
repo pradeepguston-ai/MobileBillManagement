@@ -65,17 +65,18 @@ export function DonutChart({ data, centerLabel, ariaLabel, formatValue = value =
           ? <circle key={segment.label} cx={CX} cy={CY} r={R} {...common}>{title}</circle>
           : <path key={segment.label} d={arcPath(segment.start, segment.end)} strokeLinecap="round" {...common}>{title}</path>
       })}
-      <text x={CX} y={CY - 4} textAnchor="middle" fontSize={hovered ? 20 : 22} fontWeight={700} fill={hovered ? hovered.color : theme.palette.text.primary}>
+      {/* The theme switches light/dark through CSS variables, so the text colours are set as styles that read them. */}
+      <text x={CX} y={CY - 4} textAnchor="middle" fontSize={hovered ? 20 : 22} fontWeight={700} style={{ fill: hovered ? hovered.color : (theme.vars ?? theme).palette.text.primary }}>
         {hovered ? `${hovered.pct}%` : formatTotal(total)}
       </text>
-      <text x={CX} y={CY + 15} textAnchor="middle" fontSize={hovered ? 9.5 : 10} fill={theme.palette.text.secondary}>
+      <text x={CX} y={CY + 15} textAnchor="middle" fontSize={hovered ? 9.5 : 10} style={{ fill: (theme.vars ?? theme).palette.text.secondary }}>
         {hovered ? (hovered.label.length > 22 ? `${hovered.label.slice(0, 21)}…` : hovered.label) : centerLabel}
       </text>
     </Box>
     <Box component="ul" aria-label={`${ariaLabel} legend`} sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 0 }}>
       {segments.map(segment => <Box component="li" key={segment.label} tabIndex={0}
         onMouseEnter={enter(segment.label)} onMouseLeave={leave(segment.label)} onFocus={enter(segment.label)} onBlur={leave(segment.label)}
-        sx={{ display: 'flex', alignItems: 'center', gap: 1, borderRadius: 1.5, px: 0.75, py: 0.25, mx: -0.75, cursor: 'pointer', fontSize: 14, transition: 'background-color 150ms', bgcolor: hoverLabel === segment.label ? 'action.hover' : 'transparent', outline: 'none', '&:focus-visible': { boxShadow: `0 0 0 2px ${theme.palette.primary.main}` } }}>
+        sx={{ display: 'flex', alignItems: 'center', gap: 1, borderRadius: 1.5, px: 0.75, py: 0.25, mx: -0.75, cursor: 'pointer', fontSize: 14, transition: 'background-color 150ms', bgcolor: hoverLabel === segment.label ? 'action.hover' : 'transparent', outline: 'none', '&:focus-visible': { boxShadow: `0 0 0 2px ${(theme.vars ?? theme).palette.primary.main}` } }}>
         <Box component="span" sx={{ width: 10, height: 10, borderRadius: 0.5, flexShrink: 0, bgcolor: segment.color }} />
         <Box component="span" sx={{ color: 'text.primary', fontWeight: hoverLabel === segment.label ? 700 : 400 }}>{segment.label}</Box>
         <Box component="span" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{formatValue(segment.value)} ({segment.pct}%)</Box>

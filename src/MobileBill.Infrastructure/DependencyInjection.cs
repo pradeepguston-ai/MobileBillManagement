@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Options;
+using MobileBill.Application.Assistant;
+using MobileBill.Infrastructure.Assistant;
 using MobileBill.Application.Insights;
 using MobileBill.Infrastructure.Insights;
 using Microsoft.EntityFrameworkCore;
@@ -59,6 +62,14 @@ public static class DependencyInjection
         services.AddScoped<IBillLinesExcelExportService, ClosedXmlBillLinesExcelExportService>();
         services.AddScoped<IBillingInsightsService, EfBillingInsightsService>();
         services.AddSingleton<IPdfBillParser, PdfBillParser>();
+
+        // AI assistant (OpenRouter). Without OpenRouter:ApiKey it reports itself as not enabled.
+        services.AddMemoryCache();
+        services.Configure<OpenRouterOptions>(configuration.GetSection(OpenRouterOptions.SectionName));
+        services.AddHttpClient<IChatModelClient, OpenRouterChatModelClient>((provider, client) =>
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(provider.GetRequiredService<IOptions<OpenRouterOptions>>().Value.TimeoutSeconds, 10, 300)));
+        services.AddScoped<AssistantToolbox>();
+        services.AddScoped<IAssistantService, AssistantService>();
 
         return services;
     }
