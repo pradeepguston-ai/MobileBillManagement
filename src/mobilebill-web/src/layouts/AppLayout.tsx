@@ -154,7 +154,7 @@ function NavigationContent({ isAdministrator, onNavigate }: { isAdministrator?: 
     {isAdministrator && <NavigationGroup label="Administration" links={[["/admin/users", "User Management"], ["/admin/password-resets", "Password Resets"]]} onNavigate={onNavigate} />}
   </List>
   <Box sx={{ mt: 'auto', mx: 2, py: 2, borderTop: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 700, letterSpacing: '0.02em', textAlign: 'center' }}>
-    Powered By Concord IT
+    Powered By Concord IT 2
     <Box component="span" sx={{ display: 'block', mt: 0.5, fontSize: 11.5, fontWeight: 500, color: 'rgba(255,255,255,0.75)' }}>Version {__APP_VERSION__}</Box>
   </Box>
   </Box>
