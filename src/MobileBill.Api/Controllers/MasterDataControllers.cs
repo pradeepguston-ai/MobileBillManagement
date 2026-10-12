@@ -141,6 +141,17 @@ public sealed class MobilePackagesController(IMasterDataService service) : Maste
     [HttpPost("{id:guid}/apply-rental"), Authorize(Roles = MasterDataRoles.Editors)] public async Task<ActionResult<int>> ApplyRental(Guid id, CancellationToken token) => await Service.ApplyPackageRentalAsync(id, token);
 }
 
+// Outside companies whose staff work at the factories (security agencies); shown on OTHER - THIRD-PARTY employees.
+[Route("api/third-party-companies")]
+public sealed class ThirdPartyCompaniesController(IMasterDataService service) : MasterDataControllerBase(service)
+{
+    [HttpGet] public Task<PagedResult<ReferenceDataDto>> Get([FromQuery] PagedRequest request, CancellationToken token) => Service.GetThirdPartyCompaniesAsync(request, token);
+    [HttpGet("{id:guid}")] public Task<ReferenceDataDto> Get(Guid id, CancellationToken token) => Service.GetThirdPartyCompanyAsync(id, token);
+    [HttpPost, Authorize(Roles = MasterDataRoles.MasterEditors)] public async Task<ActionResult<ReferenceDataDto>> Create(ReferenceDataUpsertRequest request, CancellationToken token) { var item = await Service.CreateThirdPartyCompanyAsync(request, token); return CreatedAtAction(nameof(Get), new { item.Id }, item); }
+    [HttpPut("{id:guid}"), Authorize(Roles = MasterDataRoles.MasterEditors)] public Task<ReferenceDataDto> Update(Guid id, ReferenceDataUpsertRequest request, CancellationToken token) => Service.UpdateThirdPartyCompanyAsync(id, request, token);
+    [HttpPost("{id:guid}/deactivate"), Authorize(Roles = MasterDataRoles.MasterEditors)] public async Task<IActionResult> Deactivate(Guid id, CancellationToken token) { await Service.DeactivateThirdPartyCompanyAsync(id, token); return NoContent(); }
+}
+
 [Route("api/providers")]
 public sealed class ProvidersController(IMasterDataService service) : MasterDataControllerBase(service)
 {

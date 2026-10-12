@@ -42,7 +42,10 @@ public sealed record MobileAccountCandidateDto(
     string MobileNumber,
     string EmployeeEpf,
     string EmployeeName,
-    bool IsActive);
+    bool IsActive,
+    string? NameWithInitials = null,
+    string? CallingName = null,
+    string? Factory = null);
 
 public sealed record ResolveMobileAccountExceptionRequest(Guid MobileAccountId, string Comment);
 

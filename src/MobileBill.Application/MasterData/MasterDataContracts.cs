@@ -4,25 +4,38 @@ using MobileBill.Domain.Enums;
 namespace MobileBill.Application.MasterData;
 
 public sealed record ReferenceDataDto(Guid Id, string Code, string Name, bool IsActive);
-public sealed record ReferenceDataUpsertRequest(string Code, string Name);
+// Code may be left out for Departments, Designations, Categories, Sections, Sub Sections, Telecom Providers and Third Party Companies: it is generated (MasterCodeRules).
+public sealed record ReferenceDataUpsertRequest(string? Code, string Name);
 
 // Department → Section → Sub Section.
 public sealed record SectionDto(Guid Id, string Code, string Name, string DepartmentCode, string DepartmentName, bool IsActive);
-public sealed record SectionUpsertRequest(string Code, string Name, string DepartmentCode);
+public sealed record SectionUpsertRequest(string? Code, string Name, string DepartmentCode);
 public sealed record SubSectionDto(Guid Id, string Code, string Name, string SectionCode, string SectionName, string DepartmentCode, string DepartmentName, bool IsActive);
-public sealed record SubSectionUpsertRequest(string Code, string Name, string SectionCode);
+public sealed record SubSectionUpsertRequest(string? Code, string Name, string SectionCode);
 
 public sealed record EmployeeDto(
     Guid Id, string Epf, string FullName, string? CallingName,
     string CategoryCode, string CategoryName, string DesignationCode, string DesignationName,
     string FactoryCode, string FactoryName, string DepartmentCode, string DepartmentName, bool IsActive,
     string? SectionCode = null, string? SectionName = null, string? SubSectionCode = null, string? SubSectionName = null,
-    DateOnly? ResignedOn = null);
+    DateOnly? ResignedOn = null,
+    [property: System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))] Gender? Gender = null,
+    string? NameWithInitials = null,
+    string? ThirdPartyCompanyCode = null, string? ThirdPartyCompanyName = null)
+{
+    // MR. or MS., from Gender.
+    public string? Title => MobileBill.Domain.Calculations.GenderRules.Title(Gender);
+}
 // Section and Sub Section are optional; a Section must belong to the Department and a Sub Section to the Section.
+// Gender is required (left optional here only so the type stays compatible); the title follows from it.
 public sealed record EmployeeUpsertRequest(
     string Epf, string FullName, string? CallingName,
     string CategoryCode, string DesignationCode, string FactoryCode, string DepartmentCode,
-    string? SectionCode = null, string? SubSectionCode = null);
+    string? SectionCode = null, string? SubSectionCode = null,
+    [property: System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))] Gender? Gender = null,
+    string? NameWithInitials = null,
+    // Only for the OTHER - THIRD-PARTY category; null or empty is Not Applicable.
+    string? ThirdPartyCompanyCode = null);
 
 // For a Pooled or Disconnected SIM, Epf and EmployeeName are the last holder.
 public sealed record MobileAccountDto(
@@ -145,4 +158,10 @@ public interface IMasterDataService
     Task<ReferenceDataDto> CreateProviderAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken);
     Task<ReferenceDataDto> UpdateProviderAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken);
     Task DeactivateProviderAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<PagedResult<ReferenceDataDto>> GetThirdPartyCompaniesAsync(PagedRequest request, CancellationToken cancellationToken);
+    Task<ReferenceDataDto> GetThirdPartyCompanyAsync(Guid id, CancellationToken cancellationToken);
+    Task<ReferenceDataDto> CreateThirdPartyCompanyAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken);
+    Task<ReferenceDataDto> UpdateThirdPartyCompanyAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken);
+    Task DeactivateThirdPartyCompanyAsync(Guid id, CancellationToken cancellationToken);
 }

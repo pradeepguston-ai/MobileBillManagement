@@ -65,6 +65,15 @@ public sealed class TelecomProvider : AuditableEntity
     public ICollection<BillBatch> BillBatches { get; } = new List<BillBatch>();
 }
 
+// An outside company whose staff work at the factories, such as a security agency; chosen on OTHER - THIRD-PARTY employees (ThirdPartyRules).
+public sealed class ThirdPartyCompany : AuditableEntity
+{
+    public required string Code { get; set; }
+    public required string Name { get; set; }
+    public bool IsActive { get; set; } = true;
+    public ICollection<Employee> Employees { get; } = new List<Employee>();
+}
+
 public sealed class DeductionRule : AuditableEntity
 {
     public required string Code { get; set; }

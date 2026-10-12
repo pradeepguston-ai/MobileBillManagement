@@ -80,21 +80,23 @@ public sealed class VasReportService(MobileBillDbContext db, IClock clock) : IVa
     {
         var report = await GetAsync(request, cancellationToken);
         using var book = new XLWorkbook();
-        AddVasSheet(book, report, "VAS Report", clock.UtcNow, FilterLabel(request));
+        var names = await FilterNamesAsync(request, cancellationToken);
+        AddVasSheet(book, report, "VAS Report", clock.UtcNow, FilterLabel(request, names));
         AddSummarySheet(book, report);
         using var stream = new MemoryStream();
         book.SaveAs(stream);
-        return new ReportFile(FileName(report, request, "xlsx"), ExcelContentType, stream.ToArray());
+        return new ReportFile(FileName(report, request, names, "xlsx"), ExcelContentType, stream.ToArray());
     }
 
     public async Task<ReportFile> ExportPdfAsync(VasReportRequest request, CancellationToken cancellationToken)
     {
         var report = await GetAsync(request, cancellationToken);
-        var renderer = new PdfDocumentRenderer { Document = BuildPdf(report, FilterLabel(request)) };
+        var names = await FilterNamesAsync(request, cancellationToken);
+        var renderer = new PdfDocumentRenderer { Document = BuildPdf(report, FilterLabel(request, names)) };
         renderer.RenderDocument();
         using var stream = new MemoryStream();
         renderer.PdfDocument.Save(stream, false);
-        return new ReportFile(FileName(report, request, "pdf"), PdfBillingReportService.PdfContentType, stream.ToArray());
+        return new ReportFile(FileName(report, request, names, "pdf"), PdfBillingReportService.PdfContentType, stream.ToArray());
     }
 
     private static readonly string[] Headers =
@@ -349,20 +351,30 @@ public sealed class VasReportService(MobileBillDbContext db, IClock clock) : IVa
 
     private static bool IsPreliminary(BillBatchStatus status) => status is not (BillBatchStatus.Completed or BillBatchStatus.Locked);
 
-    private static string FilterLabel(VasReportRequest request)
+    // Categories and sections are shown by name: their codes are generated and not shown to people.
+    private async Task<(IReadOnlyList<string> Categories, IReadOnlyList<string> Sections)> FilterNamesAsync(VasReportRequest request, CancellationToken token)
+    {
+        var categoryCodes = Codes(request.CategoryCodes).ToList();
+        var sectionCodes = Codes(request.SectionCodes).ToList();
+        IReadOnlyList<string> categories = categoryCodes.Count == 0 ? [] : await db.EmployeeCategories.AsNoTracking().Where(item => categoryCodes.Contains(item.Code)).OrderBy(item => item.Name).Select(item => item.Name).ToListAsync(token);
+        IReadOnlyList<string> sections = sectionCodes.Count == 0 ? [] : await db.Sections.AsNoTracking().Where(item => sectionCodes.Contains(item.Code)).OrderBy(item => item.Name).Select(item => item.Name).ToListAsync(token);
+        return (categories, sections);
+    }
+
+    private static string FilterLabel(VasReportRequest request, (IReadOnlyList<string> Categories, IReadOnlyList<string> Sections) names)
     {
         var parts = new List<string>();
         if (Codes(request.FactoryCodes) is { Count: > 0 } factories) parts.Add($"Factory {string.Join(", ", factories)}");
-        if (Codes(request.CategoryCodes) is { Count: > 0 } categories) parts.Add($"Category {string.Join(", ", categories)}");
-        if (Codes(request.SectionCodes) is { Count: > 0 } sections) parts.Add($"Section {string.Join(", ", sections)}");
+        if (names.Categories.Count > 0) parts.Add($"Category {string.Join(", ", names.Categories)}");
+        if (names.Sections.Count > 0) parts.Add($"Section {string.Join(", ", names.Sections)}");
         if (request.MinimumVas is { } minimum) parts.Add($"VAS at least {Money(minimum)}");
         if (request.RepeatOnly) parts.Add("Repeat users only");
         return parts.Count == 0 ? "None (all numbers with VAS)" : string.Join("; ", parts);
     }
 
-    private static string FileName(VasReportDto report, VasReportRequest request, string extension)
+    private static string FileName(VasReportDto report, VasReportRequest request, (IReadOnlyList<string> Categories, IReadOnlyList<string> Sections) names, string extension)
     {
-        var suffix = string.Concat(Codes(request.FactoryCodes).Concat(Codes(request.CategoryCodes)).Concat(Codes(request.SectionCodes)).Select(code => $"_{code}"));
+        var suffix = string.Concat(Codes(request.FactoryCodes).Concat(names.Categories).Concat(names.Sections).Select(part => $"_{new string(part.Where(char.IsLetterOrDigit).ToArray())}"));
         return $"VAS_Report_{report.BillingYear:D4}_{report.BillingMonth:D2}{suffix}{(request.RepeatOnly ? "_Repeat" : string.Empty)}.{extension}";
     }
 

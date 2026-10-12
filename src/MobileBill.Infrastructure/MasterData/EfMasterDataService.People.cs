@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MobileBill.Application.Common;
 using MobileBill.Application.MasterData;
+using MobileBill.Domain.Calculations;
 using MobileBill.Domain.Entities;
 using MobileBill.Domain.Enums;
 
@@ -12,7 +13,7 @@ public sealed partial class EfMasterDataService
     {
         var query = _dbContext.Employees.AsNoTracking();
         if (request.IsActive is not null) query = query.Where(employee => employee.IsActive == request.IsActive.Value);
-        if (!string.IsNullOrWhiteSpace(request.Search)) { var search = request.Search.Trim(); query = query.Where(employee => employee.EPF.Contains(search) || employee.FullName.Contains(search) || (employee.CallingName != null && employee.CallingName.Contains(search))); }
+        if (!string.IsNullOrWhiteSpace(request.Search)) { var search = request.Search.Trim(); query = query.Where(employee => employee.EPF.Contains(search) || employee.FullName.Contains(search) || (employee.CallingName != null && employee.CallingName.Contains(search)) || (employee.NameWithInitials != null && employee.NameWithInitials.Contains(search))); }
         return await ToPagedResultAsync(EmployeeProjection(query.OrderBy(employee => employee.EPF).ThenBy(employee => employee.FactoryCode)), request, cancellationToken);
     }
     public async Task<EmployeeDto> GetEmployeeAsync(Guid id, CancellationToken cancellationToken) => await EmployeeProjection(_dbContext.Employees.AsNoTracking().Where(employee => employee.Id == id)).SingleOrDefaultAsync(cancellationToken) ?? throw new MasterDataNotFoundException("Employee", id);
@@ -20,8 +21,9 @@ public sealed partial class EfMasterDataService
     {
         ValidateEmployee(request); await RequireEmployeeReferencesAsync(request, cancellationToken);
         var (sectionCode, subSectionCode) = await ResolveEmployeeSectionsAsync(request, cancellationToken);
+        var thirdPartyCompanyCode = await ResolveThirdPartyCompanyAsync(request, null, cancellationToken);
         var epf = request.Epf.Trim(); var factoryCode = request.FactoryCode.Trim(); if (await _dbContext.Employees.AnyAsync(employee => employee.EPF == epf && employee.FactoryCode == factoryCode, cancellationToken)) throw new MasterDataConflictException(DuplicateEpfMessage);
-        var entity = new Employee { EPF = epf, FullName = request.FullName.Trim(), CallingName = TrimOptional(request.CallingName), CategoryCode = request.CategoryCode.Trim(), DesignationCode = request.DesignationCode.Trim(), FactoryCode = request.FactoryCode.Trim(), DepartmentCode = request.DepartmentCode.Trim(), SectionCode = sectionCode, SubSectionCode = subSectionCode };
+        var entity = new Employee { EPF = epf, FullName = request.FullName.Trim(), CallingName = TrimOptional(request.CallingName), NameWithInitials = TrimOptional(request.NameWithInitials), Gender = request.Gender, CategoryCode = request.CategoryCode.Trim(), DesignationCode = request.DesignationCode.Trim(), FactoryCode = request.FactoryCode.Trim(), DepartmentCode = request.DepartmentCode.Trim(), SectionCode = sectionCode, SubSectionCode = subSectionCode, ThirdPartyCompanyCode = thirdPartyCompanyCode };
         _dbContext.Employees.Add(entity); await _dbContext.SaveChangesAsync(cancellationToken); return await GetEmployeeAsync(entity.Id, cancellationToken);
     }
     public async Task<EmployeeDto> UpdateEmployeeAsync(Guid id, EmployeeUpsertRequest request, CancellationToken cancellationToken)
@@ -29,8 +31,9 @@ public sealed partial class EfMasterDataService
         ValidateEmployee(request); await RequireEmployeeReferencesAsync(request, cancellationToken);
         var (sectionCode, subSectionCode) = await ResolveEmployeeSectionsAsync(request, cancellationToken);
         var entity = await _dbContext.Employees.FindAsync([id], cancellationToken) ?? throw new MasterDataNotFoundException("Employee", id);
+        var thirdPartyCompanyCode = await ResolveThirdPartyCompanyAsync(request, entity.ThirdPartyCompanyCode, cancellationToken);
         var epf = request.Epf.Trim(); var factoryCode = request.FactoryCode.Trim(); if (await _dbContext.Employees.AnyAsync(employee => employee.Id != id && employee.EPF == epf && employee.FactoryCode == factoryCode, cancellationToken)) throw new MasterDataConflictException(DuplicateEpfMessage);
-        entity.EPF = epf; entity.FullName = request.FullName.Trim(); entity.CallingName = TrimOptional(request.CallingName); entity.CategoryCode = request.CategoryCode.Trim(); entity.DesignationCode = request.DesignationCode.Trim(); entity.FactoryCode = request.FactoryCode.Trim(); entity.DepartmentCode = request.DepartmentCode.Trim(); entity.SectionCode = sectionCode; entity.SubSectionCode = subSectionCode;
+        entity.EPF = epf; entity.FullName = request.FullName.Trim(); entity.CallingName = TrimOptional(request.CallingName); entity.NameWithInitials = TrimOptional(request.NameWithInitials); entity.Gender = request.Gender; entity.CategoryCode = request.CategoryCode.Trim(); entity.DesignationCode = request.DesignationCode.Trim(); entity.FactoryCode = request.FactoryCode.Trim(); entity.DepartmentCode = request.DepartmentCode.Trim(); entity.SectionCode = sectionCode; entity.SubSectionCode = subSectionCode; entity.ThirdPartyCompanyCode = thirdPartyCompanyCode;
         await _dbContext.SaveChangesAsync(cancellationToken); return await GetEmployeeAsync(id, cancellationToken);
     }
     public async Task DeactivateEmployeeAsync(Guid id, CancellationToken cancellationToken)
@@ -109,11 +112,29 @@ public sealed partial class EfMasterDataService
         return await GetMobileAccountAsync(id, cancellationToken);
     }
 
-    private static IQueryable<EmployeeDto> EmployeeProjection(IQueryable<Employee> query) => query.Select(employee => new EmployeeDto(employee.Id, employee.EPF, employee.FullName, employee.CallingName, employee.CategoryCode, employee.Category.Name, employee.DesignationCode, employee.Designation.Name, employee.FactoryCode, employee.Factory.Name, employee.DepartmentCode, employee.Department.Name, employee.IsActive, employee.SectionCode, employee.Section != null ? employee.Section.Name : null, employee.SubSectionCode, employee.SubSection != null ? employee.SubSection.Name : null, employee.ResignedOn));
+    private static IQueryable<EmployeeDto> EmployeeProjection(IQueryable<Employee> query) => query.Select(employee => new EmployeeDto(employee.Id, employee.EPF, employee.FullName, employee.CallingName, employee.CategoryCode, employee.Category.Name, employee.DesignationCode, employee.Designation.Name, employee.FactoryCode, employee.Factory.Name, employee.DepartmentCode, employee.Department.Name, employee.IsActive, employee.SectionCode, employee.Section != null ? employee.Section.Name : null, employee.SubSectionCode, employee.SubSection != null ? employee.SubSection.Name : null, employee.ResignedOn, employee.Gender, employee.NameWithInitials, employee.ThirdPartyCompanyCode, employee.ThirdPartyCompany != null ? employee.ThirdPartyCompany.Name : null));
     private static IQueryable<MobileAccountDto> MobileAccountProjection(IQueryable<MobileAccount> query) => query.Select(account => new MobileAccountDto(account.Id, account.MobileNumber, account.Employee.EPF, account.Employee.FullName, account.Employee.Factory.Name, account.Employee.Department.Name, account.MonthlyCreditLimit, account.MonthlyRental, account.IsActive, account.Status, account.PooledOn, account.DisconnectedOn, account.StatusReason, account.EmployeeId, account.Employee.FactoryCode,
         account.PackageId, account.Package != null ? account.Package.Code : null, account.Package != null && account.MonthlyRental != account.Package.MonthlyRental, account.SimType));
     private static string? TrimOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    private static void ValidateEmployee(EmployeeUpsertRequest request) { MasterDataValidation.RequireText(request.Epf, "EPF"); MasterDataValidation.RequireText(request.FullName, "Full Name"); }
+    // Only an OTHER - THIRD-PARTY employee may have a third-party company, and it must be active (or the one they already have).
+    private async Task<string?> ResolveThirdPartyCompanyAsync(EmployeeUpsertRequest request, string? currentCode, CancellationToken token)
+    {
+        var code = TrimOptional(request.ThirdPartyCompanyCode);
+        if (code is null) return null;
+        var categoryCode = request.CategoryCode.Trim();
+        var categoryName = await _dbContext.EmployeeCategories.Where(category => category.Code == categoryCode).Select(category => category.Name).SingleOrDefaultAsync(token);
+        if (!ThirdPartyRules.AllowsThirdParty(categoryName))
+            throw new MasterDataValidationException($"Third Party Allocation is only for the {ThirdPartyRules.ThirdPartyCategoryName} category.");
+        if (code != currentCode && !await _dbContext.ThirdPartyCompanies.AnyAsync(company => company.Code == code && company.IsActive, token))
+            throw new MasterDataValidationException("Choose an active third party company.");
+        return code;
+    }
+
+    private static void ValidateEmployee(EmployeeUpsertRequest request)
+    {
+        MasterDataValidation.RequireText(request.Epf, "EPF"); MasterDataValidation.RequireText(request.FullName, "Full Name");
+        if (request.Gender is not { } gender || !Enum.IsDefined(gender)) throw new MasterDataValidationException("Gender is required.");
+    }
     private static void ValidateMobileAccount(MobileAccountUpsertRequest request) { MasterDataValidation.RequireText(request.MobileNumber, "Mobile Number"); MasterDataValidation.RequireCurrencyAmount(request.MonthlyCreditLimit, "Monthly Credit Limit"); MasterDataValidation.RequireCurrencyAmount(request.MonthlyRental, "Monthly Rental"); }
     private async Task RequireEmployeeReferencesAsync(EmployeeUpsertRequest request, CancellationToken token)
     {

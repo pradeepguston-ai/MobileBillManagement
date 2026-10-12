@@ -45,6 +45,9 @@ export type MobileAccountCandidate = {
   employeeEpf: string
   employeeName: string
   isActive: boolean
+  nameWithInitials?: string | null
+  callingName?: string | null
+  factory?: string | null
 }
 
 export function getBillExceptions(batchId: string, query: Record<string, string>) {

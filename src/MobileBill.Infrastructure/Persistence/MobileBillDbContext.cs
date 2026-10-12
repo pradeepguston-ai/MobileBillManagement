@@ -19,6 +19,7 @@ public sealed class MobileBillDbContext(DbContextOptions<MobileBillDbContext> op
     public DbSet<Designation> Designations => Set<Designation>();
     public DbSet<EmployeeCategory> EmployeeCategories => Set<EmployeeCategory>();
     public DbSet<TelecomProvider> TelecomProviders => Set<TelecomProvider>();
+    public DbSet<ThirdPartyCompany> ThirdPartyCompanies => Set<ThirdPartyCompany>();
     public DbSet<DeductionRule> DeductionRules => Set<DeductionRule>();
     public DbSet<BillBatch> BillBatches => Set<BillBatch>();
     public DbSet<BillLine> BillLines => Set<BillLine>();

@@ -59,7 +59,7 @@ function RegisterDownloads() {
       </TextField>
       <TextField select size="small" label="Register department" value={departmentCode} onChange={event => setDepartmentCode(event.target.value)} sx={{ minWidth: 200 }}>
         <MenuItem value="">All departments</MenuItem>
-        {departments.map(item => <MenuItem key={String(item.id)} value={String(item.code)}>{String(item.code)} — {String(item.name)}</MenuItem>)}
+        {departments.map(item => <MenuItem key={String(item.id)} value={String(item.code)}>{String(item.name)}</MenuItem>)}
       </TextField>
       <Button variant="contained" startIcon={<DownloadIcon />} disabled={downloading} onClick={() => void download('excel')}>Device Register Excel</Button>
       <Button variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={downloading} onClick={() => void download('pdf')}>Device Register PDF</Button>

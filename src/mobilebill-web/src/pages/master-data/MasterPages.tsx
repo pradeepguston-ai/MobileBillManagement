@@ -1,5 +1,5 @@
 import { MasterDataPage } from './MasterDataPage'
-import { categoriesConfig, designationsConfig, factoriesConfig, mobilePackagesConfig, providersConfig } from './pageConfigs'
+import { categoriesConfig, designationsConfig, factoriesConfig, mobilePackagesConfig, providersConfig, thirdPartyCompaniesConfig } from './pageConfigs'
 
 export { DepartmentsPage } from './DepartmentsPage'
 export { EmployeesPage } from './EmployeesPage'
@@ -10,4 +10,5 @@ export const FactoriesPage = () => <MasterDataPage config={factoriesConfig} />
 export const DesignationsPage = () => <MasterDataPage config={designationsConfig} />
 export const CategoriesPage = () => <MasterDataPage config={categoriesConfig} />
 export const ProvidersPage = () => <MasterDataPage config={providersConfig} />
+export const ThirdPartyCompaniesPage = () => <MasterDataPage config={thirdPartyCompaniesConfig} />
 export const MobilePackagesPage = () => <MasterDataPage config={mobilePackagesConfig} />

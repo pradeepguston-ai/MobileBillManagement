@@ -1,7 +1,10 @@
-import { Alert, Autocomplete, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material'
+import { Alert, Autocomplete, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, createFilterOptions } from '@mui/material'
 
 // data: the record behind the option, for filling in other fields when it is chosen.
-export type FormFieldOption = { value: string; label: string; parentValue?: string; data?: Record<string, unknown> }
+// searchText: more words typing can match besides the label (for example an employee's full name).
+export type FormFieldOption = { value: string; label: string; parentValue?: string; data?: Record<string, unknown>; searchText?: string }
+
+const filterOptions = createFilterOptions<FormFieldOption>({ stringify: option => `${option.label} ${option.searchText ?? ''}` })
 export type FormField = {
   key: string
   label: string
@@ -12,6 +15,10 @@ export type FormField = {
   disabled?: boolean
   // Shown under the field when it has no error.
   helperText?: string
+  // A select's first option for "none", saved as an empty value (for example Not Applicable).
+  emptyOptionLabel?: string
+  // The field shows only while this is true, given the form values and the loaded select options.
+  visibleWhen?: (values: Record<string, string>, options: Record<string, FormFieldOption[]>) => boolean
 }
 
 type MasterDataDialogProps = {
@@ -38,6 +45,7 @@ export function MasterDataDialog({ open, title, fields, values, errors, onChange
               value={field.options?.find(option => option.value === values[field.key]) ?? null}
               onChange={(_, option) => onChange(field.key, option?.value ?? '')}
               getOptionLabel={option => option.label}
+              filterOptions={filterOptions}
               isOptionEqualToValue={(option, selected) => option.value === selected.value}
               disabled={field.disabled}
               renderInput={params => <TextField {...params} label={field.label} required={field.required} error={Boolean(errors[field.key])} helperText={errors[field.key]} />}

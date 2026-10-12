@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using MobileBill.Application.Common;
 using MobileBill.Application.MasterData;
+using MobileBill.Domain.Calculations;
 using MobileBill.Domain.Entities;
 
 namespace MobileBill.Infrastructure.MasterData;
 
-// Department → Section → Sub Section. Codes are unique within each list, like the other masters.
+// Department → Section → Sub Section. Codes are generated and unique within each list; a section's name is unique
+// within its department and a sub section's within its section.
 public sealed partial class EfMasterDataService
 {
     public async Task<PagedResult<SectionDto>> GetSectionsAsync(PagedRequest request, string? departmentCode, CancellationToken cancellationToken)
@@ -23,9 +25,12 @@ public sealed partial class EfMasterDataService
 
     public async Task<SectionDto> CreateSectionAsync(SectionUpsertRequest request, CancellationToken cancellationToken)
     {
-        var (code, name, departmentCode) = (request.Code?.Trim() ?? string.Empty, request.Name?.Trim() ?? string.Empty, request.DepartmentCode?.Trim() ?? string.Empty);
-        ValidateReference(code, name); MasterDataValidation.RequireText(departmentCode, "Department");
+        var (code, name, departmentCode) = (request.Code?.Trim() ?? string.Empty, CleanName(request.Name), request.DepartmentCode?.Trim() ?? string.Empty);
+        MasterDataValidation.RequireText(name, "Name"); MasterDataValidation.RequireText(departmentCode, "Department");
         await RequireActiveDepartmentAsync(departmentCode, cancellationToken);
+        await RequireUniqueNameAsync(_dbContext.Sections.Where(section => section.DepartmentCode == departmentCode), null, name, "Section in this department", cancellationToken);
+        if (code.Length == 0) code = await NextCodeAsync(_dbContext.Sections, MasterCodeRules.Section, cancellationToken);
+        ValidateReference(code, name);
         if (await _dbContext.Sections.AnyAsync(section => section.Code == code, cancellationToken)) throw new MasterDataConflictException("Section code already exists.");
         var entity = new Section { Code = code, Name = name, DepartmentCode = departmentCode };
         _dbContext.Sections.Add(entity); await _dbContext.SaveChangesAsync(cancellationToken);
@@ -34,9 +39,11 @@ public sealed partial class EfMasterDataService
 
     public async Task<SectionDto> UpdateSectionAsync(Guid id, SectionUpsertRequest request, CancellationToken cancellationToken)
     {
-        var (code, name, departmentCode) = (request.Code?.Trim() ?? string.Empty, request.Name?.Trim() ?? string.Empty, request.DepartmentCode?.Trim() ?? string.Empty);
-        ValidateReference(code, name); MasterDataValidation.RequireText(departmentCode, "Department");
+        var (code, name, departmentCode) = (request.Code?.Trim() ?? string.Empty, CleanName(request.Name), request.DepartmentCode?.Trim() ?? string.Empty);
         var entity = await _dbContext.Sections.FindAsync([id], cancellationToken) ?? throw new MasterDataNotFoundException("Section", id);
+        if (code.Length == 0) code = entity.Code;
+        ValidateReference(code, name); MasterDataValidation.RequireText(departmentCode, "Department");
+        await RequireUniqueNameAsync(_dbContext.Sections.Where(section => section.DepartmentCode == departmentCode), id, name, "Section in this department", cancellationToken);
         if (await _dbContext.Sections.AnyAsync(section => section.Id != id && section.Code == code, cancellationToken)) throw new MasterDataConflictException("Section code already exists.");
         if (entity.Code != code && await IsSectionReferencedAsync(entity.Code, cancellationToken))
             throw new MasterDataValidationException("Section code cannot be changed while employees or sub sections use it.");
@@ -76,9 +83,12 @@ public sealed partial class EfMasterDataService
 
     public async Task<SubSectionDto> CreateSubSectionAsync(SubSectionUpsertRequest request, CancellationToken cancellationToken)
     {
-        var (code, name, sectionCode) = (request.Code?.Trim() ?? string.Empty, request.Name?.Trim() ?? string.Empty, request.SectionCode?.Trim() ?? string.Empty);
-        ValidateReference(code, name); MasterDataValidation.RequireText(sectionCode, "Section");
+        var (code, name, sectionCode) = (request.Code?.Trim() ?? string.Empty, CleanName(request.Name), request.SectionCode?.Trim() ?? string.Empty);
+        MasterDataValidation.RequireText(name, "Name"); MasterDataValidation.RequireText(sectionCode, "Section");
         await RequireActiveSectionAsync(sectionCode, cancellationToken);
+        await RequireUniqueNameAsync(_dbContext.SubSections.Where(subSection => subSection.SectionCode == sectionCode), null, name, "Sub section in this section", cancellationToken);
+        if (code.Length == 0) code = await NextCodeAsync(_dbContext.SubSections, MasterCodeRules.SubSection, cancellationToken);
+        ValidateReference(code, name);
         if (await _dbContext.SubSections.AnyAsync(subSection => subSection.Code == code, cancellationToken)) throw new MasterDataConflictException("Sub section code already exists.");
         var entity = new SubSection { Code = code, Name = name, SectionCode = sectionCode };
         _dbContext.SubSections.Add(entity); await _dbContext.SaveChangesAsync(cancellationToken);
@@ -87,9 +97,11 @@ public sealed partial class EfMasterDataService
 
     public async Task<SubSectionDto> UpdateSubSectionAsync(Guid id, SubSectionUpsertRequest request, CancellationToken cancellationToken)
     {
-        var (code, name, sectionCode) = (request.Code?.Trim() ?? string.Empty, request.Name?.Trim() ?? string.Empty, request.SectionCode?.Trim() ?? string.Empty);
-        ValidateReference(code, name); MasterDataValidation.RequireText(sectionCode, "Section");
+        var (code, name, sectionCode) = (request.Code?.Trim() ?? string.Empty, CleanName(request.Name), request.SectionCode?.Trim() ?? string.Empty);
         var entity = await _dbContext.SubSections.FindAsync([id], cancellationToken) ?? throw new MasterDataNotFoundException("Sub section", id);
+        if (code.Length == 0) code = entity.Code;
+        ValidateReference(code, name); MasterDataValidation.RequireText(sectionCode, "Section");
+        await RequireUniqueNameAsync(_dbContext.SubSections.Where(subSection => subSection.SectionCode == sectionCode), id, name, "Sub section in this section", cancellationToken);
         if (await _dbContext.SubSections.AnyAsync(subSection => subSection.Id != id && subSection.Code == code, cancellationToken)) throw new MasterDataConflictException("Sub section code already exists.");
         var inUse = await _dbContext.Employees.AnyAsync(employee => employee.SubSectionCode == entity.Code, cancellationToken);
         if (entity.Code != code && inUse) throw new MasterDataValidationException("Sub section code cannot be changed while employees use it.");

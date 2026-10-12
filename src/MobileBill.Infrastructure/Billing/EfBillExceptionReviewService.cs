@@ -38,7 +38,7 @@ public sealed class EfBillExceptionReviewService(MobileBillDbContext db, IBillRe
         var exception = await GetExceptionWithLine(exceptionId, token);
         if (exception.ExceptionType != BillExceptionType.MOBILE_NOT_FOUND) throw new BillReviewConflictException("Historical allocation candidates are available only for MOBILE_NOT_FOUND exceptions.");
         return await db.MobileAccounts.AsNoTracking().Include(x => x.Employee).Where(x => x.MobileNumber == exception.BillLine!.MobileNumber)
-            .OrderByDescending(x => x.IsActive).ThenBy(x => x.Id).Select(x => new MobileAccountCandidateDto(x.Id, x.Employee.Id, x.MobileNumber, x.Employee.EPF, x.Employee.FullName, x.IsActive)).ToListAsync(token);
+            .OrderByDescending(x => x.IsActive).ThenBy(x => x.Id).Select(x => new MobileAccountCandidateDto(x.Id, x.Employee.Id, x.MobileNumber, x.Employee.EPF, x.Employee.FullName, x.IsActive, x.Employee.NameWithInitials, x.Employee.CallingName, x.Employee.Factory.Name)).ToListAsync(token);
     }
 
     public async Task<BillExceptionResolutionResult> ResolveMobileNotFoundAsync(Guid exceptionId, ResolveMobileAccountExceptionRequest request, CancellationToken token)

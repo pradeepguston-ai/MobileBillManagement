@@ -4,6 +4,7 @@ using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using MobileBill.Application.Common;
 using MobileBill.Application.MasterData;
+using MobileBill.Domain.Calculations;
 using MobileBill.Domain.Entities;
 using MobileBill.Domain.Enums;
 using MobileBill.Infrastructure.Persistence;
@@ -17,8 +18,14 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
 {
     public const int MaxRows = 5000;
 
-    private static readonly string[] EmployeeColumns = ["Factory Code", "EPF", "Full Name", "Calling Name", "Category Code", "Designation Code", "Department Code", "Section Code", "Sub Section Code"];
-    private static readonly string[] EmployeeRequired = ["Factory Code", "EPF", "Full Name", "Category Code", "Designation Code", "Department Code"];
+    // Category, Designation, Department, Section and Sub Section are written by name (their codes are generated and
+    // not shown); a code is still accepted. Files with the older "… Code" headings still read (see HeadingAliases).
+    private static readonly string[] EmployeeColumns = ["Factory Code", "EPF", "Full Name", "Name With Initials", "Calling Name", "Gender", "Category", "Designation", "Department", "Section", "Sub Section", "Third Party Allocation"];
+    private static readonly string[] EmployeeRequired = ["Factory Code", "EPF", "Full Name", "Gender", "Category", "Designation", "Department"];
+    private static readonly Dictionary<string, string> HeadingAliases = new()
+    {
+        ["categorycode"] = "category", ["designationcode"] = "designation", ["departmentcode"] = "department", ["sectioncode"] = "section", ["subsectioncode"] = "subsection",
+    };
     private static readonly string[] AllocationRequired = ["Mobile Number", "Factory Code", "EPF", "Monthly Credit Limit", "Monthly Rental"];
     // Package Code is checked per row (required for new allocations), so files made before it was added still read.
     private static readonly string[] AllocationColumns = ["Mobile Number", "Factory Code", "EPF", "Package Code", "SIM Type", "Monthly Credit Limit", "Monthly Rental"];
@@ -34,8 +41,10 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
     [
         "One row per employee. An employee is identified by Factory Code + EPF: the same EPF may exist in different factories.",
         "If Factory Code + EPF already exists, that employee is updated; otherwise a new employee is created.",
-        "Codes must match active records in Factories, Categories, Designations and Departments.",
-        "Section Code is optional and must belong to the Department. Sub Section Code is optional and must belong to the Section.",
+        "Factory Code must match an active factory. Category, Designation and Department are the names shown on the screens (for example Information Technology).",
+        "Gender is Male or Female (M / F and Mr. / Ms. are also accepted); the title MR. or MS. follows from it.",
+        "Section is optional and must belong to the Department. Sub Section is optional and must belong to the Section.",
+        "Third Party Allocation is only for the OTHER - THIRD-PARTY category: the company name, or blank / Not Applicable.",
         "Columns marked * are required. Keep the heading row as it is.",
     ]));
 
@@ -54,13 +63,13 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
     {
         var sheet = await ReadSheetAsync(workbook, EmployeeRequired, cancellationToken);
         var factories = await CodesAsync(db.Factories.Where(x => x.IsActive).Select(x => x.Code), cancellationToken);
-        var categories = await CodesAsync(db.EmployeeCategories.Where(x => x.IsActive).Select(x => x.Code), cancellationToken);
-        var designations = await CodesAsync(db.Designations.Where(x => x.IsActive).Select(x => x.Code), cancellationToken);
-        var departments = await CodesAsync(db.Departments.Where(x => x.IsActive).Select(x => x.Code), cancellationToken);
-        var sections = (await db.Sections.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Code, x.DepartmentCode }).ToListAsync(cancellationToken))
-            .ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
-        var subSections = (await db.SubSections.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.Code, x.SectionCode }).ToListAsync(cancellationToken))
-            .ToDictionary(x => x.Code, StringComparer.OrdinalIgnoreCase);
+        var categories = NamedCodes(await db.EmployeeCategories.AsNoTracking().Where(x => x.IsActive).Select(x => new NamedCode(x.Code, x.Name, null)).ToListAsync(cancellationToken));
+        var designations = NamedCodes(await db.Designations.AsNoTracking().Where(x => x.IsActive).Select(x => new NamedCode(x.Code, x.Name, null)).ToListAsync(cancellationToken));
+        var departments = NamedCodes(await db.Departments.AsNoTracking().Where(x => x.IsActive).Select(x => new NamedCode(x.Code, x.Name, null)).ToListAsync(cancellationToken));
+        // A section's name is unique only within its department, so sections are looked up per department (and sub sections per section).
+        var sections = NamedCodes(await db.Sections.AsNoTracking().Where(x => x.IsActive).Select(x => new NamedCode(x.Code, x.Name, x.DepartmentCode)).ToListAsync(cancellationToken));
+        var thirdPartyCompanies = NamedCodes(await db.ThirdPartyCompanies.AsNoTracking().Where(x => x.IsActive).Select(x => new NamedCode(x.Code, x.Name, null)).ToListAsync(cancellationToken));
+        var subSections = NamedCodes(await db.SubSections.AsNoTracking().Where(x => x.IsActive).Select(x => new NamedCode(x.Code, x.Name, x.SectionCode)).ToListAsync(cancellationToken));
         var existing = (await db.Employees.ToListAsync(cancellationToken)).ToDictionary(x => Key(x.FactoryCode, x.EPF), StringComparer.OrdinalIgnoreCase);
 
         var errors = new List<ImportRowError>();
@@ -72,25 +81,24 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
             var factory = Code(row.Text("Factory Code"), factories, "Factory Code", rowErrors);
             var epf = Required(row.Text("EPF"), "EPF", 50, rowErrors);
             var fullName = Required(row.Text("Full Name"), "Full Name", 200, rowErrors);
+            var nameWithInitials = Optional(row.Text("Name With Initials"), "Name With Initials", 200, rowErrors);
             var callingName = Optional(row.Text("Calling Name"), "Calling Name", 100, rowErrors);
-            var category = Code(row.Text("Category Code"), categories, "Category Code", rowErrors);
-            var designation = Code(row.Text("Designation Code"), designations, "Designation Code", rowErrors);
-            var department = Code(row.Text("Department Code"), departments, "Department Code", rowErrors);
-            string? section = null, subSection = null;
-            var sectionText = row.Text("Section Code");
-            var subSectionText = row.Text("Sub Section Code");
-            if (sectionText.Length > 0)
-            {
-                if (!sections.TryGetValue(sectionText, out var found)) rowErrors.Add($"Section Code '{sectionText}' is not an active section.");
-                else if (department is not null && !string.Equals(found.DepartmentCode, department, StringComparison.OrdinalIgnoreCase)) rowErrors.Add($"Section '{found.Code}' does not belong to department '{department}'.");
-                else section = found.Code;
-            }
+            var genderText = row.Text("Gender");
+            var gender = GenderRules.Parse(genderText);
+            if (genderText.Length == 0) rowErrors.Add("Gender is required.");
+            else if (gender is null) rowErrors.Add($"Gender '{genderText}' is not Male or Female.");
+            var category = Lookup(row.Text("Category"), categories, null, "Category", rowErrors);
+            var designation = Lookup(row.Text("Designation"), designations, null, "Designation", rowErrors);
+            var department = Lookup(row.Text("Department"), departments, null, "Department", rowErrors);
+            NamedCode? section = null, subSection = null;
+            var sectionText = row.Text("Section");
+            var subSectionText = row.Text("Sub Section");
+            if (sectionText.Length > 0 && department is not null)
+                section = Lookup(sectionText, sections, department.Value, "Section", rowErrors, $" in department '{department.Value.Name}'");
             if (subSectionText.Length > 0)
             {
-                if (sectionText.Length == 0) rowErrors.Add("Sub Section Code needs a Section Code.");
-                else if (!subSections.TryGetValue(subSectionText, out var found)) rowErrors.Add($"Sub Section Code '{subSectionText}' is not an active sub section.");
-                else if (section is not null && !string.Equals(found.SectionCode, section, StringComparison.OrdinalIgnoreCase)) rowErrors.Add($"Sub section '{found.Code}' does not belong to section '{section}'.");
-                else subSection = found.Code;
+                if (sectionText.Length == 0) rowErrors.Add("Sub Section needs a Section.");
+                else if (section is not null) subSection = Lookup(subSectionText, subSections, section.Value, "Sub Section", rowErrors, $" in section '{section.Value.Name}'");
             }
             if (factory is not null && epf is not null)
             {
@@ -99,19 +107,32 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
             }
             if (rowErrors.Count > 0) { errors.AddRange(rowErrors.Select(message => new ImportRowError(row.Number, message))); continue; }
 
+            NamedCode? thirdParty = null;
+            var thirdPartyText = row.Text("Third Party Allocation");
+            if (thirdPartyText.Length > 0 && MasterCodeRules.NameKey(thirdPartyText) != ThirdPartyRules.NotApplicable)
+            {
+                if (!ThirdPartyRules.AllowsThirdParty(category!.Value.Name))
+                    rowErrors.Add($"Third Party Allocation is only for the {ThirdPartyRules.ThirdPartyCategoryName} category.");
+                else thirdParty = Lookup(thirdPartyText, thirdPartyCompanies, null, "Third Party Allocation", rowErrors);
+            }
+            if (rowErrors.Count > 0) { errors.AddRange(rowErrors.Select(message => new ImportRowError(row.Number, message))); continue; }
+
+            var thirdPartyCode = thirdParty?.Code;
+            var (categoryCode, designationCode, departmentCode) = (category!.Value.Code, designation!.Value.Code, department!.Value.Code);
+            var (sectionCode, subSectionCode) = (section?.Code, subSection?.Code);
             if (existing.TryGetValue(Key(factory!, epf!), out var employee))
             {
-                var changed = employee.FullName != fullName || employee.CallingName != callingName || employee.CategoryCode != category || employee.DesignationCode != designation
-                    || employee.DepartmentCode != department || employee.SectionCode != section || employee.SubSectionCode != subSection;
+                var changed = employee.FullName != fullName || employee.NameWithInitials != nameWithInitials || employee.CallingName != callingName || employee.Gender != gender || employee.CategoryCode != categoryCode || employee.DesignationCode != designationCode
+                    || employee.DepartmentCode != departmentCode || employee.SectionCode != sectionCode || employee.SubSectionCode != subSectionCode || employee.ThirdPartyCompanyCode != thirdPartyCode;
                 if (!changed) { unchanged++; continue; }
-                employee.FullName = fullName!; employee.CallingName = callingName; employee.CategoryCode = category!; employee.DesignationCode = designation!;
-                employee.DepartmentCode = department!; employee.SectionCode = section; employee.SubSectionCode = subSection;
+                employee.FullName = fullName!; employee.NameWithInitials = nameWithInitials; employee.CallingName = callingName; employee.Gender = gender; employee.CategoryCode = categoryCode; employee.DesignationCode = designationCode;
+                employee.DepartmentCode = departmentCode; employee.SectionCode = sectionCode; employee.SubSectionCode = subSectionCode; employee.ThirdPartyCompanyCode = thirdPartyCode;
                 employee.UpdatedAtUtc = clock.UtcNow; employee.UpdatedBy = currentUser.UserId;
                 updated++;
             }
             else
             {
-                db.Employees.Add(new Employee { EPF = epf!, FactoryCode = factory!, FullName = fullName!, CallingName = callingName, CategoryCode = category!, DesignationCode = designation!, DepartmentCode = department!, SectionCode = section, SubSectionCode = subSection, CreatedAtUtc = clock.UtcNow, CreatedBy = currentUser.UserId });
+                db.Employees.Add(new Employee { EPF = epf!, FactoryCode = factory!, FullName = fullName!, NameWithInitials = nameWithInitials, CallingName = callingName, Gender = gender, CategoryCode = categoryCode, DesignationCode = designationCode, DepartmentCode = departmentCode, SectionCode = sectionCode, SubSectionCode = subSectionCode, ThirdPartyCompanyCode = thirdPartyCode, CreatedAtUtc = clock.UtcNow, CreatedBy = currentUser.UserId });
                 created++;
             }
         }
@@ -230,7 +251,7 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
             for (var column = 1; column <= lastColumn; column++)
             {
                 var heading = Normalize(sheet.Cell(1, column).GetFormattedString());
-                if (heading.Length > 0) headers.TryAdd(heading, column);
+                if (heading.Length > 0) headers.TryAdd(HeadingAliases.GetValueOrDefault(heading, heading), column);
             }
             var missing = requiredColumns.Where(column => !headers.ContainsKey(Normalize(column))).ToList();
             if (missing.Count > 0) throw new MasterDataValidationException($"Missing column(s): {string.Join(", ", missing)}. Download the template to see the expected headings.");
@@ -284,6 +305,30 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
         if (text.Length == 0) { errors.Add($"{column} is required."); return null; }
         if (codes.TryGetValue(text, out var code)) return code;
         errors.Add($"{column} '{text}' is not an active code.");
+        return null;
+    }
+
+    private readonly record struct NamedCode(string Code, string Name, string? ParentCode);
+
+    // By name (ignoring case and repeated spaces) or by code, within the parent when there is one.
+    private static Dictionary<(string? Parent, string Key), NamedCode> NamedCodes(IEnumerable<NamedCode> items)
+    {
+        var lookup = new Dictionary<(string? Parent, string Key), NamedCode>();
+        foreach (var item in items)
+        {
+            lookup.TryAdd((item.ParentCode?.ToUpperInvariant(), MasterCodeRules.NameKey(item.Name)), item);
+            lookup.TryAdd((item.ParentCode?.ToUpperInvariant(), item.Code.ToUpperInvariant()), item);
+        }
+        return lookup;
+    }
+
+    // A required name (or code) that must be an active record; for a section or sub section, one of the given parent.
+    private static NamedCode? Lookup(string text, Dictionary<(string? Parent, string Key), NamedCode> items, NamedCode? parent, string column, List<string> errors, string within = "")
+    {
+        if (text.Length == 0) { errors.Add($"{column} is required."); return null; }
+        var parentCode = parent?.Code.ToUpperInvariant();
+        if (items.TryGetValue((parentCode, MasterCodeRules.NameKey(text)), out var found) || items.TryGetValue((parentCode, text.Trim().ToUpperInvariant()), out found)) return found;
+        errors.Add($"{column} '{text}' is not an active {column.ToLowerInvariant()}{within}.");
         return null;
     }
 

@@ -52,6 +52,7 @@ public sealed class EmployeeApiTests
                 EPF = "EPF-001",
                 FullName = "Test Employee",
                 CallingName = "Test",
+                Gender = Gender.Female,
                 CategoryCode = category.Code,
                 DesignationCode = designation.Code,
                 FactoryCode = factoryRecord.Code,
@@ -70,6 +71,7 @@ public sealed class EmployeeApiTests
         var employee = Assert.Single(result!.Items);
         Assert.Equal("EPF-001", employee.Epf);
         Assert.Equal("Information Technology", employee.DepartmentName);
+        Assert.Equal((Gender.Female, "MS."), (employee.Gender, employee.Title));
     }
 
     [Fact]
@@ -255,6 +257,7 @@ public sealed class EmployeeApiTests
             epf = "EPF-002",
             fullName = "Second Employee",
             callingName = "Second",
+            gender = "Female",
             categoryCode,
             designationCode,
             factoryCode,
@@ -267,6 +270,7 @@ public sealed class EmployeeApiTests
         Assert.Equal("EPF-002", employee.Epf);
         Assert.Equal("Head Office", employee.FactoryName);
         Assert.Equal("Information Technology", employee.DepartmentName);
+        Assert.Equal((Gender.Female, "MS."), (employee.Gender, employee.Title));
     }
 
     [Fact]
@@ -363,15 +367,18 @@ public sealed class EmployeeApiTests
                 DefaultCreditLimit NUMERIC NOT NULL, IsActive INTEGER NOT NULL,
                 CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE Employees (
-                Id TEXT PRIMARY KEY, EPF TEXT NOT NULL, FullName TEXT NOT NULL, CallingName TEXT NULL,
+                Id TEXT PRIMARY KEY, EPF TEXT NOT NULL, FullName TEXT NOT NULL, CallingName TEXT NULL, NameWithInitials TEXT NULL, Gender TEXT NULL,
                 CategoryCode TEXT NOT NULL, DesignationCode TEXT NOT NULL, FactoryCode TEXT NOT NULL, DepartmentCode TEXT NOT NULL,
-                SectionCode TEXT NULL, SubSectionCode TEXT NULL, DefaultResponsibility TEXT NULL, ResignedOn TEXT NULL, ResignationReason TEXT NULL,
+                SectionCode TEXT NULL, SubSectionCode TEXT NULL, ThirdPartyCompanyCode TEXT NULL, DefaultResponsibility TEXT NULL, ResignedOn TEXT NULL, ResignationReason TEXT NULL,
                 IsActive INTEGER NOT NULL, CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE Sections (
                 Id TEXT PRIMARY KEY, Code TEXT NOT NULL, Name TEXT NOT NULL, DepartmentCode TEXT NOT NULL, IsActive INTEGER NOT NULL,
                 CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             CREATE TABLE SubSections (
                 Id TEXT PRIMARY KEY, Code TEXT NOT NULL, Name TEXT NOT NULL, SectionCode TEXT NOT NULL, IsActive INTEGER NOT NULL,
+                CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
+            CREATE TABLE ThirdPartyCompanies (
+                Id TEXT PRIMARY KEY, Code TEXT NOT NULL, Name TEXT NOT NULL, IsActive INTEGER NOT NULL,
                 CreatedAtUtc TEXT NOT NULL DEFAULT '1970-01-01T00:00:00+00:00', CreatedBy TEXT NULL, UpdatedAtUtc TEXT NULL, UpdatedBy TEXT NULL);
             """;
         await command.ExecuteNonQueryAsync();

@@ -6,6 +6,7 @@ import { masterDataEditorRoles } from '../../auth/roles'
 import { StatusBadge } from '../../components/common/StatusBadge'
 import type { FormField } from '../../components/master-data/MasterDataDialog'
 import { formatCurrency } from '../../utils/formatters'
+import { employeeLabel, employeeSearchText } from '../../utils/employeeLabel'
 import type { MasterDataPageConfig } from './MasterDataPage'
 
 type Row = EntityRow
@@ -23,7 +24,11 @@ const statusBadge = (row: Row) => createElement(StatusBadge, {
   label: ['UnderRepair', 'ReturnPending'].includes(status(row)) ? `${deviceStatusLabels[status(row)]} · ${value(row, 'daysInStatus')} days` : deviceStatusLabels[status(row)],
   tone: tones[status(row)],
 })
-const employeeOption = (row: Row) => ({ value: String(row.id), label: `${value(row, 'epf')} — ${value(row, 'fullName')} (${value(row, 'factoryName') || value(row, 'factoryCode')})` })
+// The same employee label as every other employee drop-down.
+const employeeOption = (row: Row) => {
+  const parts = { epf: row.epf, nameWithInitials: row.nameWithInitials, fullName: row.fullName, callingName: row.callingName, factory: row.factoryName || row.factoryCode }
+  return { value: String(row.id), label: employeeLabel(parts), searchText: employeeSearchText(parts) }
+}
 const deviceOption = (row: Row) => ({ value: String(row.id), label: `${value(row, 'assetTag')} — ${value(row, 'brand')} ${value(row, 'model')}` })
 
 // The register. Administrator and IT Engineer register, issue, return and replace devices; other roles view them.

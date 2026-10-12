@@ -790,8 +790,16 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("Gender")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("NameWithInitials")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("ResignationReason")
                         .HasMaxLength(250)
@@ -805,6 +813,10 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("SubSectionCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ThirdPartyCompanyCode")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
@@ -832,6 +844,8 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.HasIndex("SectionCode");
 
                     b.HasIndex("SubSectionCode");
+
+                    b.HasIndex("ThirdPartyCompanyCode");
 
                     b.HasIndex("FactoryCode", "EPF")
                         .IsUnique();
@@ -1546,6 +1560,45 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.ToTable("TelecomProviders", (string)null);
                 });
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.ThirdPartyCompany", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ThirdPartyCompanies", (string)null);
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1739,6 +1792,12 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                         .HasPrincipalKey("Code")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MobileBill.Domain.Entities.ThirdPartyCompany", "ThirdPartyCompany")
+                        .WithMany("Employees")
+                        .HasForeignKey("ThirdPartyCompanyCode")
+                        .HasPrincipalKey("Code")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Category");
 
                     b.Navigation("Department");
@@ -1750,6 +1809,8 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Navigation("Section");
 
                     b.Navigation("SubSection");
+
+                    b.Navigation("ThirdPartyCompany");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.MobileAccount", b =>
@@ -1938,6 +1999,11 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MobileBill.Domain.Entities.TelecomProvider", b =>
                 {
                     b.Navigation("BillBatches");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.ThirdPartyCompany", b =>
+                {
+                    b.Navigation("Employees");
                 });
 #pragma warning restore 612, 618
         }

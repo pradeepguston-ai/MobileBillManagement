@@ -54,8 +54,9 @@ export function MasterDataPage<T extends EntityRow>({ config, hideHeader = false
     })).then(entries => { if (!cancelled) setLookupOptions(Object.fromEntries(entries)) }).catch(exception => { if (!cancelled) setError(exception instanceof Error ? exception.message : 'Unable to load lookup data.') })
     return () => { cancelled = true }
   }, [config.lookups, lookupKey])
-  const dialogFields = useMemo(() => config.fields.map(field => {
-    const options = field.type === 'select' ? lookupOptions[field.key] ?? field.options ?? [] : field.options
+  const dialogFields = useMemo(() => config.fields.filter(field => field.visibleWhen?.(values, lookupOptions) ?? true).map(field => {
+    const loaded = field.type === 'select' ? lookupOptions[field.key] ?? field.options ?? [] : field.options
+    const options = field.emptyOptionLabel ? [{ value: '', label: field.emptyOptionLabel }, ...(loaded ?? [])] : loaded
     const filteredOptions = field.dependsOn ? options?.filter(option => option.parentValue === values[field.dependsOn!]) : options
     const lockedByLimitedEdit = limited && !config.limitedEdit?.editableFields.includes(field.key)
     return { ...field, options: filteredOptions, disabled: field.disabled || lockedByLimitedEdit || Boolean(field.dependsOn && !values[field.dependsOn]) }
@@ -63,7 +64,8 @@ export function MasterDataPage<T extends EntityRow>({ config, hideHeader = false
   const openCreate = () => { setLimited(false); setEditing(undefined); setValues({ ...config.toForm(), ...config.createDefaults?.(lookupOptions) }); setValidation({}) }
   const openEdit = (row: T) => { setLimited(false); setEditing(row); setValues(config.toForm(row)); setValidation({}) }
   const openLimitedEdit = (row: T) => { setLimited(true); setEditing(row); setValues(config.toForm(row)); setValidation({}) }
-  const filled = (key: string, value: string, creating: boolean) => config.autofill?.(key, lookupOptions[key]?.find(option => option.value === value), creating) ?? {}
+  // The chosen option comes from a lookup, or from the field's own fixed options.
+  const filled = (key: string, value: string, creating: boolean) => config.autofill?.(key, (lookupOptions[key] ?? config.fields.find(field => field.key === key)?.options)?.find(option => option.value === value), creating) ?? {}
   const changeValue = (key: string, value: string) => setValues(current => {
     const next = { ...current, [key]: value, ...filled(key, value, !editing) }
     // Clears dependent selections that no longer belong to their parent, down the chain (Department → Section → Sub Section).

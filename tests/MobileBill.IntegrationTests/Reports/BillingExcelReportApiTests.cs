@@ -358,11 +358,11 @@ public sealed class BillingExcelReportApiTests
         var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel?sectionCode=INF");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("Mobile_Bill_Report_2026_08_INF.xlsx", response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        Assert.Equal("Mobile_Bill_Report_2026_08_Infrastructure.xlsx", response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
         await using var content = await response.Content.ReadAsStreamAsync();
         using var workbook = new XLWorkbook(content);
         var sheet = workbook.Worksheet("Monthly Bill Report");
-        Assert.Equal("Infrastructure (INF)", sheet.Cell("H3").GetString());
+        Assert.Equal("Infrastructure", sheet.Cell("H3").GetString());   // by name: section codes are not shown
         var only = Assert.Single(sheet.Table("MonthlyBillReportTable").DataRange!.Rows());
         Assert.Equal(("761499101", "Infrastructure", "Network"), (only.Cell(2).GetString(), only.Cell(9).GetString(), only.Cell(10).GetString()));
 
@@ -399,13 +399,13 @@ public sealed class BillingExcelReportApiTests
         var staff = await Excel("categoryCode=STF");
         Assert.Equal(["761499102", "761499103"], staff.Mobiles);
         Assert.Equal(50m, staff.Total);
-        Assert.Equal("Staff (STF)", staff.Category);
-        Assert.Equal("Mobile_Bill_Report_2026_08_STF.xlsx", staff.FileName);
+        Assert.Equal("Staff", staff.Category);
+        Assert.Equal("Mobile_Bill_Report_2026_08_Staff.xlsx", staff.FileName);
 
         var both = await Excel("factoryCode=FB&categoryCode=STF");
         Assert.Equal(["761499103"], both.Mobiles);
         Assert.Equal(30m, both.Total);
-        Assert.Equal("Mobile_Bill_Report_2026_08_FB_STF.xlsx", both.FileName);
+        Assert.Equal("Mobile_Bill_Report_2026_08_FB_Staff.xlsx", both.FileName);
 
         var pdf = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?factoryCode=FAC&categoryCode=STF");
         Assert.Equal(HttpStatusCode.OK, pdf.StatusCode);
@@ -414,7 +414,8 @@ public sealed class BillingExcelReportApiTests
         Assert.Contains("761499102", text);
         Assert.DoesNotContain("761499101", text);
         Assert.DoesNotContain("761499103", text);
-        Assert.Contains("(STF)", text);
+        Assert.Contains("Category: Staff", text);
+        Assert.DoesNotContain("(STF)", text);
 
         Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?categoryCode=NOPE")).StatusCode);
 
@@ -422,8 +423,8 @@ public sealed class BillingExcelReportApiTests
         var many = await Excel("categoryCode=CAT&categoryCode=STF");
         Assert.Equal(["761499101", "761499102", "761499103"], many.Mobiles);
         Assert.Equal(60m, many.Total);
-        Assert.Equal("Manager (CAT), Staff (STF)", many.Category);
-        Assert.Equal("Mobile_Bill_Report_2026_08_CAT-STF.xlsx", many.FileName);
+        Assert.Equal("Manager, Staff", many.Category);
+        Assert.Equal("Mobile_Bill_Report_2026_08_Manager-Staff.xlsx", many.FileName);
 
         var manyWithFactory = await Excel("factoryCode=FAC&categoryCode=CAT&categoryCode=STF");
         Assert.Equal(["761499101", "761499102"], manyWithFactory.Mobiles);
@@ -432,7 +433,7 @@ public sealed class BillingExcelReportApiTests
         var manyFactories = await Excel("factoryCode=FAC&factoryCode=FB&categoryCode=STF");
         Assert.Equal(["761499102", "761499103"], manyFactories.Mobiles);
         Assert.Equal(50m, manyFactories.Total);
-        Assert.Equal("Mobile_Bill_Report_2026_08_FAC-FB_STF.xlsx", manyFactories.FileName);
+        Assert.Equal("Mobile_Bill_Report_2026_08_FAC-FB_Staff.xlsx", manyFactories.FileName);
         Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf?factoryCode=FAC&factoryCode=NOPE")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel?categoryCode=STF&categoryCode=NOPE")).StatusCode);
     }

@@ -79,7 +79,10 @@ builder.Services.AddRateLimiter(options =>
 });
 builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
 builder.Services.AddScoped<IBillReviewAuthorizationService, RoleBasedBillReviewAuthorizationService>();
-builder.Services.AddHostedService<MobileBill.Api.BackgroundJobs.ResignationCompletionService>();
+// Completes pending resignations hourly. BackgroundJobs:ResignationCompletion = false turns it off (the test hosts do,
+// so it does not touch their databases while a test is setting them up).
+if (builder.Configuration.GetValue("BackgroundJobs:ResignationCompletion", true))
+    builder.Services.AddHostedService<MobileBill.Api.BackgroundJobs.ResignationCompletionService>();
 
 var app = builder.Build();
 

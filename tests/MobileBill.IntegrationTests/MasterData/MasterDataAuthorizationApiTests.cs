@@ -12,7 +12,7 @@ public sealed class MasterDataAuthorizationApiTests
         { "POST", "/api/departments", new { code = "X", name = "X" } },
         { "PUT", "/api/factories/00000000-0000-0000-0000-000000000001", new { code = "X", name = "X" } },
         { "POST", "/api/designations/00000000-0000-0000-0000-000000000001/deactivate", null },
-        { "POST", "/api/employees", new { epf = "1", fullName = "A", categoryCode = "C", designationCode = "D", factoryCode = "F", departmentCode = "P" } },
+        { "POST", "/api/employees", new { epf = "1", fullName = "A", gender = "Male", categoryCode = "C", designationCode = "D", factoryCode = "F", departmentCode = "P" } },
         { "POST", "/api/mobile-accounts", new { mobileNumber = "0771234567", employeeId = Guid.NewGuid(), monthlyCreditLimit = 1m, monthlyRental = 1m } },
     };
 

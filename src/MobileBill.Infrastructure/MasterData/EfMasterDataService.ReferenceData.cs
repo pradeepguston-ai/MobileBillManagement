@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 using MobileBill.Application.Common;
 using MobileBill.Application.MasterData;
+using MobileBill.Domain.Calculations;
 using MobileBill.Domain.Entities;
 
 namespace MobileBill.Infrastructure.MasterData;
@@ -18,29 +19,36 @@ public sealed partial class EfMasterDataService
     public Task<PagedResult<ReferenceDataDto>> GetDesignationsAsync(PagedRequest request, CancellationToken cancellationToken) =>
         GetReferencesAsync(_dbContext.Designations, request, designation => new ReferenceDataDto(designation.Id, designation.Code, designation.Name, designation.IsActive), designation => designation.Code, designation => designation.Name, designation => designation.IsActive, cancellationToken);
     public Task<ReferenceDataDto> GetDesignationAsync(Guid id, CancellationToken cancellationToken) => GetReferenceAsync(_dbContext.Designations, id, "Designation", designation => new ReferenceDataDto(designation.Id, designation.Code, designation.Name, designation.IsActive), cancellationToken);
-    public Task<ReferenceDataDto> CreateDesignationAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.Designations, request, () => new Designation { Code = string.Empty, Name = string.Empty }, "Designation", cancellationToken);
-    public Task<ReferenceDataDto> UpdateDesignationAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.Designations, id, request, "Designation", cancellationToken);
+    public Task<ReferenceDataDto> CreateDesignationAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.Designations, request, () => new Designation { Code = string.Empty, Name = string.Empty }, "Designation", cancellationToken, MasterCodeRules.Designation);
+    public Task<ReferenceDataDto> UpdateDesignationAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.Designations, id, request, "Designation", cancellationToken, generatedCodes: true);
     public Task DeactivateDesignationAsync(Guid id, CancellationToken cancellationToken) => DeactivateReferenceAsync(_dbContext.Designations, id, "Designation", code => _dbContext.Employees.AnyAsync(employee => employee.DesignationCode == code && employee.IsActive, cancellationToken), cancellationToken);
 
     public Task<PagedResult<ReferenceDataDto>> GetCategoriesAsync(PagedRequest request, CancellationToken cancellationToken) =>
         GetReferencesAsync(_dbContext.EmployeeCategories, request, category => new ReferenceDataDto(category.Id, category.Code, category.Name, category.IsActive), category => category.Code, category => category.Name, category => category.IsActive, cancellationToken);
     public Task<ReferenceDataDto> GetCategoryAsync(Guid id, CancellationToken cancellationToken) => GetReferenceAsync(_dbContext.EmployeeCategories, id, "Category", category => new ReferenceDataDto(category.Id, category.Code, category.Name, category.IsActive), cancellationToken);
-    public Task<ReferenceDataDto> CreateCategoryAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.EmployeeCategories, request, () => new EmployeeCategory { Code = string.Empty, Name = string.Empty }, "Category", cancellationToken);
-    public Task<ReferenceDataDto> UpdateCategoryAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.EmployeeCategories, id, request, "Category", cancellationToken);
+    public Task<ReferenceDataDto> CreateCategoryAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.EmployeeCategories, request, () => new EmployeeCategory { Code = string.Empty, Name = string.Empty }, "Category", cancellationToken, MasterCodeRules.Category);
+    public Task<ReferenceDataDto> UpdateCategoryAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.EmployeeCategories, id, request, "Category", cancellationToken, generatedCodes: true);
     public Task DeactivateCategoryAsync(Guid id, CancellationToken cancellationToken) => DeactivateReferenceAsync(_dbContext.EmployeeCategories, id, "Category", code => _dbContext.Employees.AnyAsync(employee => employee.CategoryCode == code && employee.IsActive, cancellationToken), cancellationToken);
 
     public Task<PagedResult<ReferenceDataDto>> GetProvidersAsync(PagedRequest request, CancellationToken cancellationToken) =>
         GetReferencesAsync(_dbContext.TelecomProviders, request, provider => new ReferenceDataDto(provider.Id, provider.Code, provider.Name, provider.IsActive), provider => provider.Code, provider => provider.Name, provider => provider.IsActive, cancellationToken);
     public Task<ReferenceDataDto> GetProviderAsync(Guid id, CancellationToken cancellationToken) => GetReferenceAsync(_dbContext.TelecomProviders, id, "Provider", provider => new ReferenceDataDto(provider.Id, provider.Code, provider.Name, provider.IsActive), cancellationToken);
-    public Task<ReferenceDataDto> CreateProviderAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.TelecomProviders, request, () => new TelecomProvider { Code = string.Empty, Name = string.Empty }, "Provider", cancellationToken);
-    public Task<ReferenceDataDto> UpdateProviderAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.TelecomProviders, id, request, "Provider", cancellationToken);
+    public Task<ReferenceDataDto> CreateProviderAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.TelecomProviders, request, () => new TelecomProvider { Code = string.Empty, Name = string.Empty }, "Provider", cancellationToken, MasterCodeRules.Provider);
+    public Task<ReferenceDataDto> UpdateProviderAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.TelecomProviders, id, request, "Provider", cancellationToken, generatedCodes: true);
     public Task DeactivateProviderAsync(Guid id, CancellationToken cancellationToken) => DeactivateReferenceAsync(_dbContext.TelecomProviders, id, "Provider", _ => Task.FromResult(false), cancellationToken);
+
+    public Task<PagedResult<ReferenceDataDto>> GetThirdPartyCompaniesAsync(PagedRequest request, CancellationToken cancellationToken) =>
+        GetReferencesAsync(_dbContext.ThirdPartyCompanies, request, company => new ReferenceDataDto(company.Id, company.Code, company.Name, company.IsActive), company => company.Code, company => company.Name, company => company.IsActive, cancellationToken);
+    public Task<ReferenceDataDto> GetThirdPartyCompanyAsync(Guid id, CancellationToken cancellationToken) => GetReferenceAsync(_dbContext.ThirdPartyCompanies, id, "Third party company", company => new ReferenceDataDto(company.Id, company.Code, company.Name, company.IsActive), cancellationToken);
+    public Task<ReferenceDataDto> CreateThirdPartyCompanyAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.ThirdPartyCompanies, request, () => new ThirdPartyCompany { Code = string.Empty, Name = string.Empty }, "Third party company", cancellationToken, MasterCodeRules.ThirdPartyCompany);
+    public Task<ReferenceDataDto> UpdateThirdPartyCompanyAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.ThirdPartyCompanies, id, request, "Third party company", cancellationToken, generatedCodes: true);
+    public Task DeactivateThirdPartyCompanyAsync(Guid id, CancellationToken cancellationToken) => DeactivateReferenceAsync(_dbContext.ThirdPartyCompanies, id, "Third party company", code => _dbContext.Employees.AnyAsync(employee => employee.ThirdPartyCompanyCode == code && employee.IsActive, cancellationToken), cancellationToken);
 
     public Task<PagedResult<ReferenceDataDto>> GetDepartmentsAsync(PagedRequest request, CancellationToken cancellationToken) =>
         GetReferencesAsync(_dbContext.Departments, request, department => new ReferenceDataDto(department.Id, department.Code, department.Name, department.IsActive), department => department.Code, department => department.Name, department => department.IsActive, cancellationToken);
     public Task<ReferenceDataDto> GetDepartmentAsync(Guid id, CancellationToken cancellationToken) => GetReferenceAsync(_dbContext.Departments, id, "Department", department => new ReferenceDataDto(department.Id, department.Code, department.Name, department.IsActive), cancellationToken);
-    public Task<ReferenceDataDto> CreateDepartmentAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.Departments, request, () => new Department { Code = string.Empty, Name = string.Empty }, "Department", cancellationToken);
-    public Task<ReferenceDataDto> UpdateDepartmentAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.Departments, id, request, "Department", cancellationToken);
+    public Task<ReferenceDataDto> CreateDepartmentAsync(ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => CreateReferenceAsync(_dbContext.Departments, request, () => new Department { Code = string.Empty, Name = string.Empty }, "Department", cancellationToken, MasterCodeRules.Department);
+    public Task<ReferenceDataDto> UpdateDepartmentAsync(Guid id, ReferenceDataUpsertRequest request, CancellationToken cancellationToken) => UpdateReferenceAsync(_dbContext.Departments, id, request, "Department", cancellationToken, generatedCodes: true);
     public async Task DeactivateDepartmentAsync(Guid id, CancellationToken cancellationToken)
     {
         var department = await _dbContext.Departments.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, cancellationToken) ?? throw new MasterDataNotFoundException("Department", id);
@@ -59,25 +67,58 @@ public sealed partial class EfMasterDataService
         return await ToPagedResultAsync(query.OrderBy(code).Select(projection), request, token);
     }
     private async Task<ReferenceDataDto> GetReferenceAsync<TEntity>(DbSet<TEntity> set, Guid id, string resource, Expression<Func<TEntity, ReferenceDataDto>> projection, CancellationToken token) where TEntity : class => await set.AsNoTracking().Where(entity => EF.Property<Guid>(entity, "Id") == id).Select(projection).SingleOrDefaultAsync(token) ?? throw new MasterDataNotFoundException(resource, id);
-    private async Task<ReferenceDataDto> CreateReferenceAsync<TEntity>(DbSet<TEntity> set, ReferenceDataUpsertRequest request, Func<TEntity> create, string resource, CancellationToken token) where TEntity : class
+    // codePrefix set: a master whose code is generated (see MasterCodeRules) when the request has none, and whose
+    // name must be unique. Factories keep the codes people give them.
+    private async Task<ReferenceDataDto> CreateReferenceAsync<TEntity>(DbSet<TEntity> set, ReferenceDataUpsertRequest request, Func<TEntity> create, string resource, CancellationToken token, string? codePrefix = null) where TEntity : class
     {
-        ValidateReference(request.Code, request.Name);
-        if (await set.AnyAsync(entity => EF.Property<string>(entity, "Code") == request.Code.Trim(), token)) throw new MasterDataConflictException($"{resource} code already exists.");
+        var name = CleanName(request.Name);
+        var code = request.Code?.Trim() ?? string.Empty;
+        if (codePrefix is not null)
+        {
+            MasterDataValidation.RequireText(name, "Name");
+            await RequireUniqueNameAsync(set, null, name, resource, token);
+            if (code.Length == 0) code = await NextCodeAsync(set, codePrefix, token);
+        }
+        ValidateReference(code, name);
+        if (await set.AnyAsync(entity => EF.Property<string>(entity, "Code") == code, token)) throw new MasterDataConflictException($"{resource} code already exists.");
         var entity = create();
-        _dbContext.Entry(entity).Property<string>("Code").CurrentValue = request.Code.Trim();
-        _dbContext.Entry(entity).Property<string>("Name").CurrentValue = request.Name.Trim();
+        _dbContext.Entry(entity).Property<string>("Code").CurrentValue = code;
+        _dbContext.Entry(entity).Property<string>("Name").CurrentValue = name;
         set.Add(entity); await _dbContext.SaveChangesAsync(token);
-        return new ReferenceDataDto(_dbContext.Entry(entity).Property<Guid>("Id").CurrentValue, request.Code.Trim(), request.Name.Trim(), true);
+        return new ReferenceDataDto(_dbContext.Entry(entity).Property<Guid>("Id").CurrentValue, code, name, true);
     }
-    private async Task<ReferenceDataDto> UpdateReferenceAsync<TEntity>(DbSet<TEntity> set, Guid id, ReferenceDataUpsertRequest request, string resource, CancellationToken token) where TEntity : class
+    // generatedCodes: the code is kept when the request leaves it out, and the name must be unique.
+    private async Task<ReferenceDataDto> UpdateReferenceAsync<TEntity>(DbSet<TEntity> set, Guid id, ReferenceDataUpsertRequest request, string resource, CancellationToken token, bool generatedCodes = false) where TEntity : class
     {
-        ValidateReference(request.Code, request.Name); var entity = await set.FindAsync([id], token) ?? throw new MasterDataNotFoundException(resource, id);
-        if (await set.AnyAsync(other => EF.Property<Guid>(other, "Id") != id && EF.Property<string>(other, "Code") == request.Code.Trim(), token)) throw new MasterDataConflictException($"{resource} code already exists.");
-        _dbContext.Entry(entity).Property<string>("Code").CurrentValue = request.Code.Trim();
-        _dbContext.Entry(entity).Property<string>("Name").CurrentValue = request.Name.Trim();
+        var entity = await set.FindAsync([id], token) ?? throw new MasterDataNotFoundException(resource, id);
+        var name = CleanName(request.Name);
+        var code = request.Code?.Trim() ?? string.Empty;
+        if (generatedCodes)
+        {
+            if (code.Length == 0) code = _dbContext.Entry(entity).Property<string>("Code").CurrentValue;
+            MasterDataValidation.RequireText(name, "Name");
+            await RequireUniqueNameAsync(set, id, name, resource, token);
+        }
+        ValidateReference(code, name);
+        if (await set.AnyAsync(other => EF.Property<Guid>(other, "Id") != id && EF.Property<string>(other, "Code") == code, token)) throw new MasterDataConflictException($"{resource} code already exists.");
+        _dbContext.Entry(entity).Property<string>("Code").CurrentValue = code;
+        _dbContext.Entry(entity).Property<string>("Name").CurrentValue = name;
         await _dbContext.SaveChangesAsync(token);
-        return new ReferenceDataDto(id, request.Code.Trim(), request.Name.Trim(), _dbContext.Entry(entity).Property<bool>("IsActive").CurrentValue);
+        return new ReferenceDataDto(id, code, name, _dbContext.Entry(entity).Property<bool>("IsActive").CurrentValue);
     }
+
+    // Trimmed, with repeated spaces collapsed, so names compare the same way people read them.
+    private static string CleanName(string? name) => string.Join(' ', (name ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+    private static async Task RequireUniqueNameAsync<TEntity>(IQueryable<TEntity> set, Guid? exceptId, string name, string resource, CancellationToken token) where TEntity : class
+    {
+        var upper = name.ToUpperInvariant();
+        if (await set.AnyAsync(entity => EF.Property<Guid>(entity, "Id") != exceptId && EF.Property<string>(entity, "Name").ToUpper() == upper, token))
+            throw new MasterDataConflictException($"A {resource.ToLowerInvariant()} named '{name}' already exists.");
+    }
+
+    private static async Task<string> NextCodeAsync<TEntity>(IQueryable<TEntity> set, string prefix, CancellationToken token) where TEntity : class =>
+        MasterCodeRules.NextCode(prefix, await set.Select(entity => EF.Property<string>(entity, "Code")).Where(code => code.StartsWith(prefix)).ToListAsync(token));
     private async Task DeactivateReferenceAsync<TEntity>(DbSet<TEntity> set, Guid id, string resource, Func<string, Task<bool>> inUseByCode, CancellationToken token) where TEntity : class
     {
         var entity = await set.FindAsync([id], token) ?? throw new MasterDataNotFoundException(resource, id);

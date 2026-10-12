@@ -106,7 +106,7 @@ public sealed class SectionMasterDataServiceTests
     }
 
     private static EmployeeUpsertRequest Employee(string epf, string departmentCode, string? sectionCode, string? subSectionCode) =>
-        new(epf, "Test Employee", null, "C", "DS", "F", departmentCode, sectionCode, subSectionCode);
+        new(epf, "Test Employee", null, "C", "DS", "F", departmentCode, sectionCode, subSectionCode, MobileBill.Domain.Enums.Gender.Male);
 
     private static MobileBillDbContext CreateContext() => new(new DbContextOptionsBuilder<MobileBillDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 

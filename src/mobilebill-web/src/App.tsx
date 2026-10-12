@@ -6,7 +6,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { MonthlyBillReportPage } from './pages/MonthlyBillReportPage'
 import { VasReportPage } from './pages/VasReportPage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { CategoriesPage, DepartmentsPage, DesignationsPage, EmployeesPage, FactoriesPage, MobileAllocationsPage, MobileDevicesPage, MobilePackagesPage, ProvidersPage } from './pages/master-data/MasterPages'
+import { CategoriesPage, DepartmentsPage, DesignationsPage, EmployeesPage, FactoriesPage, MobileAllocationsPage, MobileDevicesPage, MobilePackagesPage, ProvidersPage, ThirdPartyCompaniesPage } from './pages/master-data/MasterPages'
 import { ExceptionReviewPage } from './pages/ExceptionReviewPage'
 import { MonthlyBillReviewPage } from './pages/MonthlyBillReviewPage'
 import { BillingBatchListPage } from './pages/billing/BillingBatchListPage'
@@ -39,6 +39,7 @@ function App() {
           <Route path="departments" element={<DepartmentsPage />} />          <Route path="designations" element={<DesignationsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="providers" element={<ProvidersPage />} />
+          <Route path="third-party-companies" element={<ThirdPartyCompaniesPage />} />
           <Route path="packages" element={<MobilePackagesPage />} />
           <Route path="billing" element={<BillingBatchListPage />} />
           <Route path="monthly-bill-review" element={<MonthlyBillOverviewPage />} />

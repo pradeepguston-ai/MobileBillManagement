@@ -39,18 +39,21 @@ internal sealed record BillingReportData(
 
     public bool IsFiltered => Factories is { Count: > 0 } || Categories is { Count: > 0 } || Sections is { Count: > 0 };
 
-    public string FactoryLabel => Label(Factories, "All factories");
-    public string CategoryLabel => Label(Categories, "All categories");
-    public string SectionLabel => Label(Sections, "All sections");
+    // Factories are shown with their code; categories and sections by name only, as their codes are generated and hidden.
+    public string FactoryLabel => Label(Factories, "All factories", withCode: true);
+    public string CategoryLabel => Label(Categories, "All categories", withCode: false);
+    public string SectionLabel => Label(Sections, "All sections", withCode: false);
 
-    private static string Label(IReadOnlyList<ReportFilterValue>? values, string all) =>
-        values is { Count: > 0 } ? string.Join(", ", values.Select(value => $"{value.Name} ({value.Code})")) : all;
+    private static string Label(IReadOnlyList<ReportFilterValue>? values, string all, bool withCode) =>
+        values is { Count: > 0 } ? string.Join(", ", values.Select(value => withCode ? $"{value.Name} ({value.Code})" : value.Name)) : all;
 
-    private static string Suffix(IReadOnlyList<ReportFilterValue>? values) =>
-        values is { Count: > 0 } ? "_" + string.Join("-", values.Select(value => value.Code)) : string.Empty;
+    private static string Suffix(IReadOnlyList<ReportFilterValue>? values, bool byCode) =>
+        values is { Count: > 0 } ? "_" + string.Join("-", values.Select(value => byCode ? value.Code : FileNamePart(value.Name))) : string.Empty;
+
+    private static string FileNamePart(string name) => new(name.Where(char.IsLetterOrDigit).ToArray());
 
     public string FileName(string extension) =>
-        $"Mobile_Bill_Report_{BillingYear:D4}_{BillingMonth:D2}{Suffix(Factories)}{Suffix(Categories)}{Suffix(Sections)}.{extension}";
+        $"Mobile_Bill_Report_{BillingYear:D4}_{BillingMonth:D2}{Suffix(Factories, byCode: true)}{Suffix(Categories, byCode: false)}{Suffix(Sections, byCode: false)}.{extension}";
 
     public static async Task<BillingReportData> LoadAsync(MobileBillDbContext db, Guid batchId, CancellationToken cancellationToken, IReadOnlyCollection<string>? factoryCodes = null, IReadOnlyCollection<string>? categoryCodes = null, IReadOnlyCollection<string>? sectionCodes = null)
     {

@@ -63,7 +63,7 @@ describe('Mobile devices', () => {
     const row = within(await screen.findByRole('table')).getAllByRole('row')[2]
     fireEvent.click(within(row).getByRole('button', { name: 'Issue' }))
     fireEvent.change(await screen.findByRole('combobox', { name: 'Employee' }), { target: { value: 'Joiner' } })
-    fireEvent.click(await screen.findByRole('option', { name: 'EPF-2 — Joiner (Head Office)' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'EPF-2 — Joiner — Head Office' }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Issue' }))
 
     await waitFor(() => expect(posted).toEqual([{ url: '/api/mobile-devices/d2/issue', body: { employeeId: 'e2', issuedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), notes: null } }]))

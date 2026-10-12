@@ -30,7 +30,7 @@ describe('Mobile packages', () => {
     await screen.findByText('No mobile packages match the selected filters.')
 
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
-    expect((screen.getByRole('combobox', { name: 'Telecom Provider' }) as HTMLInputElement).value).toBe('P01 — Dialog')
+    expect((screen.getByRole('combobox', { name: 'Telecom Provider' }) as HTMLInputElement).value).toBe('Dialog')
     fireEvent.change(screen.getByRole('textbox', { name: 'Package Code' }), { target: { value: 'PPU23_700' } })
     fireEvent.change(screen.getByRole('textbox', { name: 'Package Description' }), { target: { value: 'Unlimited any network calls & 5 GB data per month' } })
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Rental (before tax)' }), { target: { value: '700' } })
@@ -73,7 +73,7 @@ describe('Mobile packages', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Create' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Mobile Number' }), { target: { value: '0771234567' } })
-    await selectOption('Employee', 'Holder', 'EPF-1 — Holder (Head Office)')
+    await selectOption('Employee', 'Holder', 'EPF-1 — Holder — Head Office')
     await selectOption('SIM Type', 'Voice', 'Voice + Data')
     await selectOption('Package', 'PPU23', 'PPU23_700 — Unlimited any network calls & 5 GB data per month (Dialog)')
 

@@ -103,6 +103,17 @@ internal sealed class TelecomProviderConfiguration : AuditableEntityConfiguratio
     }
 }
 
+internal sealed class ThirdPartyCompanyConfiguration : AuditableEntityConfiguration<ThirdPartyCompany>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<ThirdPartyCompany> builder)
+    {
+        builder.ToTable("ThirdPartyCompanies");
+        builder.Property(entity => entity.Code).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.Name).HasMaxLength(200).IsRequired();
+        builder.HasAlternateKey(entity => entity.Code);
+    }
+}
+
 internal sealed class DeductionRuleConfiguration : AuditableEntityConfiguration<DeductionRule>
 {
     protected override void ConfigureEntity(EntityTypeBuilder<DeductionRule> builder)
@@ -123,6 +134,8 @@ internal sealed class EmployeeConfiguration : AuditableEntityConfiguration<Emplo
         builder.Property(entity => entity.EPF).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.FullName).HasMaxLength(200).IsRequired();
         builder.Property(entity => entity.CallingName).HasMaxLength(100);
+        builder.Property(entity => entity.NameWithInitials).HasMaxLength(200);
+        builder.Property(entity => entity.Gender).HasConversion<string>().HasMaxLength(10);
         builder.Property(entity => entity.CategoryCode).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.DesignationCode).HasMaxLength(50).IsRequired();
         builder.Property(entity => entity.FactoryCode).HasMaxLength(50).IsRequired();
@@ -142,6 +155,8 @@ internal sealed class EmployeeConfiguration : AuditableEntityConfiguration<Emplo
         builder.HasOne(entity => entity.Department).WithMany(department => department.Employees).HasForeignKey(entity => entity.DepartmentCode).HasPrincipalKey(department => department.Code).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(entity => entity.Section).WithMany(section => section.Employees).HasForeignKey(entity => entity.SectionCode).HasPrincipalKey(section => section.Code).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(entity => entity.SubSection).WithMany(subSection => subSection.Employees).HasForeignKey(entity => entity.SubSectionCode).HasPrincipalKey(subSection => subSection.Code).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(entity => entity.ThirdPartyCompanyCode).HasMaxLength(50);
+        builder.HasOne(entity => entity.ThirdPartyCompany).WithMany(company => company.Employees).HasForeignKey(entity => entity.ThirdPartyCompanyCode).HasPrincipalKey(company => company.Code).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
