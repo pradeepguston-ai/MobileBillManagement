@@ -44,13 +44,20 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
                 .ToListAsync(token);
             if (allocations.Count == 0)
             {
-                // A disconnected SIM still being billed: the company pays, and the line is flagged for a provider follow-up.
                 var disconnected = await WithEmployee(db.MobileAccounts)
                     .Where(x => x.MobileNumber == line.MobileNumber && x.Status == SimStatus.Disconnected)
                     .OrderByDescending(x => x.DisconnectedOn).ThenByDescending(x => x.UpdatedAtUtc)
                     .FirstOrDefaultAsync(token);
+                if (disconnected is not null && (disconnected.DisconnectedOn is null
+                    || DisconnectionRules.IsFinalBill(disconnected.DisconnectedOn.Value, batch.BillingYear, batch.BillingMonth)))
+                {
+                    // The expected final bill after disconnection: the last holder's normal entitlement, excess left for review.
+                    monthlyBills.Add(CreateFinalBillAfterDisconnection(line, disconnected, AllocationMatchMethod.Automatic, clock.UtcNow, currentUser.UserId));
+                    continue;
+                }
                 if (disconnected is not null)
                 {
+                    // Still billed after the final bill: the company pays, and the line is flagged for a provider follow-up.
                     var companyBill = CreatePooledBill(line, disconnected, AllocationMatchMethod.Automatic, clock.UtcNow, currentUser.UserId,
                         $"Billed after disconnection on {disconnected.DisconnectedOn:dd-MMM-yyyy} · previously EPF {disconnected.Employee.EPF} – {disconnected.Employee.FullName}");
                     monthlyBills.Add(companyBill);
@@ -156,6 +163,21 @@ public sealed class EfBillMatchingService(MobileBillDbContext db, IClock clock, 
         bill.Remark = $"Resigned on {resignedOn:dd-MMM-yyyy} (on or after the {SimPoolRules.CompanyPaysIfResignedBeforeDay}th): final month charged to employee";
         bill.AssessedAt = now;
         bill.AssessedBy = userId;
+        return bill;
+    }
+
+    // Final bill for a disconnected SIM: calculated on the last holder's entitlement and always left unassessed,
+    // so the reviewer decides By User or By Company for any excess.
+    internal static MonthlyBill CreateFinalBillAfterDisconnection(BillLine line, MobileAccount allocation, AllocationMatchMethod allocationMethod, DateTimeOffset now, string userId)
+    {
+        var bill = CreateMonthlyBill(line, allocation, allocationMethod, now, userId);
+        bill.Responsibility = null;
+        bill.FinalDeduction = 0m;
+        bill.AssessedAt = null;
+        bill.AssessedBy = null;
+        bill.Remark = allocation.DisconnectedOn is { } disconnectedOn
+            ? $"Final bill after disconnection on {disconnectedOn:dd-MMM-yyyy}"
+            : "Final bill after disconnection";
         return bill;
     }
 

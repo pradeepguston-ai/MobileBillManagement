@@ -74,13 +74,39 @@ public sealed class BillMatchingServiceTests
         Assert.Equal("AutoAssessedResignedHolder", (await db.AuditLogs.SingleAsync()).Action);
     }
 
-    [Fact]
-    public async Task Bill_for_a_disconnected_sim_is_a_company_bill_flagged_for_the_provider()
+    [Theory]
+    [InlineData("2026-09-20")]   // disconnected during the billing month
+    [InlineData("2026-08-01")]   // one month before the billing month
+    public async Task Final_bill_after_disconnection_uses_the_last_holders_entitlement_and_waits_for_review(string disconnectedOn)
     {
         await using var db = CreateDb();
-        var setup = await SeedAsync(db, accountIsActive: false);
+        var setup = await SeedAsync(db, accountIsActive: false);   // batch is September 2026
         setup.Account.Status = SimStatus.Disconnected;
-        setup.Account.DisconnectedOn = new DateOnly(2026, 8, 31);
+        setup.Account.DisconnectedOn = DateOnly.Parse(disconnectedOn);
+        setup.Account.Employee.DefaultResponsibility = Responsibility.ByCompany;
+        await db.SaveChangesAsync();
+
+        var result = await new EfBillMatchingService(db, new TestClock(), new TestUser("matcher"), new FixedAuthorization(true)).MatchAsync(setup.Batch.Id, default);
+
+        var monthly = await db.MonthlyBills.SingleAsync();
+        Assert.Equal(0, result.ExceptionsCreated);
+        Assert.False(monthly.IsPooled);
+        Assert.Equal(("EPF-1", "Employee One"), (monthly.EmployeeEpfSnapshot, monthly.EmployeeNameSnapshot));
+        Assert.Equal((100m, 10m, 40m), (monthly.CreditLimit, monthly.MonthlyRental, monthly.CalculatedExcess));
+        Assert.Null(monthly.Responsibility);   // the remembered responsibility is not applied: the excess goes to review
+        Assert.Null(monthly.AssessedAt);
+        Assert.Equal(0m, monthly.FinalDeduction);
+        Assert.Equal($"Final bill after disconnection on {DateOnly.Parse(disconnectedOn):dd-MMM-yyyy}", monthly.Remark);
+        Assert.Empty(await db.AuditLogs.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Bill_for_a_disconnected_sim_after_the_final_bill_is_a_company_bill_flagged_for_the_provider()
+    {
+        await using var db = CreateDb();
+        var setup = await SeedAsync(db, accountIsActive: false);   // batch is September 2026
+        setup.Account.Status = SimStatus.Disconnected;
+        setup.Account.DisconnectedOn = new DateOnly(2026, 7, 31);
         await db.SaveChangesAsync();
 
         await new EfBillMatchingService(db, new TestClock(), new TestUser("matcher"), new FixedAuthorization(true)).MatchAsync(setup.Batch.Id, default);
@@ -88,7 +114,7 @@ public sealed class BillMatchingServiceTests
         var monthly = await db.MonthlyBills.SingleAsync();
         Assert.True(monthly.IsPooled);
         Assert.Equal(Responsibility.ByCompany, monthly.Responsibility);
-        Assert.StartsWith("Billed after disconnection on 31-Aug-2026", monthly.Remark);
+        Assert.StartsWith("Billed after disconnection on 31-Jul-2026", monthly.Remark);
         var flag = await db.BillExceptions.SingleAsync();
         Assert.Equal((BillExceptionType.BILLED_AFTER_DISCONNECTION, BillExceptionSeverity.Warning, monthly.Id), (flag.ExceptionType, flag.Severity, flag.MonthlyBillId!.Value));
     }
