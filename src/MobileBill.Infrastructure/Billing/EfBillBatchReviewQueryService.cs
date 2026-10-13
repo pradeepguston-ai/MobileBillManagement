@@ -25,7 +25,14 @@ public sealed class EfBillBatchReviewQueryService(MobileBillDbContext db) : IBil
             await bills.Where(x => x.Responsibility == Responsibility.ByCompany).SumAsync(x => (decimal?)x.CalculatedExcess, token) ?? 0m,
             await exceptions.CountAsync(token), await exceptions.CountAsync(x => x.ExceptionType == BillExceptionType.MOBILE_NOT_FOUND && x.Status != BillExceptionStatus.Resolved, token),
             await bills.CountAsync(x => x.AssessedAt != null, token), await bills.CountAsync(x => x.AssessedAt == null, token))
-        { ApprovalHistory = approvalHistory, UnresolvedExceptionCount = await exceptions.CountAsync(x => x.Status == BillExceptionStatus.Open || x.Status == BillExceptionStatus.InReview, token) };
+        {
+            ApprovalHistory = approvalHistory,
+            // Only bill lines that are still open and have no monthly bill come out blank in the report. Lines that already have a bill
+            // (a zero bill, the final bill or a company-paid bill after disconnection) are complete, even with an open warning.
+            UnresolvedExceptionCount = await exceptions
+                .Where(x => (x.Status == BillExceptionStatus.Open || x.Status == BillExceptionStatus.InReview) && x.BillLineId != null && !bills.Any(b => b.BillLineId == x.BillLineId))
+                .Select(x => x.BillLineId).Distinct().CountAsync(token)
+        };
     }
 
     public async Task<PagedResult<BillReviewRowDto>> GetRowsAsync(Guid batchId, BillReviewRowsRequest request, CancellationToken token)

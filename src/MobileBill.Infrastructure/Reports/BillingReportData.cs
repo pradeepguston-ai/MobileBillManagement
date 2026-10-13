@@ -25,9 +25,9 @@ internal sealed record BillingReportData(
 
     public static readonly string[] Headers =
     [
-        "Serial", "Mobile Phone", "EPF", "Name", "Category", "Designation", "Factory", "Department",
-        "Section", "Sub Section", "Calling Name", "Monthly Credit Limit", "Monthly Rental", "Actual Bill", "Variance", "Deduction",
-        "Deduction Responsibility", "Remark", "Package"
+        "Serial", "Mobile Phone", "EPF", "Name With Initials", "Calling Name", "Category", "Designation", "Factory", "Department",
+        "Package", "Monthly Credit Limit", "Monthly Rental", "Actual Bill", "Variance", "Deduction",
+        "Deduction Responsibility", "Remark"
     ];
 
     // By User rows show the deduction taken from the employee; By Company rows show the excess the company absorbs.
@@ -102,6 +102,14 @@ internal sealed record BillingReportData(
                 item.IsPooled,
                 item.PackageCodeSnapshot))
             .ToListAsync(cancellationToken);
+
+        // Name with initials is not snapshotted on the bill, so it is read from the employee record. SIM Pool rows keep
+        // "SIM Pool (Unassigned)", and an employee without initials falls back to the full name on the bill.
+        var employeeIds = rows.Where(item => !item.IsPooled).Select(item => item.EmployeeId).Distinct().ToList();
+        var initials = await db.Employees.AsNoTracking()
+            .Where(employee => employeeIds.Contains(employee.Id) && employee.NameWithInitials != null && employee.NameWithInitials != "")
+            .ToDictionaryAsync(employee => employee.Id, employee => employee.NameWithInitials!, cancellationToken);
+        rows = rows.Select(item => !item.IsPooled && initials.TryGetValue(item.EmployeeId, out var name) ? item with { NameWithInitials = name } : item).ToList();
 
         var includedRows = rows.Where(item => item.Status != MonthlyBillStatus.Excluded).ToList();
         ValidateIncludedRows(includedRows);
@@ -231,8 +239,10 @@ internal sealed record ReportRow(
     decimal FinalDeduction,
     string? Remark,
     bool IsPooled = false,
-    string? PackageCode = null)
+    string? PackageCode = null,
+    string? NameWithInitials = null)
 {
+    public string DisplayName => string.IsNullOrWhiteSpace(NameWithInitials) ? EmployeeName : NameWithInitials;
     public decimal DisplayedDeduction => Responsibility == Domain.Enums.Responsibility.ByCompany ? CalculatedExcess : FinalDeduction;
     public string ResponsibilityLabel => Responsibility == Domain.Enums.Responsibility.ByUser ? "By User" : "By Company";
 }

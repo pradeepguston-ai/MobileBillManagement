@@ -12,10 +12,11 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
     public const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private const string WorksheetName = "Monthly Bill Report";
     private const int HeaderRow = 5;
-    private const int ColumnCount = 19;
+    private const int ColumnCount = 17;
     // 1-based positions of the columns written below; they follow BillingReportData.Headers.
-    private const int CallingNameColumn = 11, CreditLimitColumn = 12, MonthlyRentalColumn = 13, ActualBillColumn = 14,
-        VarianceColumn = 15, DeductionColumn = 16, ResponsibilityColumn = 17, RemarkColumn = 18, PackageColumn = 19;
+    private const int NameColumn = 4, CallingNameColumn = 5, CategoryColumn = 6, DesignationColumn = 7, FactoryColumn = 8, DepartmentColumn = 9,
+        PackageColumn = 10, CreditLimitColumn = 11, MonthlyRentalColumn = 12, ActualBillColumn = 13,
+        VarianceColumn = 14, DeductionColumn = 15, ResponsibilityColumn = 16, RemarkColumn = 17;
     private const string MoneyFormat = "#,##0.00";
 
     public async Task<BillingExcelReportResult> ExportAsync(
@@ -92,21 +93,19 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
             sheet.Cell(targetRow, ActualBillColumn).Value = entry.ActualBill;
             if (entry.Bill is not { } row) continue;
             sheet.Cell(targetRow, 3).Value = row.EmployeeEpf;
-            sheet.Cell(targetRow, 4).Value = row.EmployeeName;
-            sheet.Cell(targetRow, 5).Value = row.Category ?? string.Empty;
-            sheet.Cell(targetRow, 6).Value = row.Designation ?? string.Empty;
-            sheet.Cell(targetRow, 7).Value = row.Factory ?? string.Empty;
-            sheet.Cell(targetRow, 8).Value = row.Department ?? string.Empty;
-            sheet.Cell(targetRow, 9).Value = row.Section ?? string.Empty;
-            sheet.Cell(targetRow, 10).Value = row.SubSection ?? string.Empty;
+            sheet.Cell(targetRow, NameColumn).Value = row.DisplayName;
             sheet.Cell(targetRow, CallingNameColumn).Value = row.CallingName ?? string.Empty;
+            sheet.Cell(targetRow, CategoryColumn).Value = row.Category ?? string.Empty;
+            sheet.Cell(targetRow, DesignationColumn).Value = row.Designation ?? string.Empty;
+            sheet.Cell(targetRow, FactoryColumn).Value = row.Factory ?? string.Empty;
+            sheet.Cell(targetRow, DepartmentColumn).Value = row.Department ?? string.Empty;
+            sheet.Cell(targetRow, PackageColumn).Value = row.PackageCode ?? string.Empty;
             sheet.Cell(targetRow, CreditLimitColumn).Value = row.CreditLimit;
             sheet.Cell(targetRow, MonthlyRentalColumn).Value = row.MonthlyRental;
             sheet.Cell(targetRow, VarianceColumn).Value = row.Variance;
             sheet.Cell(targetRow, DeductionColumn).Value = row.DisplayedDeduction;
             sheet.Cell(targetRow, ResponsibilityColumn).Value = row.ResponsibilityLabel;
             sheet.Cell(targetRow, RemarkColumn).Value = row.Remark ?? string.Empty;
-            sheet.Cell(targetRow, PackageColumn).Value = row.PackageCode ?? string.Empty;
         }
 
         var lastDataRow = HeaderRow + rows.Count;
@@ -202,7 +201,7 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
 
     private static void ApplyColumnWidths(IXLWorksheet sheet)
     {
-        var widths = new[] { 9d, 16d, 12d, 30d, 22d, 28d, 14d, 20d, 20d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d, 16d };
+        var widths = new[] { 9d, 16d, 12d, 30d, 18d, 22d, 28d, 22d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d };
         for (var column = 1; column <= widths.Length; column++)
             sheet.Column(column).Width = widths[column - 1];
     }

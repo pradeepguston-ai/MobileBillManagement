@@ -30,6 +30,29 @@ public sealed class BillBatchReviewQueryServiceTests
     }
 
     [Fact]
+    public async Task Unresolved_count_covers_only_open_lines_without_a_monthly_bill()
+    {
+        await using var db = CreateDb();
+        var seed = await SeedAsync(db);
+        var lost = new BillLine { BillBatchId = seed.Batch.Id, MobileNumber = "770000001", PageNumber = 2, RawText = "row", ExtractionStatus = BillLineExtractionStatus.Extracted, TotalDueAmount = 80m };
+        var resolved = new BillLine { BillBatchId = seed.Batch.Id, MobileNumber = "770000002", PageNumber = 2, RawText = "row", ExtractionStatus = BillLineExtractionStatus.Extracted, TotalDueAmount = 90m };
+        db.BillLines.AddRange(lost, resolved);
+        db.BillExceptions.AddRange(
+            // Billed lines with open warnings are complete in the report and are not counted.
+            new BillException { BillBatchId = seed.Batch.Id, BillLineId = seed.Line.Id, MonthlyBillId = seed.MonthlyBill.Id, ExceptionType = BillExceptionType.ZERO_BILL, Severity = BillExceptionSeverity.Information, Description = "Zero" },
+            new BillException { BillBatchId = seed.Batch.Id, BillLineId = seed.Line.Id, MonthlyBillId = seed.MonthlyBill.Id, ExceptionType = BillExceptionType.BILLED_AFTER_DISCONNECTION, Severity = BillExceptionSeverity.Warning, Description = "Disconnected" },
+            // An unmatched line is counted once, however many exceptions it has.
+            new BillException { BillBatchId = seed.Batch.Id, BillLineId = lost.Id, ExceptionType = BillExceptionType.MOBILE_NOT_FOUND, Severity = BillExceptionSeverity.Blocking, Description = "Not found" },
+            new BillException { BillBatchId = seed.Batch.Id, BillLineId = lost.Id, ExceptionType = BillExceptionType.ZERO_BILL, Severity = BillExceptionSeverity.Information, Description = "Zero" },
+            new BillException { BillBatchId = seed.Batch.Id, BillLineId = resolved.Id, ExceptionType = BillExceptionType.MOBILE_NOT_FOUND, Severity = BillExceptionSeverity.Blocking, Status = BillExceptionStatus.Waived, Description = "Waived" });
+        await db.SaveChangesAsync();
+
+        var result = await new EfBillBatchReviewQueryService(db).GetSummaryAsync(seed.Batch.Id, default);
+
+        Assert.Equal(1, result.UnresolvedExceptionCount);
+    }
+
+    [Fact]
     public async Task Summary_projects_real_approval_history_in_chronological_order()
     {
         await using var db = CreateDb();

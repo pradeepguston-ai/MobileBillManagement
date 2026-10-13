@@ -11,7 +11,7 @@ export function canDownloadReport(status: BillBatchStatus) {
 }
 
 export function exceptionDownloadWarning(unresolvedCount: number) {
-  return `This batch still has ${unresolvedCount} unresolved exception${unresolvedCount === 1 ? '' : 's'}. The Excel report will include those bill lines with the employee, allocation and deduction columns left blank. Download anyway?`
+  return `This batch still has ${unresolvedCount} bill line${unresolvedCount === 1 ? '' : 's'} not matched to an employee. The report will include ${unresolvedCount === 1 ? 'it' : 'them'} with the employee, allocation and deduction columns left blank. Download anyway?`
 }
 
 export function billingPeriod(year: number, month: number) {

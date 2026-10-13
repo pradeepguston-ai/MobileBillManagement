@@ -308,7 +308,7 @@ describe('MonthlyBillReviewPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Download Excel Report' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/3 unresolved exceptions/)).toBeTruthy()
+    expect(within(dialog).getByText(/3 bill lines not matched/)).toBeTruthy()
     expect(excelCalls()).toBe(0)
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
@@ -329,7 +329,7 @@ describe('MonthlyBillReviewPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Download PDF Report' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/2 unresolved exceptions/)).toBeTruthy()
+    expect(within(dialog).getByText(/2 bill lines not matched/)).toBeTruthy()
     expect(calls('/pdf')).toBe(0)
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Download anyway' }))
@@ -357,7 +357,7 @@ describe('MonthlyBillReviewPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Download Excel Report' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/excel'))).toBe(true))
-    expect(screen.queryByText(/unresolved exception/)).toBeNull()
+    expect(screen.queryByText(/not matched to an employee/)).toBeNull()
   })
 
   it('disables bulk selection for a locked batch', async () => {

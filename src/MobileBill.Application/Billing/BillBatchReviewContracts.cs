@@ -11,6 +11,7 @@ public sealed record ApprovalHistoryItemDto(Guid Id, [property: JsonConverter(ty
 public sealed record BillBatchReviewSummaryDto(Guid BatchId, int BillingYear, int BillingMonth, string Provider, string CorporateCode, [property: JsonConverter(typeof(JsonStringEnumConverter))] BillBatchStatus BatchStatus, [property: JsonConverter(typeof(JsonStringEnumConverter))] ValidationLevel ValidationLevel, int TotalAccounts, decimal TotalActualBill, decimal TotalCalculatedExcess, decimal TotalFinalDeduction, decimal CompanyResponsibilityAmount, int ExceptionCount, int UnmatchedCount, int AssessedCount, int UnassessedCount)
 {
     public IReadOnlyList<ApprovalHistoryItemDto> ApprovalHistory { get; init; } = [];
+    // Bill lines with an unresolved exception and no monthly bill: the ones the report shows with blank employee and deduction columns.
     public int UnresolvedExceptionCount { get; init; }
 }
 public sealed record BillReviewRowsRequest(int PageNumber = 1, int PageSize = 20, string? SortBy = null, string? SortDirection = null, string? FactoryCode = null, string? DepartmentCode = null, string? CategoryCode = null, ReviewResponsibilityFilter? Responsibility = null, ReviewExceptionFilter Exception = ReviewExceptionFilter.All, MonthlyBillStatus? Status = null, string? Search = null, decimal? CalculatedExcessMin = null, decimal? CalculatedExcessMax = null, string? SectionCode = null)

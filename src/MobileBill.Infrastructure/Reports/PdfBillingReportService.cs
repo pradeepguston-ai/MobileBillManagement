@@ -5,6 +5,7 @@ using MigraDoc.Rendering;
 using MobileBill.Application.Common;
 using MobileBill.Application.Reports;
 using MobileBill.Infrastructure.Persistence;
+using PdfSharp.Drawing;
 using PdfSharp.Fonts;
 
 namespace MobileBill.Infrastructure.Reports;
@@ -17,11 +18,13 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
     private const string HeaderColor = "#1F4E78";
     private const string RuleColor = "#D9E2F3";
 
-    // Widths in millimetres for the 19 report columns; they add up to the 277mm printable width of A4 landscape.
-    private static readonly double[] ColumnWidths = [7, 15, 10, 26, 14, 19, 15, 15, 16, 15, 13, 13, 12, 14, 14, 14, 15, 15, 15];
+    // Widths in millimetres for the 17 report columns; they add up to the 277mm printable width of A4 landscape.
+    private static readonly double[] ColumnWidths = [7, 15, 11, 30, 16, 15, 23, 23, 23, 16, 14, 13, 14, 14, 14, 15, 14];
+    private const double BodyFontSize = 6.5, MinimumFontSize = 4.5, CellPaddingPoints = 2;
     // 0-based positions of the columns written below; they follow BillingReportData.Headers.
-    private const int SectionColumn = 8, SubSectionColumn = 9, CallingNameColumn = 10, CreditLimitColumn = 11, MonthlyRentalColumn = 12,
-        ActualBillColumn = 13, VarianceColumn = 14, DeductionColumn = 15, ResponsibilityColumn = 16, RemarkColumn = 17, PackageColumn = 18;
+    private const int NameColumn = 3, CallingNameColumn = 4, CategoryColumn = 5, DesignationColumn = 6, FactoryColumn = 7, DepartmentColumn = 8,
+        PackageColumn = 9, CreditLimitColumn = 10, MonthlyRentalColumn = 11, ActualBillColumn = 12, VarianceColumn = 13, DeductionColumn = 14,
+        ResponsibilityColumn = 15, RemarkColumn = 16;
     private static readonly HashSet<int> NumericColumns = [CreditLimitColumn, MonthlyRentalColumn, ActualBillColumn, VarianceColumn, DeductionColumn];
 
     static PdfBillingReportService() => ReportFonts.Configure();
@@ -54,7 +57,7 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
 
         var normal = document.Styles[StyleNames.Normal]!;
         normal.Font.Name = FontName;
-        normal.Font.Size = 6.5;
+        normal.Font.Size = BodyFontSize;
 
         var section = document.AddSection();
         var setup = section.PageSetup;
@@ -108,7 +111,7 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
         table.Borders.Bottom.Color = Color.Parse(RuleColor);
         table.Rows.LeftIndent = 0;
         table.TopPadding = table.BottomPadding = Unit.FromPoint(1.5);
-        table.LeftPadding = table.RightPadding = Unit.FromPoint(2);
+        table.LeftPadding = table.RightPadding = Unit.FromPoint(CellPaddingPoints);
         foreach (var width in ColumnWidths) table.AddColumn(Unit.FromMillimeter(width));
 
         var header = table.AddRow();
@@ -132,21 +135,19 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
             Set(row, ActualBillColumn, Money(entry.ActualBill));
             if (entry.Bill is not { } bill) continue;
             Set(row, 2, bill.EmployeeEpf);
-            Set(row, 3, bill.EmployeeName);
-            Set(row, 4, bill.Category);
-            Set(row, 5, bill.Designation);
-            Set(row, 6, bill.Factory);
-            Set(row, 7, bill.Department);
-            Set(row, SectionColumn, bill.Section);
-            Set(row, SubSectionColumn, bill.SubSection);
+            Set(row, NameColumn, bill.DisplayName);
             Set(row, CallingNameColumn, bill.CallingName);
+            Set(row, CategoryColumn, bill.Category);
+            Set(row, DesignationColumn, bill.Designation);
+            Set(row, FactoryColumn, bill.Factory);
+            Set(row, DepartmentColumn, bill.Department);
+            Set(row, PackageColumn, bill.PackageCode);
             Set(row, CreditLimitColumn, Money(bill.CreditLimit));
             Set(row, MonthlyRentalColumn, Money(bill.MonthlyRental));
             Set(row, VarianceColumn, Money(bill.Variance));
             Set(row, DeductionColumn, Money(bill.DisplayedDeduction));
             Set(row, ResponsibilityColumn, bill.ResponsibilityLabel);
             Set(row, RemarkColumn, bill.Remark);
-            Set(row, PackageColumn, bill.PackageCode);
         }
 
         var totals = table.AddRow();
@@ -207,6 +208,30 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
         if (string.IsNullOrEmpty(text)) return;
         var paragraph = row.Cells[column].AddParagraph(text);
         if (NumericColumns.Contains(column)) paragraph.Format.Alignment = ParagraphAlignment.Right;
+        // A word cannot be split across lines, so a word wider than its column (e.g. MANUFACTURING) would spill into the next one.
+        // Such cells get a smaller font so the longest word fits.
+        else if (FittingFontSize(text, column) is { } size) paragraph.Format.Font.Size = size;
+    }
+
+    private static readonly object MeasureGate = new();
+    // Created on first use, after the static constructor has configured the fonts.
+    private static XGraphics? measure;
+    private static XFont? measureFont;
+
+    // Null when every word fits at the normal size; otherwise the smaller size that makes the longest word fit.
+    public static double? FittingFontSize(string text, int column)
+    {
+        var available = Unit.FromMillimeter(ColumnWidths[column]).Point - 2 * CellPaddingPoints;
+        double widest;
+        lock (MeasureGate)
+        {
+            measure ??= XGraphics.CreateMeasureContext(new XSize(1000, 1000), XGraphicsUnit.Point, XPageDirection.Downwards);
+            measureFont ??= new XFont(FontName, BodyFontSize, XFontStyleEx.Regular);
+            widest = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).DefaultIfEmpty("").Max(word => measure.MeasureString(word, measureFont).Width);
+        }
+        if (widest <= available) return null;
+        // Round down to a tenth of a point so the word is sure to fit.
+        return Math.Max(MinimumFontSize, Math.Floor(BodyFontSize * available / widest * 10) / 10);
     }
 
     private static string Money(decimal value) => value.ToString("#,##0.00", CultureInfo.InvariantCulture);
