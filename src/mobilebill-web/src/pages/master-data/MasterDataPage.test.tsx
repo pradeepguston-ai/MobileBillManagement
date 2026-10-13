@@ -5,6 +5,8 @@ import { DepartmentsPage, EmployeesPage, FactoriesPage, MobileAllocationsPage } 
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 const page = (items: unknown[], pageNumber = 1, totalPages = 1, totalCount = items.length) => ({ items, pageNumber, pageSize: 100, totalCount, totalPages })
+// Filling the whole employee form takes about 5 seconds on slower machines, just over Vitest's default limit.
+const LongFormTimeout = 15000
 
 // Opens a short drop-down and clicks an option, without typing a search.
 async function pickOption(fieldName: string, optionName: string) {
@@ -110,7 +112,7 @@ describe('MasterDataPage states', () => {
       thirdPartyCompanyCode: null,
     }))
     expect(screen.queryByRole('combobox', { name: 'Third Party Allocation' })).toBeNull()
-  })
+  }, LongFormTimeout)
 
   it('offers Third Party Allocation only for the OTHER - THIRD-PARTY category and clears it when the category changes', async () => {
     let submittedBody: unknown
@@ -148,7 +150,7 @@ describe('MasterDataPage states', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(submittedBody).toMatchObject({ categoryCode: 'CAT005', departmentCode: 'DEP029', thirdPartyCompanyCode: 'TPC001' }))
-  })
+  }, LongFormTimeout)
 
   it('allows selecting a department independently of the chosen factory', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
@@ -200,6 +202,20 @@ describe('MasterDataPage states', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
       await waitFor(() => expect(submittedBody).toEqual({ mobileNumber: '0771234567', employeeId: 'employee-1', monthlyCreditLimit: 1500.25, monthlyRental: 700, packageId: null, simType: null }))
+    })
+
+    it('lists the name with initials, or the full name when there are none', async () => {
+      const account = { id: 'account-1', mobileNumber: '771234567', epf: 'EPF-100', factory: 'Head Office', department: 'IT', monthlyCreditLimit: 1000, monthlyRental: 700, isActive: true, status: 'Assigned' }
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async input => new URL(String(input)).pathname === '/api/mobile-accounts'
+        ? json(page([{ ...account, employeeName: 'TESTING EMPLOYEE PERERA', nameWithInitials: 'T.E. PERERA' }, { ...account, id: 'account-2', mobileNumber: '771234568', employeeName: 'SAMAN PERERA', nameWithInitials: null }]))
+        : json(page([], 1, 0, 0)))
+
+      render(<MobileAllocationsPage />)
+
+      expect(await screen.findByRole('columnheader', { name: 'Name With Initials' })).toBeTruthy()
+      expect(await screen.findByText('T.E. PERERA')).toBeTruthy()
+      expect(screen.getByText('SAMAN PERERA')).toBeTruthy()
+      expect(screen.queryByText('TESTING EMPLOYEE PERERA')).toBeNull()
     })
   })
 })

@@ -53,6 +53,22 @@ public sealed class BillBatchReviewQueryServiceTests
     }
 
     [Fact]
+    public async Task Rows_and_detail_carry_the_employees_name_with_initials_and_it_can_be_searched()
+    {
+        await using var db = CreateDb();
+        var seed = await SeedAsync(db);
+        db.Employees.Add(new Employee { Id = seed.MonthlyBill.EmployeeId, EPF = "EPF-1", FullName = "Employee One", NameWithInitials = "E. ONE", CategoryCode = "CAT", DesignationCode = "DES", FactoryCode = "FAC", DepartmentCode = "DEP" });
+        await db.SaveChangesAsync();
+        var service = new EfBillBatchReviewQueryService(db);
+
+        var row = Assert.Single((await service.GetRowsAsync(seed.Batch.Id, new BillReviewRowsRequest(Search: "E. ONE"), default)).Items);
+        var detail = await service.GetDetailAsync(seed.Batch.Id, seed.MonthlyBill.Id, default);
+
+        Assert.Equal(("E. ONE", "Employee One"), (row.NameWithInitials, row.EmployeeName));
+        Assert.Equal("E. ONE", detail.Row.NameWithInitials);
+    }
+
+    [Fact]
     public async Task Summary_projects_real_approval_history_in_chronological_order()
     {
         await using var db = CreateDb();

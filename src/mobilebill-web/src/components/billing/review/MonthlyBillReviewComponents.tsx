@@ -19,7 +19,7 @@ import { ValidationLevelChip } from '../ValidationLevelChip'
 import { FilterBar } from '../../common/FilterBar'
 import { KpiCard } from '../../common/KpiCard'
 import { SortableHeaderCell, TableEmptyRow } from '../../common/DataTable'
-import { approvalRemarkNeedingComment, approvalRemarks, isApproval, reviewColumns, type MasterOption, type ReviewColumn, type SelectOption, type WorkflowDialogState } from './reviewPresentation'
+import { approvalRemarkNeedingComment, approvalRemarks, displayName, isApproval, reviewColumns, type MasterOption, type ReviewColumn, type SelectOption, type WorkflowDialogState } from './reviewPresentation'
 const moneyColumns = new Set<keyof ReviewRow>(['creditLimit', 'monthlyRental', 'actualBill', 'variance', 'calculatedExcess', 'finalDeduction'])
 // A By Company row deducts nothing from the employee, but the amount the company absorbs is shown in the column.
 function FinalDeductionCell({ row }: { row: ReviewRow }) {
@@ -80,8 +80,10 @@ export function ReviewTable({ rows, loading, sort, direction, selectable, select
   return <Box aria-label="Monthly bill rows scroll area" sx={{ maxWidth: '100%', overflow: 'auto', maxHeight: 'calc(100vh - 220px)', minHeight: 240, border: 1, borderColor: 'divider', borderRadius: 2, opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 150ms' }} aria-busy={loading}><Table stickyHeader size="small" aria-label="Monthly bill review rows" sx={{ minWidth: 1900 }}><TableHead><TableRow><TableCell padding="checkbox"><Checkbox slotProps={{ input: { 'aria-label': 'Select all rows' } }} checked={allOnPageSelected} indeterminate={someOnPageSelected} disabled={!selectable || !rows?.items.length} onChange={onToggleAllOnPage} /></TableCell>{reviewColumns.map(column => <SortableHeaderCell key={column.key} label={column.label} sortable={Boolean(column.sortKey)} active={sort === column.sortKey} direction={direction === 'asc' ? 'asc' : 'desc'} onClick={() => onSort(column)} />)}</TableRow></TableHead><TableBody>{rows?.items.map(row => <ReviewTableRow key={row.id} row={row} selected={selectedIds.has(row.id)} selectable={selectable} onToggle={() => onToggleRow(row.id)} onOpen={() => onOpen(row)} />)}{!loading && rows?.items.length === 0 && <TableEmptyRow colSpan={reviewColumns.length + 1} message="No monthly bill rows match the selected filters." />}</TableBody></Table></Box>
 }
 
-// Long names and designations are cut at a fixed width with "…"; hovering shows the full text.
-const truncatedColumnWidths: Partial<Record<ReviewColumn['key'], number>> = { employeeName: 470, designation: 260 }
+// Long designations are cut at a fixed width with "…"; hovering shows the full text.
+const truncatedColumnWidths: Partial<Record<ReviewColumn['key'], number>> = { designation: 260 }
+
+// The name column is exactly as wide as the longest name (width 1% with no wrapping shrinks it to its content).
 
 function TruncatedCell({ text, width, onHoverChange }: { text?: string | null; width: number; onHoverChange: (hovering: boolean) => void }) {
   if (!text) return <>—</>
@@ -90,15 +92,16 @@ function TruncatedCell({ text, width, onHoverChange }: { text?: string | null; w
   </Tooltip>
 }
 
-// Hovering a row with a deduction (Calculated Excess above 0) shows it; it stays hidden while a name or designation shows its own full-text popup.
+// Hovering a row with a deduction (Calculated Excess above 0) shows it, including over the name; it stays hidden
+// over a designation, which shows its own full-text popup.
 // The row tracks the pointer itself so the popup always closes when the pointer leaves, whichever cell it leaves from.
 function ReviewTableRow({ row, selected, selectable, onToggle, onOpen }: { row: ReviewRow; selected: boolean; selectable: boolean; onToggle: () => void; onOpen: () => void }) {
   const [hovering, setHovering] = useState(false)
-  const [overTruncated, setOverTruncated] = useState(false)
-  return <Tooltip title={`Deduction: ${formatCurrency(row.calculatedExcess)}`} followCursor describeChild open={hovering && !overTruncated && row.calculatedExcess > 0} disableHoverListener disableFocusListener disableTouchListener>
-    <TableRow hover onClick={onOpen} onMouseEnter={() => setHovering(true)} onMouseLeave={() => { setHovering(false); setOverTruncated(false) }} sx={{ cursor: 'pointer', bgcolor: row.calculatedExcess > 0 ? 'rgba(255, 201, 40, 0.22)' : row.hasException ? 'rgba(237, 108, 2, 0.08)' : undefined }}>
+  const [deductionPopupBlocked, setDeductionPopupBlocked] = useState(false)
+  return <Tooltip title={`Deduction: ${formatCurrency(row.calculatedExcess)}`} followCursor describeChild open={hovering && !deductionPopupBlocked && row.calculatedExcess > 0} disableHoverListener disableFocusListener disableTouchListener>
+    <TableRow hover onClick={onOpen} onMouseEnter={() => setHovering(true)} onMouseLeave={() => { setHovering(false); setDeductionPopupBlocked(false) }} sx={{ cursor: 'pointer', bgcolor: row.calculatedExcess > 0 ? 'rgba(255, 201, 40, 0.22)' : row.hasException ? 'rgba(237, 108, 2, 0.08)' : undefined }}>
       <TableCell padding="checkbox" onClick={event => event.stopPropagation()} sx={{ borderLeft: '4px solid', borderLeftColor: row.hasException ? 'warning.main' : row.calculatedExcess > 0 ? '#F39A18' : 'transparent' }}><Checkbox slotProps={{ input: { 'aria-label': `Select ${row.mobileNumber}` } }} checked={selected} disabled={!selectable} onChange={onToggle} /></TableCell>
-      {reviewColumns.map(column => <TableCell key={column.key} sx={{ whiteSpace: 'nowrap', ...(truncatedColumnWidths[column.key] ? { width: truncatedColumnWidths[column.key], maxWidth: truncatedColumnWidths[column.key] } : {}), ...(column.key === 'calculatedExcess' && row.calculatedExcess > 0 ? { fontWeight: 700, color: 'warning.main' } : {}) }}>{column.key === 'finalDeduction' ? <FinalDeductionCell row={row} /> : moneyColumns.has(column.key) ? formatCurrency(row[column.key] as number) : column.key === 'responsibility' ? row.responsibility ?? 'Unassessed' : truncatedColumnWidths[column.key] ? <TruncatedCell text={row[column.key] as string | null} width={truncatedColumnWidths[column.key]!} onHoverChange={setOverTruncated} /> : String(row[column.key] ?? '—')}</TableCell>)}
+      {reviewColumns.map(column => <TableCell key={column.key} sx={{ whiteSpace: 'nowrap', ...(truncatedColumnWidths[column.key] ? { width: truncatedColumnWidths[column.key], maxWidth: truncatedColumnWidths[column.key] } : {}), ...(column.key === 'employeeName' ? { width: '1%' } : {}), ...(column.key === 'calculatedExcess' && row.calculatedExcess > 0 ? { fontWeight: 700, color: 'warning.main' } : {}) }}>{column.key === 'finalDeduction' ? <FinalDeductionCell row={row} /> : moneyColumns.has(column.key) ? formatCurrency(row[column.key] as number) : column.key === 'responsibility' ? row.responsibility ?? 'Unassessed' : column.key === 'employeeName' ? displayName(row) : truncatedColumnWidths[column.key] ? <TruncatedCell text={row[column.key] as string | null} width={truncatedColumnWidths[column.key]!} onHoverChange={setDeductionPopupBlocked} /> : String(row[column.key] ?? '—')}</TableCell>)}
     </TableRow>
   </Tooltip>
 }
@@ -148,7 +151,7 @@ export function BulkAssignDialog({ open, selectedIds, mobileNumberById, onClose,
 
 export function BillDetailDrawer({ batchId, detail, batchStatus, canAssess = true, onClose, onSaved }: { batchId?: string; detail?: ReviewDetail; batchStatus?: string; canAssess?: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
   return <Drawer anchor="right" open={Boolean(detail)} onClose={onClose} sx={theme => ({ zIndex: theme.zIndex.drawer + 2 })} slotProps={{ paper: { sx: { width: { xs: '100%', sm: 'min(680px, 92vw)' }, p: { xs: 2, sm: 3 } } } }}>{detail && <Stack spacing={2}><Typography variant="h5">{detail.row.mobileNumber}</Typography>
-    <Section title="Employee Snapshot"><SectionValues values={{ EPF: detail.row.employeeEpf, Name: detail.row.employeeName, 'Calling Name': detail.row.callingName, Category: detail.row.category, Designation: detail.row.designation, Factory: detail.row.factory, Department: detail.row.department, Section: detail.row.section || '—', 'Sub Section': detail.row.subSection || '—' }} /></Section>
+    <Section title="Employee Snapshot"><SectionValues values={{ EPF: detail.row.employeeEpf, Name: detail.row.employeeName, 'Name With Initials': detail.row.nameWithInitials || '—', 'Calling Name': detail.row.callingName, Category: detail.row.category, Designation: detail.row.designation, Factory: detail.row.factory, Department: detail.row.department, Section: detail.row.section || '—', 'Sub Section': detail.row.subSection || '—' }} /></Section>
     {batchId && <BillTrendSection key={detail.row.id} batchId={batchId} rowId={detail.row.id} />}
     <Section title="Allocation Snapshot"><SectionValues values={{ Package: detail.row.packageCode || '—', 'Credit Limit': formatCurrency(detail.row.creditLimit), 'Monthly Rental': formatCurrency(detail.row.monthlyRental) }} /></Section>
     <Section title="PDF Charge Breakdown"><BillChargeBreakdown charges={detail.charges} /></Section>

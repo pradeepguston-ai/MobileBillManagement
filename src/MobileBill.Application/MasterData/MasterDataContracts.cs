@@ -44,7 +44,8 @@ public sealed record MobileAccountDto(
     [property: System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))] SimStatus Status = SimStatus.Assigned,
     DateOnly? PooledOn = null, DateOnly? DisconnectedOn = null, string? StatusReason = null, Guid EmployeeId = default, string? FactoryCode = null,
     Guid? PackageId = null, string? PackageCode = null, bool DiffersFromPackage = false,
-    [property: System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))] SimType? SimType = null);
+    [property: System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))] SimType? SimType = null,
+    string? NameWithInitials = null);
 
 // A provider's mobile plan. Rental is before tax; Total With Tax is for reference. Choosing a package for an
 // allocation fills in its rental and suggests the credit limit.

@@ -24,17 +24,18 @@ export function approvalComment(remark: string, comment: string) {
   return typed ? `${remark}: ${typed}` : remark
 }
 
+export const displayName = (row: Pick<ReviewRow, 'employeeName' | 'nameWithInitials'>) => row.nameWithInitials?.trim() || row.employeeName
+
 export const reviewColumns: ReviewColumn[] = [
   { key: 'mobileNumber', label: 'Mobile', sortKey: 'mobileNumber' },
   { key: 'employeeEpf', label: 'EPF', sortKey: 'epf' },
-  { key: 'employeeName', label: 'Name', sortKey: 'employeeName' },
+  // Shows the name with initials; the full name stands in when an employee has none (see displayName).
+  { key: 'employeeName', label: 'Name With Initials', sortKey: 'employeeName' },
+  { key: 'callingName', label: 'Calling Name', sortKey: 'callingName' },
   { key: 'category', label: 'Category', sortKey: 'category' },
   { key: 'designation', label: 'Designation', sortKey: 'designation' },
   { key: 'factory', label: 'Factory', sortKey: 'factory' },
   { key: 'department', label: 'Department', sortKey: 'department' },
-  { key: 'section', label: 'Section', sortKey: 'section' },
-  { key: 'subSection', label: 'Sub Section', sortKey: 'subSection' },
-  { key: 'callingName', label: 'Calling Name', sortKey: 'callingName' },
   { key: 'packageCode', label: 'Package' },
   { key: 'creditLimit', label: 'Credit Limit', sortKey: 'creditLimit' },
   { key: 'monthlyRental', label: 'Monthly Rental', sortKey: 'monthlyRental' },

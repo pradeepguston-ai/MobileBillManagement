@@ -29,6 +29,8 @@ const employeeOption = (row: Row) => {
   const parts = { epf: row.epf, nameWithInitials: row.nameWithInitials, fullName: row.fullName, callingName: row.callingName, factory: row.factoryName || row.factoryCode }
   return { value: String(row.id), label: employeeLabel(parts), searchText: employeeSearchText(parts) }
 }
+// Holder column: name with initials (full name when there are none) with the calling name in brackets; EPF has its own column.
+export const holderLabel = (row: Row) => row.holderName ? employeeLabel({ nameWithInitials: row.holderNameWithInitials, fullName: row.holderName, callingName: row.holderCallingName }) : '—'
 const deviceOption = (row: Row) => ({ value: String(row.id), label: `${value(row, 'assetTag')} — ${value(row, 'brand')} ${value(row, 'model')}` })
 
 // The register. Administrator and IT Engineer register, issue, return and replace devices; other roles view them.
@@ -43,7 +45,8 @@ export const mobileDevicesConfig: MasterDataPageConfig<Row> = {
     { key: 'model', header: 'Device', format: (_, row) => `${value(row, 'brand')} ${value(row, 'model')}` },
     { key: 'imei1', header: 'IMEI' },
     { key: 'status', header: 'Status', render: statusBadge },
-    { key: 'holderName', header: 'Holder', format: (_, row) => row.holderName ? `${value(row, 'holderEpf')} — ${value(row, 'holderName')}` : '—' },
+    { key: 'holderEpf', header: 'EPF', format: (_, row) => value(row, 'holderEpf') || '—' },
+    { key: 'holderName', header: 'Holder', format: (_, row) => holderLabel(row) },
     { key: 'holderFactory', header: 'Factory', format: (_, row) => value(row, 'holderFactory') || '—' },
     { key: 'purchaseDate', header: 'Purchased' },
     { key: 'purchaseCost', header: 'Cost', format: amount => formatCurrency(Number(amount)) },

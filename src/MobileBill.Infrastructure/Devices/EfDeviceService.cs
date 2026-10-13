@@ -38,7 +38,9 @@ public sealed class EfDeviceService(MobileBillDbContext db, ICurrentUserService 
             var search = request.Search.Trim();
             query = query.Where(device => device.AssetTag.Contains(search) || device.Imei1.Contains(search) || (device.Imei2 != null && device.Imei2.Contains(search))
                 || device.Brand.Contains(search) || device.Model.Contains(search)
-                || (device.CurrentEmployee != null && (device.CurrentEmployee.EPF.Contains(search) || device.CurrentEmployee.FullName.Contains(search))));
+                || (device.CurrentEmployee != null && (device.CurrentEmployee.EPF.Contains(search) || device.CurrentEmployee.FullName.Contains(search)
+                    || (device.CurrentEmployee.NameWithInitials != null && device.CurrentEmployee.NameWithInitials.Contains(search))
+                    || (device.CurrentEmployee.CallingName != null && device.CurrentEmployee.CallingName.Contains(search)))));
         }
         var total = await query.CountAsync(cancellationToken);
         var page = request.NormalizedPageNumber; var size = request.NormalizedPageSize;
@@ -470,13 +472,15 @@ public sealed class EfDeviceService(MobileBillDbContext db, ICurrentUserService 
     private sealed record DeviceRow(
         Guid Id, string AssetTag, string Imei1, string? Imei2, string Brand, string Model, string? SerialNumber, DateOnly PurchaseDate, decimal PurchaseCost,
         DateOnly? WarrantyUntil, string? Supplier, string? Notes, DeviceStatus Status, DateOnly StatusSince,
-        Guid? HolderId, string? HolderEpf, string? HolderName, string? HolderFactory, string? HolderDepartment);
+        Guid? HolderId, string? HolderEpf, string? HolderName, string? HolderFactory, string? HolderDepartment,
+        string? HolderNameWithInitials, string? HolderCallingName);
 
     private static IQueryable<DeviceRow> Project(IQueryable<MobileDevice> query) => query.Select(device => new DeviceRow(
         device.Id, device.AssetTag, device.Imei1, device.Imei2, device.Brand, device.Model, device.SerialNumber, device.PurchaseDate, device.PurchaseCost,
         device.WarrantyUntil, device.Supplier, device.Notes, device.Status, device.StatusSince, device.CurrentEmployeeId,
         device.CurrentEmployee != null ? device.CurrentEmployee.EPF : null, device.CurrentEmployee != null ? device.CurrentEmployee.FullName : null,
-        device.CurrentEmployee != null ? device.CurrentEmployee.Factory.Name : null, device.CurrentEmployee != null ? device.CurrentEmployee.Department.Name : null));
+        device.CurrentEmployee != null ? device.CurrentEmployee.Factory.Name : null, device.CurrentEmployee != null ? device.CurrentEmployee.Department.Name : null,
+        device.CurrentEmployee != null ? device.CurrentEmployee.NameWithInitials : null, device.CurrentEmployee != null ? device.CurrentEmployee.CallingName : null));
 
     private MobileDeviceDto ToDto(DeviceRow row)
     {
@@ -484,7 +488,8 @@ public sealed class EfDeviceService(MobileBillDbContext db, ICurrentUserService 
         return new MobileDeviceDto(row.Id, row.AssetTag, row.Imei1, row.Imei2, row.Brand, row.Model, row.SerialNumber, row.PurchaseDate, row.PurchaseCost,
             row.WarrantyUntil, row.Supplier, row.Notes, row.Status, row.StatusSince, DeviceRules.DaysWaiting(row.StatusSince, today),
             row.HolderId, row.HolderEpf, row.HolderName, row.HolderFactory, row.HolderDepartment, !OutOfUse.Contains(row.Status),
-            OutOfUse.Contains(row.Status) ? 0m : DeviceRules.RecoverableAmount(row.PurchaseCost, row.PurchaseDate, today));
+            OutOfUse.Contains(row.Status) ? 0m : DeviceRules.RecoverableAmount(row.PurchaseCost, row.PurchaseDate, today),
+            row.HolderNameWithInitials, row.HolderCallingName);
     }
 
     internal static string StatusLabel(DeviceStatus status) => status switch

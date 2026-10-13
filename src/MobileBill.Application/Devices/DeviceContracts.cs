@@ -10,7 +10,7 @@ public sealed record MobileDeviceDto(
     DateOnly PurchaseDate, decimal PurchaseCost, DateOnly? WarrantyUntil, string? Supplier, string? Notes,
     [property: JsonConverter(typeof(JsonStringEnumConverter))] DeviceStatus Status, DateOnly StatusSince, int DaysInStatus,
     Guid? HolderEmployeeId, string? HolderEpf, string? HolderName, string? HolderFactory, string? HolderDepartment,
-    bool IsActive, decimal CurrentValue);
+    bool IsActive, decimal CurrentValue, string? HolderNameWithInitials = null, string? HolderCallingName = null);
 
 public sealed record MobileDeviceUpsertRequest(
     string AssetTag, string Imei1, string? Imei2, string Brand, string Model, string? SerialNumber,

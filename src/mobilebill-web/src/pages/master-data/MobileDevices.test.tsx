@@ -14,7 +14,7 @@ const device = (id: string, assetTag: string, status: string, extra: Record<stri
   warrantyUntil: null, supplier: null, notes: null, status, statusSince: '2026-10-01', daysInStatus: 6, holderEmployeeId: null, holderEpf: null, holderName: null,
   holderFactory: null, holderDepartment: null, isActive: true, currentValue: 63750, ...extra,
 })
-const issued = device('d1', 'GL-MOB-0001', 'Issued', { holderEmployeeId: 'e1', holderEpf: 'EPF-1', holderName: 'Holder', holderFactory: 'Head Office' })
+const issued = device('d1', 'GL-MOB-0001', 'Issued', { holderEmployeeId: 'e1', holderEpf: 'EPF-1', holderName: 'Holder Full Name', holderNameWithInitials: 'H.F. NAME', holderCallingName: 'HOLDER', holderFactory: 'Head Office' })
 const spare = device('d2', 'GL-MOB-0002', 'InStock')
 const repair = device('d3', 'GL-MOB-0003', 'UnderRepair')
 
@@ -45,7 +45,11 @@ describe('Mobile devices', () => {
 
     const table = await screen.findByRole('table')
     const rows = within(table).getAllByRole('row')
-    expect(rows[1].textContent).toContain('EPF-1 — Holder')
+    // EPF in its own column; the holder shown with initials and the calling name in brackets.
+    expect(within(table).getByRole('columnheader', { name: 'EPF' })).toBeTruthy()
+    expect(within(rows[1]).getByRole('cell', { name: 'EPF-1' })).toBeTruthy()
+    expect(within(rows[1]).getByRole('cell', { name: 'H.F. NAME (HOLDER)' })).toBeTruthy()
+    expect(rows[2].textContent).not.toContain('EPF-1')
     expect(within(rows[1]).getByText('Issued')).toBeTruthy()
     expect(within(rows[1]).getByRole('button', { name: 'Return' })).toBeTruthy()
     expect(within(rows[1]).getByRole('button', { name: 'Replace' })).toBeTruthy()
