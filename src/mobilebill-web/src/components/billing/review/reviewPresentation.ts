@@ -12,6 +12,18 @@ export type WorkflowDialogState = {
   commentRequired: boolean
 }
 
+// Remarks offered when approving a batch at any stage (IT, HR, Finance). The conditions must be written in the comment.
+export const approvalRemarks = ['Approved', 'Reviewed and Approved', 'Verified and Approved', 'Approved with Conditions'] as const
+export const approvalRemarkNeedingComment = 'Approved with Conditions'
+
+export const isApproval = (state?: WorkflowDialogState) => state?.kind === 'decision' && state.action === 'Approve'
+
+// The comment saved in the approval history: the chosen remark, then anything typed in the comment box.
+export function approvalComment(remark: string, comment: string) {
+  const typed = comment.trim()
+  return typed ? `${remark}: ${typed}` : remark
+}
+
 export const reviewColumns: ReviewColumn[] = [
   { key: 'mobileNumber', label: 'Mobile', sortKey: 'mobileNumber' },
   { key: 'employeeEpf', label: 'EPF', sortKey: 'epf' },

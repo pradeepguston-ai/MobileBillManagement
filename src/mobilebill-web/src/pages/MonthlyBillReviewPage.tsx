@@ -12,7 +12,7 @@ import { billingPeriod, exceptionDownloadWarning } from '../billing/billingRoute
 import { BatchContextNavigation } from '../components/billing/BatchContextNavigation'
 import { WorkflowStepper } from '../components/billing/WorkflowStepper'
 import { ApprovalHistorySection, BillDetailDrawer, BulkAssignBar, BulkAssignDialog, ReportCard, ReviewFilters, ReviewHeader, ReviewKpis, ReviewTable, WorkflowActionDialog, WorkflowActions } from '../components/billing/review/MonthlyBillReviewComponents'
-import type { MasterOption, ReviewColumn, WorkflowDialogState } from '../components/billing/review/reviewPresentation'
+import { approvalComment, approvalRemarkNeedingComment, approvalRemarks, isApproval, type MasterOption, type ReviewColumn, type WorkflowDialogState } from '../components/billing/review/reviewPresentation'
 import { ConfirmActionDialog } from '../components/common/ConfirmActionDialog'
 import { ErrorState } from '../components/common/ErrorState'
 import { LoadingState } from '../components/common/LoadingState'
@@ -31,6 +31,7 @@ export function MonthlyBillReviewPage() {
   const [capabilityError, setCapabilityError] = useState<string>()
   const [workflowDialog, setWorkflowDialog] = useState<WorkflowDialogState>()
   const [workflowComment, setWorkflowComment] = useState('')
+  const [approvalRemark, setApprovalRemark] = useState<string>(approvalRemarks[0])
   const [workflowDialogError, setWorkflowDialogError] = useState<string>()
   const [lockConfirmationOpen, setLockConfirmationOpen] = useState(false)
   const [workflowSaving, setWorkflowSaving] = useState(false)
@@ -90,13 +91,15 @@ export function MonthlyBillReviewPage() {
   const toggleSort = (column: ReviewColumn) => { if (!column.sortKey) return; setLoading(true); if (sort === column.sortKey) setDirection(current => current === 'asc' ? 'desc' : 'asc'); else { setSort(column.sortKey); setDirection('asc') } }
   const refreshAfterAssessment = async (monthlyBillId: string) => { const [nextDetail] = await Promise.all([getReviewDetail(batchId, monthlyBillId), load()]); setDetail(nextDetail) }
   const refreshAuthoritativeState = async () => { setLoading(true); await Promise.all([load(), loadCapabilities()]) }
-  const openWorkflowDialog = (state: WorkflowDialogState) => { setWorkflowComment(''); setWorkflowDialogError(undefined); setWorkflowDialog(state) }
+  const openWorkflowDialog = (state: WorkflowDialogState) => { setWorkflowComment(''); setApprovalRemark(approvalRemarks[0]); setWorkflowDialogError(undefined); setWorkflowDialog(state) }
   const runWorkflow = async () => {
     if (!workflowDialog) return
+    const approving = isApproval(workflowDialog)
     if (workflowDialog.commentRequired && workflowComment.trim().length < 5) { setWorkflowDialogError('Enter a meaningful reason.'); return }
+    if (approving && approvalRemark === approvalRemarkNeedingComment && workflowComment.trim().length < 5) { setWorkflowDialogError('Write the conditions of this approval.'); return }
     setWorkflowSaving(true); setError(undefined); setWorkflowDialogError(undefined)
     try {
-      const comment = workflowComment.trim() || undefined
+      const comment = approving ? approvalComment(approvalRemark, workflowComment) : workflowComment.trim() || undefined
       if (workflowDialog.kind === 'submit') await submitForItReview(batchId, comment)
       else await decideWorkflow(batchId, workflowDialog.action!, comment)
       setWorkflowDialog(undefined); setWorkflowComment(''); await refreshAuthoritativeState()
@@ -128,7 +131,7 @@ export function MonthlyBillReviewPage() {
     <BulkAssignBar selectedCount={selectedIds.size} matchingCount={rows?.totalCount ?? 0} selectable={canBulkAssign} onSelectAllMatching={selectAllMatching} onClear={clearSelection} onAssign={() => setBulkDialogOpen(true)} />
     <ReviewTable rows={rows} loading={loading} sort={sort} direction={direction} selectable={canBulkAssign} selectedIds={selectedIds} allOnPageSelected={allOnPageSelected} onToggleRow={toggleRow} onToggleAllOnPage={toggleAllOnPage} onSort={toggleSort} onOpen={row => void openDetail(row)} />
     <BillDetailDrawer batchId={batchId} canAssess={canAssess} detail={detail} batchStatus={summary?.batchStatus} onClose={() => setDetail(undefined)} onSaved={() => detail ? refreshAfterAssessment(detail.row.id) : Promise.resolve()} />
-    <WorkflowActionDialog state={workflowDialog} comment={workflowComment} error={workflowDialogError} saving={workflowSaving} onComment={setWorkflowComment} onCancel={() => setWorkflowDialog(undefined)} onConfirm={() => void runWorkflow()} />
+    <WorkflowActionDialog state={workflowDialog} comment={workflowComment} remark={approvalRemark} error={workflowDialogError} saving={workflowSaving} onComment={setWorkflowComment} onRemark={setApprovalRemark} onCancel={() => setWorkflowDialog(undefined)} onConfirm={() => void runWorkflow()} />
     <ConfirmActionDialog open={lockConfirmationOpen} title="Lock Billing Period" message="Locking this billing period will prevent further bill, matching, exception and deduction changes. Continue?" confirmLabel="Confirm Lock" busy={workflowSaving} onCancel={() => setLockConfirmationOpen(false)} onConfirm={() => void runLock()} />
     <ConfirmActionDialog open={downloadWarningOpen} title="Unresolved exceptions" message={exceptionDownloadWarning(summary?.unresolvedExceptionCount ?? 0)} confirmLabel="Download anyway" busy={downloading} onCancel={() => setDownloadWarningOpen(false)} onConfirm={() => { setDownloadWarningOpen(false); void downloadReport(pendingFormat, pendingFilters) }} />
     <BulkAssignDialog open={bulkDialogOpen} selectedIds={Array.from(selectedIds)} mobileNumberById={mobileNumberById} onClose={() => setBulkDialogOpen(false)} onCompleted={() => { setBulkDialogOpen(false); clearSelection(); setLoading(true); void load() }} />
