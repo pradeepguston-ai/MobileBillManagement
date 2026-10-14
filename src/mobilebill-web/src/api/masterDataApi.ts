@@ -24,7 +24,7 @@ export function updateMasterData<T extends EntityRow>(path: string, id: string, 
 // Moves an active mobile allocation to another employee; the number, credit limit and rental are unchanged.
 // SIM Pool. Dates are yyyy-MM-dd.
 export type SimStatus = 'Assigned' | 'Pooled' | 'Disconnected'
-export type SimPoolItem = { id: string; mobileNumber: string; previousEpf: string; previousEmployeeName: string; factory: string; department: string; pooledOn: string; reason: string | null; daysInPool: number; isLongIdle: boolean; monthlyCreditLimit: number; monthlyRental: number }
+export type SimPoolItem = { id: string; mobileNumber: string; previousEpf: string; previousEmployeeName: string; factory: string; department: string; pooledOn: string; reason: string | null; daysInPool: number; isLongIdle: boolean; monthlyCreditLimit: number; monthlyRental: number; previousNameWithInitials?: string | null; previousCallingName?: string | null }
 export function getSimPool() { return apiFetch<SimPoolItem[]>('/api/mobile-accounts/pool') }
 export function releaseToPool(id: string, resignedOn: string, reason: string) { return apiFetch<EntityRow>(`/api/mobile-accounts/${id}/release-to-pool`, { method: 'POST', body: JSON.stringify({ resignedOn, reason: reason || null }) }) }
 // Leave the amounts out to keep the pooled SIM's credit limit and rental (HR and Finance users must).

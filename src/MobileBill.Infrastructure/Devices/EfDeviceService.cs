@@ -154,7 +154,8 @@ public sealed class EfDeviceService(MobileBillDbContext db, ICurrentUserService 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var search = request.Search.Trim();
-            query = query.Where(issue => issue.Device.AssetTag.Contains(search) || issue.Device.Imei1.Contains(search) || issue.Employee.EPF.Contains(search) || issue.Employee.FullName.Contains(search));
+            query = query.Where(issue => issue.Device.AssetTag.Contains(search) || issue.Device.Imei1.Contains(search) || issue.Employee.EPF.Contains(search) || issue.Employee.FullName.Contains(search)
+                || (issue.Employee.NameWithInitials != null && issue.Employee.NameWithInitials.Contains(search)) || (issue.Employee.CallingName != null && issue.Employee.CallingName.Contains(search)));
         }
         var total = await query.CountAsync(cancellationToken);
         var page = request.NormalizedPageNumber; var size = request.NormalizedPageSize;
@@ -162,7 +163,8 @@ public sealed class EfDeviceService(MobileBillDbContext db, ICurrentUserService 
             .Select(issue => new DeviceIssueDto(issue.Id, issue.DeviceId, issue.Device.AssetTag, issue.Device.Brand, issue.Device.Model,
                 issue.EmployeeId, issue.Employee.EPF, issue.Employee.FullName, issue.Employee.Factory.Name, issue.Employee.Department.Name,
                 issue.IssuedOn, issue.CreatedBy, issue.IssueNotes, issue.ReturnedOn, issue.ReturnCondition, issue.ReturnReason, issue.ReturnNotes,
-                issue.ReplacementDevice != null ? issue.ReplacementDevice.AssetTag : null, issue.RecoverableAmount))
+                issue.ReplacementDevice != null ? issue.ReplacementDevice.AssetTag : null, issue.RecoverableAmount,
+                issue.Employee.NameWithInitials, issue.Employee.CallingName))
             .ToListAsync(cancellationToken);
         return new PagedResult<DeviceIssueDto>(items, page, size, total);
     }
@@ -177,12 +179,13 @@ public sealed class EfDeviceService(MobileBillDbContext db, ICurrentUserService 
             {
                 device.Id, device.AssetTag, device.Brand, device.Model, device.Imei1, device.PurchaseCost, device.PurchaseDate, device.StatusSince,
                 EmployeeId = device.CurrentEmployeeId!.Value, device.CurrentEmployee!.EPF, device.CurrentEmployee.FullName,
+                device.CurrentEmployee.NameWithInitials, device.CurrentEmployee.CallingName,
                 Factory = device.CurrentEmployee.Factory.Name, Department = device.CurrentEmployee.Department.Name, device.CurrentEmployee.ResignedOn
             })
             .ToListAsync(cancellationToken);
         return rows.Select(row => new DeviceToCollectDto(row.Id, row.AssetTag, row.Brand, row.Model, row.Imei1, row.EmployeeId, row.EPF, row.FullName, row.Factory, row.Department,
             row.ResignedOn, row.StatusSince, DeviceRules.DaysWaiting(row.StatusSince, today), DeviceRules.IsCollectionOverdue(row.StatusSince, today),
-            row.PurchaseCost, DeviceRules.RecoverableAmount(row.PurchaseCost, row.PurchaseDate, today))).ToList();
+            row.PurchaseCost, DeviceRules.RecoverableAmount(row.PurchaseCost, row.PurchaseDate, today), row.NameWithInitials, row.CallingName)).ToList();
     }
 
     public async Task<DeviceReportFile> ExportRegisterExcelAsync(DeviceRegisterRequest request, CancellationToken cancellationToken)

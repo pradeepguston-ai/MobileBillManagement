@@ -8,6 +8,7 @@ export type DeviceToCollect = {
   deviceId: string; assetTag: string; brand: string; model: string; imei1: string
   employeeId: string; epf: string; employeeName: string; factory: string; department: string; resignedOn: string | null
   returnPendingSince: string; daysWaiting: number; isOverdue: boolean; purchaseCost: number; recoverableAmount: number
+  nameWithInitials?: string | null; callingName?: string | null
 }
 
 export const deviceStatusLabels: Record<DeviceStatus, string> = {

@@ -150,7 +150,8 @@ export const deviceIssuesConfig: MasterDataPageConfig<Row> = {
   columns: [
     { key: 'assetTag', header: 'Asset ID' },
     { key: 'model', header: 'Device', format: (_, row) => `${value(row, 'brand')} ${value(row, 'model')}` },
-    { key: 'employeeName', header: 'Employee', format: (_, row) => `${value(row, 'epf')} — ${value(row, 'employeeName')}` },
+    { key: 'epf', header: 'EPF' },
+    { key: 'employeeName', header: 'Holder', format: (_, row) => employeeLabel({ nameWithInitials: row.nameWithInitials, fullName: row.employeeName, callingName: row.callingName }) },
     { key: 'factory', header: 'Factory' },
     { key: 'issuedOn', header: 'Issued' },
     { key: 'returnedOn', header: 'Returned', format: (_, row) => value(row, 'returnedOn') || 'Still with employee' },

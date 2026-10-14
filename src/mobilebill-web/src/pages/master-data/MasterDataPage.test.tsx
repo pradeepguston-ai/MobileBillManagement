@@ -207,7 +207,7 @@ describe('MasterDataPage states', () => {
     it('lists the name with initials, or the full name when there are none', async () => {
       const account = { id: 'account-1', mobileNumber: '771234567', epf: 'EPF-100', factory: 'Head Office', department: 'IT', monthlyCreditLimit: 1000, monthlyRental: 700, isActive: true, status: 'Assigned' }
       vi.spyOn(globalThis, 'fetch').mockImplementation(async input => new URL(String(input)).pathname === '/api/mobile-accounts'
-        ? json(page([{ ...account, employeeName: 'TESTING EMPLOYEE PERERA', nameWithInitials: 'T.E. PERERA' }, { ...account, id: 'account-2', mobileNumber: '771234568', employeeName: 'SAMAN PERERA', nameWithInitials: null }]))
+        ? json(page([{ ...account, employeeName: 'TESTING EMPLOYEE PERERA', nameWithInitials: 'T.E. PERERA', callingName: 'TESTER' }, { ...account, id: 'account-2', mobileNumber: '771234568', employeeName: 'SAMAN PERERA', nameWithInitials: null }]))
         : json(page([], 1, 0, 0)))
 
       render(<MobileAllocationsPage />)
@@ -216,6 +216,8 @@ describe('MasterDataPage states', () => {
       expect(await screen.findByText('T.E. PERERA')).toBeTruthy()
       expect(screen.getByText('SAMAN PERERA')).toBeTruthy()
       expect(screen.queryByText('TESTING EMPLOYEE PERERA')).toBeNull()
+      expect(screen.getByRole('columnheader', { name: 'Calling Name' })).toBeTruthy()
+      expect(screen.getByText('TESTER')).toBeTruthy()
     })
   })
 })

@@ -24,7 +24,7 @@ function mockApi(posted: Array<{ url: string; body: unknown }> = []) {
     if (init?.method === 'POST') { posted.push({ url: url.pathname, body: JSON.parse(String(init.body)) }); return json(issued) }
     if (url.pathname === '/api/mobile-devices/in-stock') return page([spare])
     if (url.pathname === '/api/mobile-devices/to-collect') return json([
-      { deviceId: 'd9', assetTag: 'GL-MOB-0009', brand: 'Apple', model: 'iPhone 13', imei1: '356789010000097', employeeId: 'e9', epf: 'EPF-9', employeeName: 'Leaver', factory: 'Head Office', department: 'IT', resignedOn: '2026-09-15', returnPendingSince: '2026-09-15', daysWaiting: 22, isOverdue: true, purchaseCost: 120000, recoverableAmount: 60000 },
+      { deviceId: 'd9', assetTag: 'GL-MOB-0009', brand: 'Apple', model: 'iPhone 13', imei1: '356789010000097', employeeId: 'e9', epf: 'EPF-9', employeeName: 'Leaver Full Name', nameWithInitials: 'L.F. NAME', callingName: 'LEAVER', factory: 'Head Office', department: 'IT', resignedOn: '2026-09-15', returnPendingSince: '2026-09-15', daysWaiting: 22, isOverdue: true, purchaseCost: 120000, recoverableAmount: 60000 },
     ])
     if (url.pathname === '/api/mobile-devices') return page([issued, spare, repair])
     if (url.pathname === '/api/employees') return page([{ id: 'e2', epf: 'EPF-2', fullName: 'Joiner', factoryName: 'Head Office', isActive: true }])
@@ -106,9 +106,23 @@ describe('Mobile devices', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'To Collect' }))
     const table = await screen.findByRole('table', { name: 'Devices to collect' })
-    expect(within(table).getByText('EPF-9 — Leaver')).toBeTruthy()
+    expect(within(table).getByRole('columnheader', { name: 'EPF' })).toBeTruthy()
+    expect(within(table).getByRole('cell', { name: 'EPF-9' })).toBeTruthy()
+    expect(within(table).getByRole('cell', { name: 'L.F. NAME (LEAVER)' })).toBeTruthy()
     expect(within(table).getByText('22 days · overdue')).toBeTruthy()
     expect(screen.getByText(/1 is overdue \(more than 14 days\)/)).toBeTruthy()
+  })
+
+  it('shows the history holder by EPF, name with initials and calling name', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => new URL(String(input), 'http://localhost').pathname === '/api/mobile-devices/issues'
+      ? page([{ id: 'i1', deviceId: 'd1', assetTag: 'GL-MOB-0001', brand: 'Samsung', model: 'Galaxy A35', employeeId: 'e1', epf: 'EPF-1', employeeName: 'Holder Full Name', nameWithInitials: 'H.F. NAME', callingName: 'HOLDER', factory: 'Head Office', department: 'IT', issuedOn: '2026-01-05', issuedBy: null, issueNotes: null, returnedOn: null, returnCondition: null, returnReason: null, returnNotes: null, replacementAssetTag: null, recoverableAmount: null }])
+      : page([]))
+    render(<MobileDevicesPage />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }))
+    const row = (await screen.findByText('GL-MOB-0001')).closest('tr')!
+    expect(within(row).getByRole('cell', { name: 'EPF-1' })).toBeTruthy()
+    expect(within(row).getByRole('cell', { name: 'H.F. NAME (HOLDER)' })).toBeTruthy()
   })
 
   it('is view-only for HR and Finance users', async () => {

@@ -44,13 +44,14 @@ public sealed record DeviceIssueDto(
     DateOnly IssuedOn, string? IssuedBy, string? IssueNotes, DateOnly? ReturnedOn,
     [property: JsonConverter(typeof(JsonStringEnumConverter))] DeviceStatus? ReturnCondition,
     [property: JsonConverter(typeof(JsonStringEnumConverter))] DeviceReturnReason? ReturnReason,
-    string? ReturnNotes, string? ReplacementAssetTag, decimal? RecoverableAmount);
+    string? ReturnNotes, string? ReplacementAssetTag, decimal? RecoverableAmount, string? NameWithInitials = null, string? CallingName = null);
 
 // A leaver's device still to be collected. Once overdue, RecoverableAmount is what may be recovered in the final settlement.
 public sealed record DeviceToCollectDto(
     Guid DeviceId, string AssetTag, string Brand, string Model, string Imei1,
     Guid EmployeeId, string Epf, string EmployeeName, string Factory, string Department, DateOnly? ResignedOn,
-    DateOnly ReturnPendingSince, int DaysWaiting, bool IsOverdue, decimal PurchaseCost, decimal RecoverableAmount);
+    DateOnly ReturnPendingSince, int DaysWaiting, bool IsOverdue, decimal PurchaseCost, decimal RecoverableAmount,
+    string? NameWithInitials = null, string? CallingName = null);
 
 public sealed record DeviceRegisterRequest(string? FactoryCode = null, string? DepartmentCode = null);
 

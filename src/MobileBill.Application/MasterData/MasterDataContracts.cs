@@ -45,7 +45,7 @@ public sealed record MobileAccountDto(
     DateOnly? PooledOn = null, DateOnly? DisconnectedOn = null, string? StatusReason = null, Guid EmployeeId = default, string? FactoryCode = null,
     Guid? PackageId = null, string? PackageCode = null, bool DiffersFromPackage = false,
     [property: System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))] SimType? SimType = null,
-    string? NameWithInitials = null);
+    string? NameWithInitials = null, string? CallingName = null);
 
 // A provider's mobile plan. Rental is before tax; Total With Tax is for reference. Choosing a package for an
 // allocation fills in its rental and suggests the credit limit.
@@ -75,7 +75,8 @@ public sealed record EmployeeResignationDto(
     DateOnly ResignedOn, string? Reason, int DaysLeft, IReadOnlyList<string> MobileNumbers, IReadOnlyList<string>? Devices = null);
 public sealed record SimPoolItemDto(
     Guid Id, string MobileNumber, string PreviousEpf, string PreviousEmployeeName, string Factory, string Department,
-    DateOnly PooledOn, string? Reason, int DaysInPool, bool IsLongIdle, decimal MonthlyCreditLimit, decimal MonthlyRental);
+    DateOnly PooledOn, string? Reason, int DaysInPool, bool IsLongIdle, decimal MonthlyCreditLimit, decimal MonthlyRental,
+    string? PreviousNameWithInitials = null, string? PreviousCallingName = null);
 // The holder is identified by employee ID, since the same EPF can exist in different factories.
 // A package is required for a new allocation, and once an allocation has one it cannot be removed.
 public sealed record MobileAccountUpsertRequest(

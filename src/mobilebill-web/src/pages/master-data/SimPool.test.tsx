@@ -52,7 +52,7 @@ describe('SIM Pool', () => {
   it('shows days in pool and flags numbers idle over 60 days', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       if (String(input).includes('/api/mobile-accounts/pool')) return json([
-        { id: 'p1', mobileNumber: '0770000001', previousEpf: 'EPF-1', previousEmployeeName: 'Old Holder', factory: 'F', department: 'D', pooledOn: '2026-07-01', reason: 'Resigned', daysInPool: 96, isLongIdle: true, monthlyCreditLimit: 1000, monthlyRental: 100 },
+        { id: 'p1', mobileNumber: '0770000001', previousEpf: 'EPF-1', previousEmployeeName: 'Old Holder', previousNameWithInitials: 'O. HOLDER', previousCallingName: 'OLDIE', factory: 'F', department: 'D', pooledOn: '2026-07-01', reason: 'Resigned', daysInPool: 96, isLongIdle: true, monthlyCreditLimit: 1000, monthlyRental: 100 },
         { id: 'p2', mobileNumber: '0770000002', previousEpf: 'EPF-2', previousEmployeeName: 'Recent Leaver', factory: 'F', department: 'D', pooledOn: '2026-09-20', reason: 'Resigned', daysInPool: 15, isLongIdle: false, monthlyCreditLimit: 1000, monthlyRental: 100 },
       ])
       return page([])
@@ -63,6 +63,11 @@ describe('SIM Pool', () => {
     expect(await screen.findByText('96 days · over 60')).toBeTruthy()
     expect(screen.getByText('15 days')).toBeTruthy()
     expect(screen.getByText(/1 has been idle for more than 60 days/)).toBeTruthy()
+    // EPF in its own column; the previous holder with initials and the calling name in brackets, or the full name when there are no initials.
+    expect(screen.getByRole('columnheader', { name: 'EPF' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: 'EPF-1' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: 'O. HOLDER (OLDIE)' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: 'Recent Leaver' })).toBeTruthy()
   })
 
   it('resigns an employee from the employee list', async () => {

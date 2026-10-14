@@ -5,6 +5,7 @@ import { getSimPool, type SimPoolItem } from '../../api/masterDataApi'
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/master-data/ErrorState'
 import { LoadingState } from '../../components/master-data/LoadingState'
+import { employeeLabel } from '../../utils/employeeLabel'
 import { formatCurrency } from '../../utils/formatters'
 
 export const longIdleDays = 60
@@ -34,10 +35,12 @@ export function SimPoolPanel({ reloadKey = 0 }: { reloadKey?: number }) {
     </Alert>
     <Box sx={{ overflowX: 'auto' }}>
       <Table size="small" stickyHeader aria-label="SIM Pool">
-        <TableHead><TableRow><TableCell>Mobile Number</TableCell><TableCell>Previous Holder</TableCell><TableCell>Factory</TableCell><TableCell>Department</TableCell><TableCell>In Pool Since</TableCell><TableCell>Days in Pool</TableCell><TableCell>Reason</TableCell><TableCell align="right">Credit Limit</TableCell><TableCell align="right">Rental</TableCell></TableRow></TableHead>
+        <TableHead><TableRow><TableCell>Mobile Number</TableCell><TableCell>EPF</TableCell><TableCell>Previous Holder</TableCell><TableCell>Factory</TableCell><TableCell>Department</TableCell><TableCell>In Pool Since</TableCell><TableCell>Days in Pool</TableCell><TableCell>Reason</TableCell><TableCell align="right">Credit Limit</TableCell><TableCell align="right">Rental</TableCell></TableRow></TableHead>
         <TableBody>{items.map(item => <TableRow key={item.id} hover>
           <TableCell>{item.mobileNumber}</TableCell>
-          <TableCell>{item.previousEpf} — {item.previousEmployeeName}</TableCell>
+          <TableCell>{item.previousEpf}</TableCell>
+          {/* Name with initials (full name when there are none) and the calling name in brackets. */}
+          <TableCell>{employeeLabel({ nameWithInitials: item.previousNameWithInitials, fullName: item.previousEmployeeName, callingName: item.previousCallingName })}</TableCell>
           <TableCell>{item.factory}</TableCell>
           <TableCell>{item.department}</TableCell>
           <TableCell>{item.pooledOn}</TableCell>

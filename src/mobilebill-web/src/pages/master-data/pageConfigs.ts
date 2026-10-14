@@ -155,6 +155,7 @@ export const mobileAllocationsConfig: MasterDataPageConfig<Row> = {
     { key: 'epf', header: 'EPF' },
     // The full name stands in when the employee has no initials.
     { key: 'nameWithInitials', header: 'Name With Initials', format: (_, row) => value(row, 'nameWithInitials').trim() || value(row, 'employeeName') },
+    { key: 'callingName', header: 'Calling Name', format: (_, row) => value(row, 'callingName').trim() || '—' },
     { key: 'simType', header: 'SIM Type', format: (_, row) => simTypeLabels[value(row, 'simType')] ?? '—' },
     { key: 'packageCode', header: 'Package', format: (_, row) => row.packageCode ? `${value(row, 'packageCode')}${row.differsFromPackage ? ' (rental differs)' : ''}` : '—' },
     { key: 'monthlyCreditLimit', header: 'Monthly Credit Limit' },

@@ -69,13 +69,13 @@ public sealed partial class EfMasterDataService
         var rows = await _dbContext.MobileAccounts.AsNoTracking()
             .Where(account => account.IsActive && account.Status == SimStatus.Pooled)
             .OrderBy(account => account.PooledOn).ThenBy(account => account.MobileNumber)
-            .Select(account => new { account.Id, account.MobileNumber, account.Employee.EPF, account.Employee.FullName, Factory = account.Employee.Factory.Name, Department = account.Employee.Department.Name, account.PooledOn, account.StatusReason, account.MonthlyCreditLimit, account.MonthlyRental })
+            .Select(account => new { account.Id, account.MobileNumber, account.Employee.EPF, account.Employee.FullName, account.Employee.NameWithInitials, account.Employee.CallingName, Factory = account.Employee.Factory.Name, Department = account.Employee.Department.Name, account.PooledOn, account.StatusReason, account.MonthlyCreditLimit, account.MonthlyRental })
             .ToListAsync(cancellationToken);
         return rows.Select(row =>
         {
             var pooledOn = row.PooledOn ?? today;
             return new SimPoolItemDto(row.Id, row.MobileNumber, row.EPF, row.FullName, row.Factory, row.Department, pooledOn, row.StatusReason,
-                SimPoolRules.DaysInPool(pooledOn, today), SimPoolRules.IsLongIdle(pooledOn, today), row.MonthlyCreditLimit, row.MonthlyRental);
+                SimPoolRules.DaysInPool(pooledOn, today), SimPoolRules.IsLongIdle(pooledOn, today), row.MonthlyCreditLimit, row.MonthlyRental, row.NameWithInitials, row.CallingName);
         }).ToList();
     }
 

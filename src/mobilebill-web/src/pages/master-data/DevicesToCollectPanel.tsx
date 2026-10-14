@@ -5,6 +5,7 @@ import { getDevicesToCollect, type DeviceToCollect } from '../../api/devicesApi'
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/master-data/ErrorState'
 import { LoadingState } from '../../components/master-data/LoadingState'
+import { employeeLabel } from '../../utils/employeeLabel'
 import { formatCurrency } from '../../utils/formatters'
 
 export const collectionGraceDays = 14
@@ -32,13 +33,15 @@ export function DevicesToCollectPanel() {
     </Alert>
     <Box sx={{ overflowX: 'auto' }}>
       <Table size="small" stickyHeader aria-label="Devices to collect">
-        <TableHead><TableRow>{['Asset ID', 'Device', 'IMEI', 'Employee', 'Factory', 'Department', 'Left On', 'Waiting', 'Purchase Cost', 'Recoverable'].map(heading =>
+        <TableHead><TableRow>{['Asset ID', 'Device', 'IMEI', 'EPF', 'Holder', 'Factory', 'Department', 'Left On', 'Waiting', 'Purchase Cost', 'Recoverable'].map(heading =>
           <TableCell key={heading} align={['Purchase Cost', 'Recoverable'].includes(heading) ? 'right' : 'left'} sx={{ whiteSpace: 'nowrap' }}>{heading}</TableCell>)}</TableRow></TableHead>
         <TableBody>{items.map(item => <TableRow key={item.deviceId} hover>
           <TableCell>{item.assetTag}</TableCell>
           <TableCell>{item.brand} {item.model}</TableCell>
           <TableCell>{item.imei1}</TableCell>
-          <TableCell>{item.epf} — {item.employeeName}</TableCell>
+          <TableCell>{item.epf}</TableCell>
+          {/* Name with initials (full name when there are none) and the calling name in brackets. */}
+          <TableCell>{employeeLabel({ nameWithInitials: item.nameWithInitials, fullName: item.employeeName, callingName: item.callingName })}</TableCell>
           <TableCell>{item.factory}</TableCell>
           <TableCell>{item.department}</TableCell>
           <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.resignedOn ?? item.returnPendingSince}</TableCell>
