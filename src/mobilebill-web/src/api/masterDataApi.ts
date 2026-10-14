@@ -1,11 +1,13 @@
 import { apiFetch, apiResponse } from './http'
 import type { EntityRow, PagedResponse } from './types'
 
-export type ListOptions = { pageNumber: number; pageSize: number; search: string; isActive?: boolean }
+// filters: extra query values such as factoryCode or departmentCode; empty values are left out.
+export type ListOptions = { pageNumber: number; pageSize: number; search: string; isActive?: boolean; filters?: Record<string, string> }
 
 export function listMasterData<T extends EntityRow>(path: string, options: ListOptions) {
   const params = new URLSearchParams({ pageNumber: String(options.pageNumber), pageSize: String(options.pageSize), search: options.search })
   if (options.isActive !== undefined) params.set('isActive', String(options.isActive))
+  Object.entries(options.filters ?? {}).filter(([, value]) => value !== '').forEach(([key, value]) => params.set(key, value))
   return apiFetch<PagedResponse<T>>(`${path}?${params}`)
 }
 

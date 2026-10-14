@@ -9,10 +9,12 @@ namespace MobileBill.Infrastructure.MasterData;
 
 public sealed partial class EfMasterDataService
 {
-    public async Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken)
+    public async Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken, string? factoryCode = null, string? departmentCode = null)
     {
         var query = _dbContext.Employees.AsNoTracking();
         if (request.IsActive is not null) query = query.Where(employee => employee.IsActive == request.IsActive.Value);
+        if (!string.IsNullOrWhiteSpace(factoryCode)) { var factory = factoryCode.Trim(); query = query.Where(employee => employee.FactoryCode == factory); }
+        if (!string.IsNullOrWhiteSpace(departmentCode)) { var department = departmentCode.Trim(); query = query.Where(employee => employee.DepartmentCode == department); }
         if (!string.IsNullOrWhiteSpace(request.Search)) { var search = request.Search.Trim(); query = query.Where(employee => employee.EPF.Contains(search) || employee.FullName.Contains(search) || (employee.CallingName != null && employee.CallingName.Contains(search)) || (employee.NameWithInitials != null && employee.NameWithInitials.Contains(search))); }
         return await ToPagedResultAsync(EmployeeProjection(query.OrderBy(employee => employee.EPF).ThenBy(employee => employee.FactoryCode)), request, cancellationToken);
     }
@@ -44,11 +46,14 @@ public sealed partial class EfMasterDataService
         entity.IsActive = false; await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<PagedResult<MobileAccountDto>> GetMobileAccountsAsync(PagedRequest request, CancellationToken cancellationToken, SimStatus? status = null)
+    public async Task<PagedResult<MobileAccountDto>> GetMobileAccountsAsync(PagedRequest request, CancellationToken cancellationToken, SimStatus? status = null, string? factoryCode = null, string? departmentCode = null)
     {
         var query = _dbContext.MobileAccounts.AsNoTracking();
         if (request.IsActive is not null) query = query.Where(account => account.IsActive == request.IsActive.Value);
         if (status is not null) query = query.Where(account => account.Status == status.Value);
+        // By the holder's factory and department (the last holder for a pooled or disconnected number), as the list shows them.
+        if (!string.IsNullOrWhiteSpace(factoryCode)) { var factory = factoryCode.Trim(); query = query.Where(account => account.Employee.FactoryCode == factory); }
+        if (!string.IsNullOrWhiteSpace(departmentCode)) { var department = departmentCode.Trim(); query = query.Where(account => account.Employee.DepartmentCode == department); }
         if (!string.IsNullOrWhiteSpace(request.Search)) { var search = request.Search.Trim(); query = query.Where(account => account.MobileNumber.Contains(search) || account.Employee.EPF.Contains(search) || account.Employee.FullName.Contains(search) || (account.Employee.NameWithInitials != null && account.Employee.NameWithInitials.Contains(search)) || (account.Employee.CallingName != null && account.Employee.CallingName.Contains(search)) || (account.Package != null && account.Package.Code.Contains(search))); }
         return await ToPagedResultAsync(MobileAccountProjection(query.OrderBy(account => account.MobileNumber).ThenBy(account => account.Id)), request, cancellationToken);
     }

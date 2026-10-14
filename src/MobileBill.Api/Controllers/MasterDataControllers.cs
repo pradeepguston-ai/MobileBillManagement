@@ -26,7 +26,7 @@ public abstract class MasterDataControllerBase(IMasterDataService service) : Con
 [Route("api/employees")]
 public sealed class EmployeesController(IMasterDataService service) : MasterDataControllerBase(service)
 {
-    [HttpGet] public Task<PagedResult<EmployeeDto>> Get([FromQuery] PagedRequest request, CancellationToken token) => Service.GetEmployeesAsync(request, token);
+    [HttpGet] public Task<PagedResult<EmployeeDto>> Get([FromQuery] PagedRequest request, [FromQuery] string? factoryCode, [FromQuery] string? departmentCode, CancellationToken token) => Service.GetEmployeesAsync(request, token, factoryCode, departmentCode);
     [HttpGet("{id:guid}")] public Task<EmployeeDto> Get(Guid id, CancellationToken token) => Service.GetEmployeeAsync(id, token);
     [HttpPost, Authorize(Roles = MasterDataRoles.MasterEditors)] public async Task<ActionResult<EmployeeDto>> Create(EmployeeUpsertRequest request, CancellationToken token) { var item = await Service.CreateEmployeeAsync(request, token); return CreatedAtAction(nameof(Get), new { item.Id }, item); }
     [HttpPut("{id:guid}"), Authorize(Roles = MasterDataRoles.MasterEditors)] public Task<EmployeeDto> Update(Guid id, EmployeeUpsertRequest request, CancellationToken token) => Service.UpdateEmployeeAsync(id, request, token);
@@ -46,7 +46,7 @@ public sealed class EmployeesController(IMasterDataService service) : MasterData
 [Route("api/mobile-accounts")]
 public sealed class MobileAccountsController(IMasterDataService service) : MasterDataControllerBase(service)
 {
-    [HttpGet] public Task<PagedResult<MobileAccountDto>> Get([FromQuery] PagedRequest request, [FromQuery] SimStatus? status, CancellationToken token) => Service.GetMobileAccountsAsync(request, token, status);
+    [HttpGet] public Task<PagedResult<MobileAccountDto>> Get([FromQuery] PagedRequest request, [FromQuery] SimStatus? status, [FromQuery] string? factoryCode, [FromQuery] string? departmentCode, CancellationToken token) => Service.GetMobileAccountsAsync(request, token, status, factoryCode, departmentCode);
     // Creating allocations and setting amounts is for Administrator and IT Engineer only, so is the import.
     [HttpGet("import/template"), Authorize(Roles = MasterDataRoles.Editors)]
     public IActionResult ImportTemplate([FromServices] IMasterDataImportService importer) { var template = importer.MobileAccountTemplate(); return File(template.Content, ExcelContentType, template.FileName); }

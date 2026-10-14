@@ -175,6 +175,29 @@ describe('MasterDataPage states', () => {
     expect((screen.getByRole('combobox', { name: 'Department' }) as HTMLInputElement).value).toBe('Information Technology')
   })
 
+  it('filters employees and mobile allocations by factory and department', async () => {
+    const listed: URL[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = new URL(String(input))
+      if (url.pathname === '/api/factories') return json(page([{ id: 'f1', code: 'CAL', name: 'CONCORD APPAREL (PVT) LTD', isActive: true }]))
+      if (url.pathname === '/api/departments') return json(page([{ id: 'd1', code: 'DEP001', name: 'ACCOUNTS', isActive: true }]))
+      if (url.pathname === '/api/employees' || url.pathname === '/api/mobile-accounts') listed.push(url)
+      return json(page([], 1, 0, 0))
+    })
+
+    for (const [Page, path] of [[EmployeesPage, '/api/employees'], [MobileAllocationsPage, '/api/mobile-accounts']] as const) {
+      listed.length = 0
+      const { unmount } = render(<Page />)
+      fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Factory' }))
+      fireEvent.click(await screen.findByRole('option', { name: 'CONCORD APPAREL (PVT) LTD' }))
+      fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Department' }))
+      fireEvent.click(await screen.findByRole('option', { name: 'ACCOUNTS' }))
+
+      await waitFor(() => expect(listed.some(url => url.pathname === path && url.searchParams.get('factoryCode') === 'CAL' && url.searchParams.get('departmentCode') === 'DEP001')).toBe(true))
+      unmount()
+    }
+  }, LongFormTimeout)
+
   describe('mobile allocations', () => {
     const employee = { id: 'employee-1', epf: 'EPF-100', fullName: 'TESTING EMPLOYEE PERERA', nameWithInitials: 'T.E. PERERA', callingName: 'TEST', factoryName: 'Head Office', isActive: true }
 

@@ -74,6 +74,26 @@ public sealed class MasterDataServiceTests
     }
 
     [Fact]
+    public async Task Employees_and_mobile_allocations_can_be_filtered_by_factory_and_department()
+    {
+        await using var context = CreateContext(); var service = new EfMasterDataService(context); var inF = await SeedEmployeeAsync(context);
+        context.AddRange(new Factory { Code = "F2", Name = "Factory Two" }, new Department { Code = "D2", Name = "Department Two" });
+        var inF2 = new Employee { EPF = "EPF-F2", FullName = "Other Factory", CategoryCode = "C", DesignationCode = "DS", FactoryCode = "F2", DepartmentCode = "D2" };
+        context.Employees.Add(inF2);
+        context.MobileAccounts.AddRange(
+            new MobileAccount { MobileNumber = "770000001", EmployeeId = inF.Id, MonthlyCreditLimit = 100m, MonthlyRental = 10m },
+            new MobileAccount { MobileNumber = "770000002", EmployeeId = inF2.Id, MonthlyCreditLimit = 100m, MonthlyRental = 10m });
+        await context.SaveChangesAsync();
+
+        Assert.Equal([inF.EPF], (await service.GetEmployeesAsync(new PagedRequest(), default, factoryCode: "F")).Items.Select(employee => employee.Epf));
+        Assert.Equal(["EPF-F2"], (await service.GetEmployeesAsync(new PagedRequest(), default, departmentCode: "D2")).Items.Select(employee => employee.Epf));
+        Assert.Empty((await service.GetEmployeesAsync(new PagedRequest(), default, factoryCode: "F", departmentCode: "D2")).Items);
+        Assert.Equal(2, (await service.GetEmployeesAsync(new PagedRequest(), default)).Items.Count);   // no filter: everyone
+        Assert.Equal(["770000002"], (await service.GetMobileAccountsAsync(new PagedRequest(), default, factoryCode: "F2")).Items.Select(account => account.MobileNumber));
+        Assert.Equal(["770000001"], (await service.GetMobileAccountsAsync(new PagedRequest(), default, departmentCode: "D")).Items.Select(account => account.MobileNumber));
+    }
+
+    [Fact]
     public async Task An_employee_needs_a_gender_and_gets_the_matching_title()
     {
         await using var context = CreateContext(); var service = new EfMasterDataService(context); var existing = await SeedEmployeeAsync(context);

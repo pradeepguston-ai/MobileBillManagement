@@ -89,13 +89,14 @@ public sealed record MobileAccountUpsertRequest(
 public sealed record MobileAccountReassignRequest(Guid EmployeeId);
 public interface IMasterDataService
 {
-    Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken);
+    // factoryCode / departmentCode narrow the list to one factory or department (employees, and the holders of mobile numbers).
+    Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken, string? factoryCode = null, string? departmentCode = null);
     Task<EmployeeDto> GetEmployeeAsync(Guid id, CancellationToken cancellationToken);
     Task<EmployeeDto> CreateEmployeeAsync(EmployeeUpsertRequest request, CancellationToken cancellationToken);
     Task<EmployeeDto> UpdateEmployeeAsync(Guid id, EmployeeUpsertRequest request, CancellationToken cancellationToken);
     Task DeactivateEmployeeAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<PagedResult<MobileAccountDto>> GetMobileAccountsAsync(PagedRequest request, CancellationToken cancellationToken, SimStatus? status = null);
+    Task<PagedResult<MobileAccountDto>> GetMobileAccountsAsync(PagedRequest request, CancellationToken cancellationToken, SimStatus? status = null, string? factoryCode = null, string? departmentCode = null);
     Task<MobileAccountDto> GetMobileAccountAsync(Guid id, CancellationToken cancellationToken);
     Task<MobileAccountDto> CreateMobileAccountAsync(MobileAccountUpsertRequest request, CancellationToken cancellationToken);
     Task<MobileAccountDto> UpdateMobileAccountAsync(Guid id, MobileAccountUpsertRequest request, CancellationToken cancellationToken);

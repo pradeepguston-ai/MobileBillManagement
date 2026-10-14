@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import type { EntityRow } from '../../api/types'
 import { StatusBadge } from '../../components/common/StatusBadge'
 import { masterDataEditorRoles, organisationMasterEditorRoles } from '../../auth/roles'
-import type { MasterDataPageConfig } from './MasterDataPage'
+import type { MasterDataListFilter, MasterDataPageConfig } from './MasterDataPage'
 import { employeeLabel, employeeSearchText } from '../../utils/employeeLabel'
 
 type Row = EntityRow
@@ -40,6 +40,11 @@ const packageOption = (row: Row) => ({ value: String(row.id), label: `${value(ro
 const codeOption = (row: Row, parentKey?: string) => ({ value: String(row.code), label: `${String(row.code)} — ${String(row.name)}`, parentValue: parentKey ? String(row[parentKey] ?? '') : undefined })
 // For masters with hidden codes: the code is still the value saved, but only the name is shown.
 const nameOption = (row: Row, parentKey?: string) => ({ value: String(row.code), label: String(row.name), parentValue: parentKey ? String(row[parentKey] ?? '') : undefined })
+// Factory and Department drop-downs above the Employees and Mobile Allocations lists (by name; the code is sent).
+const organisationFilters: MasterDataListFilter[] = [
+  { key: 'factoryCode', label: 'Factory', path: '/api/factories', toOption: row => nameOption(row) },
+  { key: 'departmentCode', label: 'Department', path: '/api/departments', toOption: row => nameOption(row) },
+]
 // Department → Section → Sub Section.
 export const sectionsConfig: MasterDataPageConfig<Row> = {
   title: 'Sections',
@@ -76,6 +81,7 @@ export const employeesConfig: MasterDataPageConfig<Row> = {
   path: '/api/employees',
   editRoles: organisationMasterEditorRoles,
   importer: { roles: organisationMasterEditorRoles, title: 'Import employees from Excel' },
+  listFilters: organisationFilters,
   columns: [{ key: 'epf', header: 'EPF' }, { key: 'title', header: 'Title' }, { key: 'fullName', header: 'Full Name' }, { key: 'nameWithInitials', header: 'Name with Initials' }, { key: 'callingName', header: 'Calling Name' }, { key: 'gender', header: 'Gender' }, { key: 'categoryName', header: 'Category' }, { key: 'designationName', header: 'Designation' }, { key: 'factoryName', header: 'Factory' }, { key: 'departmentName', header: 'Department' }, { key: 'sectionName', header: 'Section' }, { key: 'subSectionName', header: 'Sub Section' }, { key: 'thirdPartyCompanyName', header: 'Third Party Allocation' }, { key: 'isActive', header: 'Status', render: employeeStatus }],
   fields: [{ key: 'epf', label: 'EPF', required: true }, { key: 'fullName', label: 'Full Name', required: true }, { key: 'nameWithInitials', label: 'Name with Initials' }, { key: 'callingName', label: 'Calling Name' }, { key: 'gender', label: 'Gender', type: 'select', required: true, options: genderOptions }, { key: 'title', label: 'Title', disabled: true, helperText: 'Set from Gender.' }, { key: 'categoryCode', label: 'Category', type: 'select', required: true }, { key: 'designationCode', label: 'Designation', type: 'select', required: true }, { key: 'factoryCode', label: 'Factory', type: 'select', required: true }, { key: 'departmentCode', label: 'Department', type: 'select', required: true }, { key: 'sectionCode', label: 'Section', type: 'select', dependsOn: 'departmentCode' }, { key: 'subSectionCode', label: 'Sub Section', type: 'select', dependsOn: 'sectionCode' }, { key: 'thirdPartyCompanyCode', label: 'Third Party Allocation', type: 'select', emptyOptionLabel: 'Not Applicable', visibleWhen: (values, options) => isThirdParty(options.categoryCode?.find(option => option.value === values.categoryCode)) }],
   lookups: [
@@ -110,6 +116,7 @@ export const mobileAllocationsConfig: MasterDataPageConfig<Row> = {
   title: 'Mobile Allocations',
   path: '/api/mobile-accounts',
   editRoles: masterDataEditorRoles,
+  listFilters: organisationFilters,
   // Importing creates allocations and sets amounts, so it is for Administrator and IT Engineer only.
   importer: { roles: masterDataEditorRoles, title: 'Import mobile allocations from Excel' },
   // SIM Pool: release a resigned holder's number, give a pooled number to a new holder, or disconnect it.
