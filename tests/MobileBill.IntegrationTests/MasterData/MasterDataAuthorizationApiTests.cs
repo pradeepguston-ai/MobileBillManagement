@@ -30,6 +30,7 @@ public sealed class MasterDataAuthorizationApiTests
     [InlineData(UserRole.HeadOfIt)]
     [InlineData(UserRole.GroupHrManager)]
     [InlineData(UserRole.Cfo)]
+    [InlineData(UserRole.Viewer)]
     public async Task Read_only_roles_cannot_change_any_master_data(UserRole role)
     {
         using var factory = new WebApplicationFactory<Program>();
@@ -114,6 +115,32 @@ public sealed class MasterDataAuthorizationApiTests
 
         foreach (var request in OrganisationMasterWrites)
             Assert.Equal(HttpStatusCode.BadRequest, (await Send(client, (string)request[0]!, (string)request[1]!, request[2])).StatusCode);
+    }
+
+    // Every action is checked for its role before any database work, so 403 here proves the Viewer is refused.
+    public static TheoryData<string, string, object?> BillingActions => new()
+    {
+        { "POST", "/api/bill-batches", new { providerId = Guid.NewGuid(), corporateCode = "C", billingYear = 2026, billingMonth = 9 } },
+        { "POST", "/api/bill-batches/00000000-0000-0000-0000-000000000001/match", null },
+        { "POST", "/api/bill-batches/00000000-0000-0000-0000-000000000001/workflow/submit", new { comment = "x" } },
+        { "POST", "/api/bill-batches/00000000-0000-0000-0000-000000000001/lock", null },
+        { "PUT", "/api/monthly-bills/00000000-0000-0000-0000-000000000001/assessment", new { responsibility = "ByUser", finalDeduction = 0m } },
+        { "POST", "/api/monthly-bills/bulk-assessment", new { monthlyBillIds = new[] { Guid.NewGuid() }, responsibility = "ByUser" } },
+        { "POST", "/api/bill-exceptions/00000000-0000-0000-0000-000000000001/resolve-mobile-account", new { mobileAccountId = Guid.NewGuid(), comment = "Resolved by viewer" } },
+        { "GET", "/api/users", null },
+    };
+
+    [Fact]
+    public async Task Viewer_cannot_change_masters_devices_billing_or_users()
+    {
+        using var factory = new WebApplicationFactory<Program>();
+        using var client = factory.CreateClient();
+        TestAuth.Authorize(client, UserRole.Viewer);
+
+        foreach (var request in AdministratorOnlyWrites.Concat(OrganisationMasterWrites).Concat(BillingActions))
+            Assert.True(HttpStatusCode.Forbidden == (await Send(client, (string)request[0]!, (string)request[1]!, request[2])).StatusCode, $"{request[0]} {request[1]} should be refused");
+        foreach (var request in SimPoolActions)
+            Assert.Equal(HttpStatusCode.Forbidden, (await Send(client, "POST", (string)request[0]!, request[1])).StatusCode);
     }
 
     [Theory]
