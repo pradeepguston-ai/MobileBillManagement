@@ -15,9 +15,12 @@ public sealed class OpenRouterOptions
     public const string SectionName = "OpenRouter";
     public string BaseUrl { get; set; } = "https://openrouter.ai/api/v1/";
     public string? ApiKey { get; set; }
-    public string Model { get; set; } = "nvidia/nemotron-3-super-120b-a12b:free";
-    // Used by OpenRouter when the main model is busy, rate limited or unavailable. Empty for none.
-    public string? FallbackModel { get; set; } = "google/gemma-4-31b-it:free";
+    // Free models come and go on OpenRouter; when one is withdrawn the assistant reports it, and these settings
+    // (or OpenRouter__Model / OpenRouter__FallbackModel) are changed to models listed with tool support.
+    public string Model { get; set; } = "nvidia/nemotron-3-ultra-550b-a55b:free";
+    // Used by OpenRouter when the main model is busy, rate limited or unavailable; from another provider so both are
+    // unlikely to fail together. Empty for none.
+    public string? FallbackModel { get; set; } = "poolside/laguna-s-2.1:free";
     public int MaxTokens { get; set; } = 1500;
     public int TimeoutSeconds { get; set; } = 90;
 }
@@ -72,6 +75,8 @@ public sealed class OpenRouterChatModelClient(HttpClient http, IOptions<OpenRout
             ["messages"] = messages.Select(ToJson).ToList(),
             ["temperature"] = 0.2,
             ["max_tokens"] = settings.MaxTokens,
+            // Reasoning models return their thinking as well; only the answer is wanted.
+            ["reasoning"] = new { exclude = true },
         };
         // With a fallback, OpenRouter tries the models in order.
         if (string.IsNullOrWhiteSpace(settings.FallbackModel)) body["model"] = settings.Model;
@@ -126,6 +131,7 @@ public sealed class OpenRouterChatModelClient(HttpClient http, IOptions<OpenRout
             HttpStatusCode.TooManyRequests => "The free AI model is busy or today's free limit has been used. Try again in a minute.",
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "The assistant's OpenRouter API key was not accepted. Ask an administrator to check it.",
             HttpStatusCode.PaymentRequired => "The OpenRouter account has run out of credit for this model.",
+            HttpStatusCode.NotFound => "The AI model set for the assistant is no longer offered. Ask an administrator to choose another free model in the OpenRouter settings.",
             _ => "The AI service could not answer just now. Try again shortly.",
         });
     }

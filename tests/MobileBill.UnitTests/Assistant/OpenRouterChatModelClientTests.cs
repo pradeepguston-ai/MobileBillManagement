@@ -30,6 +30,7 @@ public sealed class OpenRouterChatModelClientTests
         Assert.Equal("Bearer test-key", handler.Request.Headers.Authorization!.ToString());
         using var body = JsonDocument.Parse(handler.Body!);
         Assert.Equal(["main:free", "backup:free"], body.RootElement.GetProperty("models").EnumerateArray().Select(model => model.GetString()));
+        Assert.True(body.RootElement.GetProperty("reasoning").GetProperty("exclude").GetBoolean());
         var messages = body.RootElement.GetProperty("messages");
         Assert.Equal(["system", "user", "assistant", "tool"], messages.EnumerateArray().Select(message => message.GetProperty("role").GetString()));
         Assert.Equal("get_sim_pool", messages[2].GetProperty("tool_calls")[0].GetProperty("function").GetProperty("name").GetString());
@@ -56,6 +57,9 @@ public sealed class OpenRouterChatModelClientTests
     [InlineData(HttpStatusCode.Unauthorized, "{}", "API key was not accepted")]
     [InlineData(HttpStatusCode.OK, """{ "error": { "code": 429, "message": "Rate limit exceeded" } }""", "free limit")]
     [InlineData(HttpStatusCode.OK, "not json", "could not answer")]
+    // A withdrawn free model: OpenRouter answers 404, inside a 200 or on its own.
+    [InlineData(HttpStatusCode.OK, """{ "error": { "code": 404, "message": "Provider returned error" } }""", "no longer offered")]
+    [InlineData(HttpStatusCode.NotFound, "{}", "no longer offered")]
     public async Task Problems_become_a_message_that_can_be_shown(HttpStatusCode status, string response, string expected)
     {
         var failure = await Assert.ThrowsAsync<AssistantUnavailableException>(() => Client(new FakeHandler(status, response)).CompleteAsync([ChatModelMessage.User("Hi")], [], default));
