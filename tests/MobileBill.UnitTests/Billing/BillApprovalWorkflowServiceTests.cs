@@ -92,6 +92,60 @@ public sealed class BillApprovalWorkflowServiceTests
         Assert.All(await db.ApprovalHistories.ToListAsync(), history => Assert.Null(history.Comment));
     }
 
+    [Theory]
+    [InlineData(BillExceptionType.MOBILE_NOT_FOUND, BillExceptionStatus.Open, false)]
+    [InlineData(BillExceptionType.MULTIPLE_ACTIVE_ALLOCATIONS, BillExceptionStatus.InReview, false)]
+    // A resigned (inactive) employee's number does not stop the submission, nor does an exception already dealt with.
+    [InlineData(BillExceptionType.EMPLOYEE_NOT_ACTIVE, BillExceptionStatus.Open, true)]
+    [InlineData(BillExceptionType.MOBILE_NOT_FOUND, BillExceptionStatus.Resolved, true)]
+    [InlineData(BillExceptionType.MOBILE_NOT_FOUND, BillExceptionStatus.Waived, true)]
+    public async Task Submit_is_refused_while_numbers_in_exception_review_are_not_assigned(BillExceptionType type, BillExceptionStatus status, bool allowed)
+    {
+        await using var db = CreateDb();
+        var batch = await AddBatchAsync(db);
+        var lineId = Guid.NewGuid();
+        db.BillExceptions.Add(new BillException { BillBatchId = batch.Id, BillLineId = lineId, ExceptionType = type, Severity = BillExceptionSeverity.Blocking, Status = status, Description = "x" });
+        if (type == BillExceptionType.EMPLOYEE_NOT_ACTIVE)
+            db.BillExceptions.Add(new BillException { BillBatchId = batch.Id, BillLineId = lineId, ExceptionType = BillExceptionType.ZERO_BILL, Severity = BillExceptionSeverity.Information, Description = "x" });
+        await db.SaveChangesAsync();
+        var service = new EfBillApprovalWorkflowService(db, new AllowWorkflowAuthorization(), new TestUser(), new TestClock());
+
+        if (allowed)
+        {
+            await service.SubmitAsync(batch.Id, new WorkflowCommentRequest(null), default);
+            Assert.Equal(BillBatchStatus.ITReview, (await db.BillBatches.SingleAsync()).Status);
+            return;
+        }
+        var refusal = await Assert.ThrowsAsync<BillWorkflowConflictException>(() => service.SubmitAsync(batch.Id, new WorkflowCommentRequest(null), default));
+        Assert.Contains("1 number(s) in Exception Review are not assigned", refusal.Message);
+        Assert.Equal(BillBatchStatus.Validated, (await db.BillBatches.SingleAsync()).Status);
+        Assert.Empty(await db.ApprovalHistories.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Submit_is_refused_while_a_number_has_no_responsibility_assigned()
+    {
+        await using var db = CreateDb();
+        var batch = await AddBatchAsync(db);
+        var line = new BillLine { BillBatchId = batch.Id, MobileNumber = "7", RawText = "7" };
+        db.BillLines.Add(line);
+        var bill = new MonthlyBill { EmployeeId = Guid.NewGuid(), MobileAccountId = Guid.NewGuid(), BillLineId = line.Id, EmployeeEpfSnapshot = "E", EmployeeNameSnapshot = "Employee", MobileNumberSnapshot = "7", CategoryCodeSnapshot = "CAT", DesignationCodeSnapshot = "DES", FactoryCodeSnapshot = "FAC", DepartmentCodeSnapshot = "DEP", EntitlementEffectiveFromSnapshot = new DateOnly(2026, 9, 1), CalculatedExcess = 25m };
+        db.MonthlyBills.Add(bill);
+        // A number still open in Exception Review that already has its bill is not an unassigned number.
+        db.BillExceptions.Add(new BillException { BillBatchId = batch.Id, BillLineId = line.Id, ExceptionType = BillExceptionType.ZERO_BILL, Severity = BillExceptionSeverity.Information, Description = "x" });
+        await db.SaveChangesAsync();
+        var service = new EfBillApprovalWorkflowService(db, new AllowWorkflowAuthorization(), new TestUser(), new TestClock());
+
+        var refusal = await Assert.ThrowsAsync<BillWorkflowConflictException>(() => service.SubmitAsync(batch.Id, new WorkflowCommentRequest(null), default));
+        Assert.Contains("1 number(s) have no responsibility assigned", refusal.Message);
+
+        bill.Responsibility = Responsibility.ByUser;
+        bill.AssessedAt = DateTimeOffset.UnixEpoch;
+        await db.SaveChangesAsync();
+        await service.SubmitAsync(batch.Id, new WorkflowCommentRequest(null), default);
+        Assert.Equal(BillBatchStatus.ITReview, (await db.BillBatches.SingleAsync()).Status);
+    }
+
     private static MobileBillDbContext CreateDb() => new(new DbContextOptionsBuilder<MobileBillDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     private static async Task<BillBatch> AddBatchAsync(MobileBillDbContext db, BillBatchStatus status = BillBatchStatus.Validated)
     {

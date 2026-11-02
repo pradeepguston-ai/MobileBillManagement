@@ -49,6 +49,10 @@ public sealed class EfBillApprovalWorkflowService(MobileBillDbContext db, IBillR
         var batch = await Find(batchId, token);
         Require(batch.Status == BillBatchStatus.Validated, "Only a Validated batch can be submitted for IT review.");
         Require(batch.ValidationLevel != ValidationLevel.None, "A batch must pass validation before IT submission.");
+        var unassignedNumbers = await UnassignedNumberCount(batchId, token);
+        Require(unassignedNumbers == 0, $"{unassignedNumbers} number(s) in Exception Review are not assigned to an employee. Assign them before submitting for IT review.");
+        var unassessed = await db.MonthlyBills.CountAsync(x => x.BillLine.BillBatchId == batchId && x.AssessedAt == null, token);
+        Require(unassessed == 0, $"{unassessed} number(s) have no responsibility assigned. Assign By User or By Company before submitting for IT review.");
         return await TransitionWithHistory(batch, ApprovalStage.ITReview, WorkflowRole.ITReviewer, ApprovalAction.Submit, ApprovalDecision.Pending, BillBatchStatus.ITReview, request.Comment, token);
     }
 
@@ -101,6 +105,18 @@ public sealed class EfBillApprovalWorkflowService(MobileBillDbContext db, IBillR
         db.ApprovalHistories.Add(new ApprovalHistory { BillBatchId = batch.Id, Stage = stage, WorkflowRole = role, Action = action, Decision = decision, Comment = Trim(comment), UserId = currentUser.UserId, DisplayName = currentUser.DisplayName, ApprovedBy = currentUser.DisplayName, ApprovedAt = now, PreviousStatus = previous, NewStatus = next, CreatedAtUtc = now, CreatedBy = currentUser.UserId });
         await db.SaveChangesAsync(token);
         return new BillWorkflowResult(batch.Id, next);
+    }
+
+    // Bill lines still open in Exception Review with no monthly bill. Lines for resigned (inactive) employees are left out:
+    // they do not stop the submission.
+    private async Task<int> UnassignedNumberCount(Guid batchId, CancellationToken token)
+    {
+        var exceptions = db.BillExceptions.Where(x => x.BillBatchId == batchId && x.BillLineId != null);
+        return await exceptions
+            .Where(x => (x.Status == BillExceptionStatus.Open || x.Status == BillExceptionStatus.InReview)
+                && !db.MonthlyBills.Any(b => b.BillLineId == x.BillLineId)
+                && !exceptions.Any(e => e.BillLineId == x.BillLineId && e.ExceptionType == BillExceptionType.EMPLOYEE_NOT_ACTIVE))
+            .Select(x => x.BillLineId).Distinct().CountAsync(token);
     }
 
     private async Task RequireAuthorization(BillWorkflowAction action, CancellationToken token)
