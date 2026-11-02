@@ -36,7 +36,7 @@ describe('MonthlyBillOverviewPage', () => {
     expect(screen.queryByText('Exception Count')).toBeNull()
     expect(screen.getByText('Total Calculated Excess').parentElement?.textContent).toContain('9,000.00')
     expect(screen.queryByText('Unassigned Count')).toBeNull()
-    expect(screen.getAllByText(/^(Total Actual Bill|Total Calculated Excess|Final User Deduction|Company Responsibility Amount)$/).map(node => node.textContent)).toEqual(['Total Actual Bill', 'Total Calculated Excess', 'Final User Deduction', 'Company Responsibility Amount'])
+    expect(screen.getAllByText(/^(Total Actual Bill|Total Calculated Excess|Deduction from Employees|Company Responsibility Amount)$/).map(node => node.textContent)).toEqual(['Total Actual Bill', 'Total Calculated Excess', 'Deduction from Employees', 'Company Responsibility Amount'])
     expect(screen.getByText('Current stage: HR Approval')).toBeTruthy()
     expect(screen.getByText('July 2026')).toBeTruthy()
     expect(screen.getAllByRole('link', { name: 'Open' })[0].getAttribute('href')).toBe('/billing/newest/review')

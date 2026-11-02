@@ -51,7 +51,7 @@ describe('MonthlyBillReviewPage', () => {
     mockReview(); renderPage()
 
     expect(await screen.findByText('Employee One')).toBeTruthy()
-    for (const label of ['Total Accounts', 'Total Actual Bill', 'Total Calculated Excess', 'Total Final Deduction', 'Company Responsibility Amount', 'Exception Count', 'Unmatched Count', 'Assigned Count', 'Unassigned Count']) expect(screen.getByText(label)).toBeTruthy()
+    for (const label of ['Total Accounts', 'Total Actual Bill', 'Total Calculated Excess', 'Deduction from Employees', 'Company Responsibility Amount', 'Exception Count', 'Unmatched Count', 'Assigned Count', 'Unassigned Count']) expect(screen.getByText(label)).toBeTruthy()
     expect(screen.getByText('Billing Period: August 2026', { exact: false })).toBeTruthy()
     expect(screen.getByText('Sam')).toBeTruthy()
     expect(screen.getAllByText('Unassessed').length).toBeGreaterThan(0)
@@ -115,6 +115,21 @@ describe('MonthlyBillReviewPage', () => {
     expect(companyLine.textContent).toContain('40.00 (Company)')
     expect(userLine.textContent).not.toContain('(Company)')
     expect(userLine.textContent).toContain('25.00')
+  })
+
+  it('shows the deduction and its responsibility when hovering a row with an excess', async () => {
+    const userRow = { ...row, responsibility: 'ByUser', finalDeduction: 40, isAssessed: true }
+    const companyRow = { ...row, id: 'bill-2', mobileNumber: '768791862', employeeName: 'Employee Two', responsibility: 'ByCompany', isAssessed: true }
+    mockReview({ rows: [userRow, companyRow] }); renderPage()
+
+    fireEvent.mouseEnter((await screen.findByText('Employee One')).closest('tr')!)
+    const userPopup = await screen.findByRole('tooltip')
+    expect(userPopup.textContent).toMatch(/Deduction: LKR\s40\.00/)
+    expect(userPopup.textContent).toContain('Status: By User')
+
+    fireEvent.mouseLeave(screen.getByText('Employee One').closest('tr')!)
+    fireEvent.mouseEnter(screen.getByText('Employee Two').closest('tr')!)
+    await waitFor(() => expect(screen.getByRole('tooltip').textContent).toContain('Status: By Company'))
   })
 
   it('highlights rows that have a Calculated Excess', async () => {

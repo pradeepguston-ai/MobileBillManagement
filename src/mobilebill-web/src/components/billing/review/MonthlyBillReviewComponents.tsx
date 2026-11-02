@@ -35,7 +35,7 @@ export function ReviewHeader({ summary, period }: { summary?: ReviewSummary; per
 
 export function ReviewKpis({ summary }: { summary: ReviewSummary }) {
   // Amounts in one row (4) and counts in another (5) so the nine cards form two even rows instead of leaving one orphaned.
-  const amounts: Array<[string, string]> = [['Total Actual Bill', formatCurrency(summary.totalActualBill)], ['Total Calculated Excess', formatCurrency(summary.totalCalculatedExcess)], ['Total Final Deduction', formatCurrency(summary.totalFinalDeduction)], ['Company Responsibility Amount', formatCurrency(summary.companyResponsibilityAmount)]]
+  const amounts: Array<[string, string]> = [['Total Actual Bill', formatCurrency(summary.totalActualBill)], ['Total Calculated Excess', formatCurrency(summary.totalCalculatedExcess)], ['Deduction from Employees', formatCurrency(summary.totalFinalDeduction)], ['Company Responsibility Amount', formatCurrency(summary.companyResponsibilityAmount)]]
   const counts: Array<[string, number]> = [['Total Accounts', summary.totalAccounts], ['Exception Count', summary.exceptionCount], ['Unmatched Count', summary.unmatchedCount], ['Assigned Count', summary.assessedCount], ['Unassigned Count', summary.unassessedCount]]
   const grid = (columns: number) => ({ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: `repeat(${columns}, minmax(0, 1fr))` }, gap: 2 })
   return <Box sx={{ display: 'grid', gap: 2 }}>
@@ -92,13 +92,14 @@ function TruncatedCell({ text, width, onHoverChange }: { text?: string | null; w
   </Tooltip>
 }
 
-// Hovering a row with a deduction (Calculated Excess above 0) shows it, including over the name; it stays hidden
+// Hovering a row with a deduction (Calculated Excess above 0) shows it and who bears it, including over the name; it stays hidden
 // over a designation, which shows its own full-text popup.
 // The row tracks the pointer itself so the popup always closes when the pointer leaves, whichever cell it leaves from.
 function ReviewTableRow({ row, selected, selectable, onToggle, onOpen }: { row: ReviewRow; selected: boolean; selectable: boolean; onToggle: () => void; onOpen: () => void }) {
   const [hovering, setHovering] = useState(false)
   const [deductionPopupBlocked, setDeductionPopupBlocked] = useState(false)
-  return <Tooltip title={`Deduction: ${formatCurrency(row.calculatedExcess)}`} followCursor describeChild open={hovering && !deductionPopupBlocked && row.calculatedExcess > 0} disableHoverListener disableFocusListener disableTouchListener>
+  const deductionPopup = <><div>Deduction: {formatCurrency(row.calculatedExcess)}</div><div>Status: {displayResponsibility(row.responsibility ?? undefined)}</div></>
+  return <Tooltip title={deductionPopup} followCursor describeChild open={hovering && !deductionPopupBlocked && row.calculatedExcess > 0} disableHoverListener disableFocusListener disableTouchListener>
     <TableRow hover onClick={onOpen} onMouseEnter={() => setHovering(true)} onMouseLeave={() => { setHovering(false); setDeductionPopupBlocked(false) }} sx={{ cursor: 'pointer', bgcolor: row.calculatedExcess > 0 ? 'rgba(255, 201, 40, 0.22)' : row.hasException ? 'rgba(237, 108, 2, 0.08)' : undefined }}>
       <TableCell padding="checkbox" onClick={event => event.stopPropagation()} sx={{ borderLeft: '4px solid', borderLeftColor: row.hasException ? 'warning.main' : row.calculatedExcess > 0 ? '#F39A18' : 'transparent' }}><Checkbox slotProps={{ input: { 'aria-label': `Select ${row.mobileNumber}` } }} checked={selected} disabled={!selectable} onChange={onToggle} /></TableCell>
       {reviewColumns.map(column => <TableCell key={column.key} sx={{ whiteSpace: 'nowrap', ...(truncatedColumnWidths[column.key] ? { width: truncatedColumnWidths[column.key], maxWidth: truncatedColumnWidths[column.key] } : {}), ...(column.key === 'employeeName' ? { width: '1%' } : {}), ...(column.key === 'calculatedExcess' && row.calculatedExcess > 0 ? { fontWeight: 700, color: 'warning.main' } : {}) }}>{column.key === 'finalDeduction' ? <FinalDeductionCell row={row} /> : moneyColumns.has(column.key) ? formatCurrency(row[column.key] as number) : column.key === 'responsibility' ? row.responsibility ?? 'Unassessed' : column.key === 'employeeName' ? displayName(row) : truncatedColumnWidths[column.key] ? <TruncatedCell text={row[column.key] as string | null} width={truncatedColumnWidths[column.key]!} onHoverChange={setDeductionPopupBlocked} /> : String(row[column.key] ?? '—')}</TableCell>)}
