@@ -94,6 +94,7 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
         closing.Format.Font.Italic = true;
         closing.Format.SpaceBefore = Unit.FromPoint(10);
 
+        AddSignatures(section);
         AddFooter(section);
         return document;
     }
@@ -188,6 +189,43 @@ public sealed class PdfBillingReportService(MobileBillDbContext db, IClock clock
             row.Cells[0].AddParagraph(label);
             var value = row.Cells[1].AddParagraph(Money(amount));
             value.Format.Alignment = ParagraphAlignment.Right;
+        }
+    }
+
+    public static readonly string[] Signatories = ["IT Engineer", "Head of IT", "Group HR Manager", "CFO"];
+    // Signature line widths and the gaps between them (mm); 4 × 55 + 3 × 19 = the 277mm printable width.
+    private const double SignatureWidth = 55, SignatureGap = 19;
+
+    // One signature line per approver across the end of the report, kept together on one page.
+    private static void AddSignatures(Section section)
+    {
+        var spacer = section.AddParagraph();
+        spacer.Format.SpaceBefore = Unit.FromMillimeter(14);
+        spacer.Format.KeepWithNext = true;
+
+        var table = section.AddTable();
+        for (var index = 0; index < Signatories.Length; index++)
+        {
+            if (index > 0) table.AddColumn(Unit.FromMillimeter(SignatureGap));
+            table.AddColumn(Unit.FromMillimeter(SignatureWidth));
+        }
+
+        var signHere = table.AddRow();
+        signHere.Height = Unit.FromMillimeter(14);
+        signHere.KeepWith = 2;
+        var titles = table.AddRow();
+        titles.Format.Font.Bold = true;
+        titles.Format.Font.Size = 8;
+        titles.TopPadding = Unit.FromPoint(3);
+        var dates = table.AddRow();
+        dates.TopPadding = Unit.FromPoint(4);
+        for (var index = 0; index < Signatories.Length; index++)
+        {
+            var column = index * 2;
+            titles.Cells[column].Borders.Top.Width = 0.75;
+            titles.Cells[column].Format.Alignment = ParagraphAlignment.Center;
+            titles.Cells[column].AddParagraph(Signatories[index]);
+            dates.Cells[column].AddParagraph("Date: ............................................");
         }
     }
 

@@ -236,6 +236,10 @@ public sealed class BillingExcelReportApiTests
         Assert.Contains("Borne by Company (By Company)", text);
         Assert.Contains("Less: Excluded Records", text);
         Assert.Contains("This is a system generated report. No signature required.", text);
+        // The signature fields close the report, after the last row and the summary.
+        var lastPage = string.Join(" ", pdf.GetPage(pdf.NumberOfPages).GetWords().Select(word => word.Text));
+        Assert.Contains("IT Engineer Head of IT Group HR Manager CFO", lastPage);
+        Assert.True(text.LastIndexOf("Borne by Company", StringComparison.Ordinal) < text.LastIndexOf("Group HR Manager", StringComparison.Ordinal));
     }
 
     [Fact]
