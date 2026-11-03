@@ -118,18 +118,19 @@ describe('MonthlyBillReviewPage', () => {
   })
 
   it('shows the deduction and its responsibility when hovering a row with an excess', async () => {
-    const userRow = { ...row, responsibility: 'ByUser', finalDeduction: 40, isAssessed: true }
+    const userRow = { ...row, factoryCode: 'MF', responsibility: 'ByUser', finalDeduction: 40, isAssessed: true }
     const companyRow = { ...row, id: 'bill-2', mobileNumber: '768791862', employeeName: 'Employee Two', responsibility: 'ByCompany', isAssessed: true }
     mockReview({ rows: [userRow, companyRow] }); renderPage()
 
     fireEvent.mouseEnter((await screen.findByText('Employee One')).closest('tr')!)
     const userPopup = await screen.findByRole('tooltip')
+    expect(userPopup.textContent).toMatch(/^SamMF - ITDeduction/)
     expect(userPopup.textContent).toMatch(/Deduction: LKR\s40\.00/)
-    expect(userPopup.textContent).toContain('Status: By User')
+    expect(userPopup.textContent).toContain('Deduction Status: By User')
 
     fireEvent.mouseLeave(screen.getByText('Employee One').closest('tr')!)
     fireEvent.mouseEnter(screen.getByText('Employee Two').closest('tr')!)
-    await waitFor(() => expect(screen.getByRole('tooltip').textContent).toContain('Status: By Company'))
+    await waitFor(() => expect(screen.getByRole('tooltip').textContent).toContain('Deduction Status: By Company'))
   })
 
   it('highlights rows that have a Calculated Excess', async () => {

@@ -98,7 +98,9 @@ function TruncatedCell({ text, width, onHoverChange }: { text?: string | null; w
 function ReviewTableRow({ row, selected, selectable, onToggle, onOpen }: { row: ReviewRow; selected: boolean; selectable: boolean; onToggle: () => void; onOpen: () => void }) {
   const [hovering, setHovering] = useState(false)
   const [deductionPopupBlocked, setDeductionPopupBlocked] = useState(false)
-  const deductionPopup = <><div>Deduction: {formatCurrency(row.calculatedExcess)}</div><div>Status: {displayResponsibility(row.responsibility ?? undefined)}</div></>
+  // The calling name heads the popup (without one, the displayed name), then the factory code and department.
+  const organisation = [row.factoryCode?.trim() || row.factory, row.department].filter(Boolean).join(' - ')
+  const deductionPopup = <><div style={{ fontWeight: 700 }}>{row.callingName?.trim() || displayName(row)}</div>{organisation && <div>{organisation}</div>}<div>Deduction: {formatCurrency(row.calculatedExcess)}</div><div>Deduction Status: {displayResponsibility(row.responsibility ?? undefined)}</div></>
   return <Tooltip title={deductionPopup} followCursor describeChild open={hovering && !deductionPopupBlocked && row.calculatedExcess > 0} disableHoverListener disableFocusListener disableTouchListener>
     <TableRow hover onClick={onOpen} onMouseEnter={() => setHovering(true)} onMouseLeave={() => { setHovering(false); setDeductionPopupBlocked(false) }} sx={{ cursor: 'pointer', bgcolor: row.calculatedExcess > 0 ? 'rgba(255, 201, 40, 0.22)' : row.hasException ? 'rgba(237, 108, 2, 0.08)' : undefined }}>
       <TableCell padding="checkbox" onClick={event => event.stopPropagation()} sx={{ borderLeft: '4px solid', borderLeftColor: row.hasException ? 'warning.main' : row.calculatedExcess > 0 ? '#F39A18' : 'transparent' }}><Checkbox slotProps={{ input: { 'aria-label': `Select ${row.mobileNumber}` } }} checked={selected} disabled={!selectable} onChange={onToggle} /></TableCell>
