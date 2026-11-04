@@ -18,6 +18,9 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
         PackageColumn = 10, CreditLimitColumn = 11, MonthlyRentalColumn = 12, ActualBillColumn = 13,
         VarianceColumn = 14, DeductionColumn = 15, ResponsibilityColumn = 16, RemarkColumn = 17;
     private const string MoneyFormat = "#,##0.00";
+    // The summary amounts below the totals go in column D, beside their labels in columns A to C.
+    private const int SummaryAmountColumn = NameColumn;
+    private const double MaximumTextWidth = 50;
 
     public async Task<BillingExcelReportResult> ExportAsync(
         BillingExcelReportRequest request,
@@ -133,6 +136,8 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
             body.Style.Border.BottomBorderColor = XLColor.FromHtml("#D9E2F3");
             sheet.Range(firstDataRow, CreditLimitColumn, lastDataRow, DeductionColumn).Style.NumberFormat.Format = MoneyFormat;
             sheet.Range(firstDataRow, 2, lastDataRow, 3).Style.NumberFormat.Format = "@";
+            // Anything still wider than its column after the widths are set wraps instead of running into the next column.
+            sheet.Range(firstDataRow, NameColumn, lastDataRow, PackageColumn).Style.Alignment.WrapText = true;
         }
 
         var totalsRow = lastDataRow + 1;
@@ -171,7 +176,7 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
         sheet.Cell(lastSummaryRow + 2, 1).Style.Font.Italic = true;
 
         sheet.SheetView.FreezeRows(HeaderRow);
-        ApplyColumnWidths(sheet);
+        ApplyColumnWidths(sheet, firstDataRow, lastDataRow);
         sheet.PageSetup.PageOrientation = XLPageOrientation.Landscape;
         sheet.PageSetup.FitToPages(1, 0);
         sheet.PageSetup.SetRowsToRepeatAtTop(HeaderRow, HeaderRow);
@@ -185,24 +190,33 @@ public sealed class ClosedXmlBillingExcelReportService(MobileBillDbContext db, I
         return stream.ToArray();
     }
 
-    private static void WriteDeductionSplitRow(IXLWorksheet sheet, int row, string label, decimal amount)
+    private static void WriteDeductionSplitRow(IXLWorksheet sheet, int row, string label, decimal amount) => WriteSummaryRow(sheet, row, label, amount);
+
+    private static void WriteReconciliationRow(IXLWorksheet sheet, int row, string label, decimal amount) => WriteSummaryRow(sheet, row, label, amount);
+
+    // Summary lines below the totals: the label fills the first columns and its amount sits right next to it.
+    private static void WriteSummaryRow(IXLWorksheet sheet, int row, string label, decimal amount)
     {
         sheet.Cell(row, 1).Value = label;
-        sheet.Cell(row, DeductionColumn).Value = amount;
-        sheet.Cell(row, DeductionColumn).Style.NumberFormat.Format = MoneyFormat;
+        var value = sheet.Cell(row, SummaryAmountColumn);
+        value.Value = amount;
+        value.Style.NumberFormat.Format = MoneyFormat;
+        value.Style.Font.Bold = true;
     }
 
-    private static void WriteReconciliationRow(IXLWorksheet sheet, int row, string label, decimal amount)
+    private static void ApplyColumnWidths(IXLWorksheet sheet, int firstDataRow, int lastDataRow)
     {
-        sheet.Cell(row, 1).Value = label;
-        sheet.Cell(row, ActualBillColumn).Value = amount;
-        sheet.Cell(row, ActualBillColumn).Style.NumberFormat.Format = MoneyFormat;
-    }
-
-    private static void ApplyColumnWidths(IXLWorksheet sheet)
-    {
-        var widths = new[] { 9d, 16d, 12d, 30d, 18d, 22d, 28d, 22d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d };
+        var widths = new[] { 9d, 16d, 14d, 30d, 18d, 22d, 28d, 22d, 20d, 16d, 17d, 15d, 15d, 15d, 15d, 22d, 28d };
         for (var column = 1; column <= widths.Length; column++)
-            sheet.Column(column).Width = widths[column - 1];
+        {
+            var width = widths[column - 1];
+            // Text columns grow to their longest entry so names such as a long factory or department are not cut off by the next column.
+            if (column is >= NameColumn and <= PackageColumn && lastDataRow >= firstDataRow)
+            {
+                var longest = Enumerable.Range(firstDataRow, lastDataRow - firstDataRow + 1).Max(row => sheet.Cell(row, column).GetString().Length);
+                width = Math.Min(MaximumTextWidth, Math.Max(width, longest * 1.15 + 2));
+            }
+            sheet.Column(column).Width = width;
+        }
     }
 }

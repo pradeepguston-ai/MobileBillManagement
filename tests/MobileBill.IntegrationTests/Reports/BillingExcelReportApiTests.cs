@@ -103,17 +103,17 @@ public sealed class BillingExcelReportApiTests
         Assert.Equal("Totals", sheet.Cell(totalsRow, 1).GetString());
         Assert.Equal(200.25m, sheet.Cell(totalsRow, 13).GetValue<decimal>());
         Assert.Equal("Provider / Batch Total", sheet.Cell(totalsRow + 2, 1).GetString());
-        Assert.Equal(205.25m, sheet.Cell(totalsRow + 2, 13).GetValue<decimal>());
+        Assert.Equal(205.25m, sheet.Cell(totalsRow + 2, 4).GetValue<decimal>());
         Assert.Equal("Less: Excluded Records", sheet.Cell(totalsRow + 3, 1).GetString());
-        Assert.Equal(5m, sheet.Cell(totalsRow + 3, 13).GetValue<decimal>());
+        Assert.Equal(5m, sheet.Cell(totalsRow + 3, 4).GetValue<decimal>());
         Assert.Equal("Report Actual Bill Total", sheet.Cell(totalsRow + 4, 1).GetString());
-        Assert.Equal(200.25m, sheet.Cell(totalsRow + 4, 13).GetValue<decimal>());
+        Assert.Equal(200.25m, sheet.Cell(totalsRow + 4, 4).GetValue<decimal>());
         Assert.Equal("#,##0.00", sheet.Cell(totalsRow, 13).Style.NumberFormat.Format);
         Assert.Equal(999.88m, sheet.Cell(totalsRow, 15).GetValue<decimal>());
         Assert.Equal("Deducted from Employees (By User)", sheet.Cell(totalsRow + 6, 1).GetString());
-        Assert.Equal(0m, sheet.Cell(totalsRow + 6, 15).GetValue<decimal>());
+        Assert.Equal(0m, sheet.Cell(totalsRow + 6, 4).GetValue<decimal>());
         Assert.Equal("Borne by Company (By Company)", sheet.Cell(totalsRow + 7, 1).GetString());
-        Assert.Equal(999.88m, sheet.Cell(totalsRow + 7, 15).GetValue<decimal>());
+        Assert.Equal(999.88m, sheet.Cell(totalsRow + 7, 4).GetValue<decimal>());
     }
 
     [Fact]
@@ -243,6 +243,23 @@ public sealed class BillingExcelReportApiTests
     }
 
     [Fact]
+    public async Task Excel_text_columns_widen_to_fit_long_factory_and_department_names()
+    {
+        using var fixture = new ReportApiFixture();
+        const string factory = "GUSTON LANKA (PVT) LTD (GLL)", department = "INFORMATION TECHNOLOGY (IT)";
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow(actualBill: 100m) with { Factory = factory, Department = department }], 100m);
+
+        await using var content = await (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/excel")).Content.ReadAsStreamAsync();
+        using var workbook = new XLWorkbook(content);
+        var sheet = workbook.Worksheet("Monthly Bill Report");
+
+        Assert.Equal(factory, sheet.Cell(6, 8).GetString());
+        Assert.True(sheet.Column(8).Width >= factory.Length + 2);
+        Assert.True(sheet.Column(9).Width >= department.Length + 2);
+        Assert.True(sheet.Cell(6, 8).Style.Alignment.WrapText);
+    }
+
+    [Fact]
     public async Task Excel_report_also_shows_the_system_generated_notice()
     {
         using var fixture = new ReportApiFixture();
@@ -347,7 +364,7 @@ public sealed class BillingExcelReportApiTests
         using var workbook = new XLWorkbook(content);
         var sheet = workbook.Worksheet("Monthly Bill Report");
         var poolRow = sheet.RowsUsed().Single(row => row.Cell(1).GetString() == "SIM Pool cost (numbers with no holder)");
-        Assert.Equal(30m, poolRow.Cell(13).GetValue<decimal>());
+        Assert.Equal(30m, poolRow.Cell(4).GetValue<decimal>());
         Assert.Equal(HttpStatusCode.OK, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/pdf")).StatusCode);
     }
 
