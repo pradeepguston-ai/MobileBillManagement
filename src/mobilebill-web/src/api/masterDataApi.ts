@@ -62,4 +62,18 @@ export async function downloadImportTemplate(path: string) {
   URL.revokeObjectURL(url)
 }
 
+// Excel workbook of assigned numbers, the SIM Pool and disconnected numbers (one sheet each).
+export async function downloadMobileAllocationsReport() {
+  const response = await apiResponse('/api/mobile-accounts/export/excel')
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const fileName = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? 'Mobile_Allocations.xlsx'
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 export function deactivateMasterData(path: string, id: string) { return apiFetch<void>(`${path}/${id}/deactivate`, { method: 'POST' }) }

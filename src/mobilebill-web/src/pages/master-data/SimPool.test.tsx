@@ -70,6 +70,50 @@ describe('SIM Pool', () => {
     expect(screen.getByRole('cell', { name: 'Recent Leaver' })).toBeTruthy()
   })
 
+  it('lists disconnected numbers with the reason, read only', async () => {
+    const requested: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      requested.push(url)
+      if (url.includes('/api/mobile-accounts?') && url.includes('status=Disconnected')) return page([
+        { ...allocation, id: 'd1', mobileNumber: '0779999999', nameWithInitials: 'A. B. LEAVER', callingName: 'LEE', status: 'Disconnected', disconnectedOn: '2026-09-15', statusReason: 'Lost phone', isActive: false },
+      ])
+      return page([])
+    })
+    render(<MobileAllocationsPage />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Disconnected' }))
+    expect(await screen.findByRole('cell', { name: 'Lost phone' })).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Reason for Disconnection' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: '2026-09-15' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: 'A. B. LEAVER (LEE)' })).toBeTruthy()
+    // A view only: no create, edit, import, row actions or Active/Inactive filter.
+    const panel = screen.getByRole('tabpanel')
+    expect(within(panel).queryByRole('button', { name: /Create|Edit|Import|Disconnect|Deactivate/ })).toBeNull()
+    expect(within(panel).queryByRole('combobox', { name: 'Status' })).toBeNull()
+    expect(requested.some(url => url.includes('/api/mobile-accounts?') && url.includes('status=Disconnected'))).toBe(true)
+  })
+
+  it('downloads the allocations Excel report', async () => {
+    const requested: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      requested.push(url)
+      if (url.includes('/api/mobile-accounts/export/excel')) return new Response(new Blob(['xlsx']), { status: 200, headers: { 'Content-Disposition': 'attachment; filename="Mobile_Allocations_2026_11_06.xlsx"' } })
+      return page([])
+    })
+    const createObjectUrl = vi.fn(() => 'blob:report')
+    Object.assign(URL, { createObjectURL: createObjectUrl, revokeObjectURL: vi.fn() })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    render(<MobileAllocationsPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download Excel' }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(requested.some(url => url.includes('/api/mobile-accounts/export/excel'))).toBe(true)
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('Mobile_Allocations_2026_11_06.xlsx')
+  })
+
   it('resigns an employee from the employee list', async () => {
     const posted: string[] = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {

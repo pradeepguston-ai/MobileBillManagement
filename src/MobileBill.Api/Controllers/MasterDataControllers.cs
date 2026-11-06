@@ -53,6 +53,8 @@ public sealed class MobileAccountsController(IMasterDataService service) : Maste
     [HttpPost("import"), Authorize(Roles = MasterDataRoles.Editors), RequestSizeLimit(MaxImportBytes), RequestFormLimits(MultipartBodyLengthLimit = MaxImportBytes)]
     public Task<MasterDataImportResult> Import(IFormFile? file, [FromQuery] bool commit, [FromServices] IMasterDataImportService importer, CancellationToken token) =>
         ImportAsync(file, stream => importer.ImportMobileAccountsAsync(stream, commit, token));
+    // Excel workbook of assigned numbers, the SIM Pool and disconnected numbers; a read, so every signed-in role can download it.
+    [HttpGet("export/excel")] public async Task<IActionResult> ExportExcel([FromServices] IMobileAllocationReportService reports, CancellationToken token) { var file = await reports.ExportAsync(token); return File(file.Content, file.ContentType, file.FileName); }
     // Numbers waiting in the SIM Pool, oldest first, with days in pool and the long-idle flag.
     [HttpGet("pool")] public Task<IReadOnlyList<SimPoolItemDto>> Pool(CancellationToken token) => Service.GetSimPoolAsync(token);
     // Every change to allocations is for Administrator and IT Engineer; other roles view them only. (HR and Finance

@@ -199,6 +199,29 @@ export const mobileAllocationsConfig: MasterDataPageConfig<Row> = {
     simType: values.simType || null,
   }),
 }
+// Disconnected numbers with the date and reason given when they were disconnected. A view only: numbers are
+// disconnected with the Disconnect action on the Allocations tab.
+const disconnectedFilter = { status: 'Disconnected' }
+export const disconnectedNumbersConfig: MasterDataPageConfig<Row> = {
+  title: 'Disconnected Numbers',
+  path: '/api/mobile-accounts',
+  readOnly: true,
+  hideActiveFilter: true,
+  fixedFilters: disconnectedFilter,
+  listFilters: organisationFilters,
+  columns: [
+    { key: 'mobileNumber', header: 'Mobile Number' },
+    { key: 'epf', header: 'EPF' },
+    { key: 'nameWithInitials', header: 'Last Holder', format: (_, row) => employeeLabel({ nameWithInitials: row.nameWithInitials as string | null, fullName: value(row, 'employeeName'), callingName: row.callingName as string | null }) },
+    { key: 'factory', header: 'Factory' },
+    { key: 'department', header: 'Department' },
+    { key: 'disconnectedOn', header: 'Disconnected On', format: (_, row) => value(row, 'disconnectedOn') || '—' },
+    { key: 'statusReason', header: 'Reason for Disconnection', format: (_, row) => value(row, 'statusReason').trim() || '—' },
+  ],
+  fields: [],
+  toForm: () => ({}),
+  toRequest: () => ({}),
+}
 // Mobile packages are kept by Administrator and IT Engineer, like telecom providers.
 export const mobilePackagesConfig: MasterDataPageConfig<Row> = {
   title: 'Mobile Packages',

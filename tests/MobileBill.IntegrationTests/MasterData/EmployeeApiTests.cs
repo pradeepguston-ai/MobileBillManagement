@@ -304,6 +304,55 @@ public sealed class EmployeeApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Allocation_excel_report_has_a_sheet_each_for_assigned_pooled_and_disconnected_numbers()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+
+        using var factory = CreateApiFactory(connection);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MobileBillDbContext>();
+            await CreateEmployeeTablesAsync(connection);
+            var employee = await SeedEmployeeAsync(db);
+            db.MobileAccounts.AddRange(
+                new MobileAccount { MobileNumber = "0771111111", EmployeeId = employee.Id, MonthlyCreditLimit = 1500m, MonthlyRental = 700m, SimType = SimType.VoiceData, CreatedAtUtc = DateTimeOffset.UnixEpoch },
+                new MobileAccount { MobileNumber = "0772222222", EmployeeId = employee.Id, Status = SimStatus.Pooled, PooledOn = new DateOnly(2026, 10, 1), StatusReason = "Resigned", CreatedAtUtc = DateTimeOffset.UnixEpoch },
+                new MobileAccount { MobileNumber = "0773333333", EmployeeId = employee.Id, Status = SimStatus.Disconnected, IsActive = false, DisconnectedOn = new DateOnly(2026, 9, 15), StatusReason = "Lost phone", CreatedAtUtc = DateTimeOffset.UnixEpoch });
+            await db.SaveChangesAsync();
+        }
+
+        using var client = factory.CreateClient();
+        // A read-only report, so a Viewer can download it.
+        TestAuth.Authorize(client, UserRole.Viewer);
+        var response = await client.GetAsync("/api/mobile-accounts/export/excel");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", response.Content.Headers.ContentType?.MediaType);
+        Assert.StartsWith("Mobile_Allocations_", response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        using var workbook = new ClosedXML.Excel.XLWorkbook(await response.Content.ReadAsStreamAsync());
+        Assert.Equal(["Allocations", "SIM Pool", "Disconnected"], workbook.Worksheets.Select(sheet => sheet.Name));
+
+        var allocations = workbook.Worksheet("Allocations");
+        Assert.Equal("Mobile Number", allocations.Cell(5, 1).GetString());
+        Assert.Equal(("0771111111", "EPF-001", "Test Employee", "Test", "Head Office", "Information Technology", "Voice + Data"),
+            (allocations.Cell(6, 1).GetString(), allocations.Cell(6, 2).GetString(), allocations.Cell(6, 3).GetString(), allocations.Cell(6, 4).GetString(), allocations.Cell(6, 5).GetString(), allocations.Cell(6, 6).GetString(), allocations.Cell(6, 7).GetString()));
+        Assert.Equal(1500m, allocations.Cell(6, 9).GetValue<decimal>());
+        Assert.True(allocations.Cell(7, 1).IsEmpty());
+
+        var pool = workbook.Worksheet("SIM Pool");
+        Assert.Equal(("0772222222", "Resigned"), (pool.Cell(6, 1).GetString(), pool.Cell(6, 9).GetString()));
+        Assert.Equal(new DateTime(2026, 10, 1), pool.Cell(6, 7).GetDateTime());
+        Assert.True(pool.Cell(7, 1).IsEmpty());
+
+        var disconnected = workbook.Worksheet("Disconnected");
+        Assert.Equal("Reason for Disconnection", disconnected.Cell(5, 9).GetString());
+        Assert.Equal(("0773333333", "Lost phone"), (disconnected.Cell(6, 1).GetString(), disconnected.Cell(6, 9).GetString()));
+        Assert.Equal(new DateTime(2026, 9, 15), disconnected.Cell(6, 8).GetDateTime());
+        Assert.True(disconnected.Cell(7, 1).IsEmpty());
+    }
+
     private static WebApplicationFactory<Program> CreateApiFactory(SqliteConnection connection) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
