@@ -73,6 +73,8 @@ export function MonthlyBillReviewPage() {
   useEffect(() => { setSelectedIds(new Set()) }, [filters])
 
   const updateFilter = (key: string, value: string) => { setError(undefined); setLoading(true); setFilters(current => ({ ...current, [key]: value })) }
+  // Numbers with Deduction lists the highest deduction first; switching it off returns to the mobile number order.
+  const sortByDeduction = (excessOnly: boolean) => { setSort(excessOnly ? 'calculatedExcess' : 'mobileNumber'); setDirection(excessOnly ? 'desc' : 'asc') }
   const openDetail = async (row: ReviewRow) => { try { setError(undefined); setDetail(await getReviewDetail(batchId, row.id)) } catch (reason) { setError(message(reason, 'Unable to load bill detail.')) } }
   const toggleRow = (id: string) => setSelectedIds(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })
   const allOnPageSelected = (rows?.items.length ?? 0) > 0 && (rows?.items.every(row => selectedIds.has(row.id)) ?? false)
@@ -125,7 +127,7 @@ export function MonthlyBillReviewPage() {
     {summary && <ReviewKpis summary={summary} />}
     {summary && ['Completed', 'Locked'].includes(summary.batchStatus) && <ReportCard summary={summary} period={period} downloading={downloading} onDownload={requestReportDownload} />}
     {summary && <ApprovalHistorySection summary={summary} />}
-    <ReviewFilters filters={filters} options={options} onChange={updateFilter} />
+    <ReviewFilters filters={filters} options={options} onChange={updateFilter} onExcessOnlyChange={sortByDeduction} />
     {error && <ErrorState message={error} />}
     {loading && !rows && <LoadingState label="Loading review…" />}
     <BulkAssignBar selectedCount={selectedIds.size} matchingCount={rows?.totalCount ?? 0} selectable={canBulkAssign} onSelectAllMatching={selectAllMatching} onClear={clearSelection} onAssign={() => setBulkDialogOpen(true)} />

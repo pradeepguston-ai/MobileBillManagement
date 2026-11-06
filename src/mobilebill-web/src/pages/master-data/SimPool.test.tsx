@@ -70,6 +70,33 @@ describe('SIM Pool', () => {
     expect(screen.getByRole('cell', { name: 'Recent Leaver' })).toBeTruthy()
   })
 
+  it('disconnects a pooled number from the SIM Pool tab with the date and reason, then reloads the pool', async () => {
+    const posted: Array<{ url: string; body: unknown }> = []
+    let poolLoads = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (init?.method === 'POST') { posted.push({ url, body: JSON.parse(String(init.body)) }); return json({ ...allocation, id: 'p1', status: 'Disconnected' }) }
+      if (url.includes('/api/mobile-accounts/pool')) return json(poolLoads++ === 0
+        ? [{ id: 'p1', mobileNumber: '0770000001', previousEpf: 'EPF-1', previousEmployeeName: 'Old Holder', factory: 'F', department: 'D', pooledOn: '2026-07-01', reason: 'Resigned', daysInPool: 96, isLongIdle: true, monthlyCreditLimit: 1000, monthlyRental: 100 }]
+        : [])
+      return page([])
+    })
+    render(<MobileAllocationsPage />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'SIM Pool' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Disconnect' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Disconnect 0770000001')).toBeTruthy()
+    // The reason starts as the SIM Pool reason.
+    expect((within(dialog).getByLabelText(/Reason/) as HTMLInputElement).value).toBe('Resigned')
+    fireEvent.change(within(dialog).getByLabelText(/Disconnection date/), { target: { value: '2026-11-05' } })
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: 'No longer needed' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }))
+
+    await waitFor(() => expect(posted).toEqual([{ url: expect.stringContaining('/api/mobile-accounts/p1/disconnect'), body: { disconnectedOn: '2026-11-05', reason: 'No longer needed' } }]))
+    expect(await screen.findByText('The SIM Pool is empty. Every active number has a holder.')).toBeTruthy()
+  })
+
   it('lists disconnected numbers with the reason, read only', async () => {
     const requested: string[] = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {

@@ -171,11 +171,17 @@ describe('MonthlyBillReviewPage', () => {
     expect((screen.getByLabelText('Max Deduction') as HTMLInputElement).value).toBe('')
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
       const url = String(input)
-      return url.includes('/rows?') && url.includes('calculatedExcessMin=0.01') && !url.includes('calculatedExcessMax=')
+      // Highest deduction first.
+      return url.includes('/rows?') && url.includes('calculatedExcessMin=0.01') && !url.includes('calculatedExcessMax=') && url.includes('sortBy=calculatedExcess') && url.includes('sortDirection=desc')
     })).toBe(true))
 
+    fetchMock.mockClear()
     fireEvent.click(screen.getByRole('button', { name: 'Showing Numbers with Deduction' }))
     expect((screen.getByLabelText('Min Deduction') as HTMLInputElement).value).toBe('')
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
+      const url = String(input)
+      return url.includes('/rows?') && !url.includes('calculatedExcessMin=') && url.includes('sortBy=mobileNumber') && url.includes('sortDirection=asc')
+    })).toBe(true))
   })
 
   it('opens a structured snapshot, charge, calculation and history drawer', async () => {

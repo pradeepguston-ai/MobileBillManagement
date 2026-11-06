@@ -44,14 +44,15 @@ export function ReviewKpis({ summary }: { summary: ReviewSummary }) {
   </Box>
 }
 
-export function ReviewFilters({ filters, options, onChange }: { filters: Record<string, string>; options: { factories: MasterOption[]; departments: MasterOption[]; sections?: MasterOption[]; categories: MasterOption[] }; onChange: (key: string, value: string) => void }) {
+// onExcessOnlyChange: told when Numbers with Deduction is switched on or off, so the page can sort by the deduction.
+export function ReviewFilters({ filters, options, onChange, onExcessOnlyChange }: { filters: Record<string, string>; options: { factories: MasterOption[]; departments: MasterOption[]; sections?: MasterOption[]; categories: MasterOption[] }; onChange: (key: string, value: string) => void; onExcessOnlyChange?: (excessOnly: boolean) => void }) {
   // Sections narrow to the chosen department.
   const sections = (options.sections ?? []).filter(section => !filters.departmentCode || section.departmentCode === filters.departmentCode)
   const activeCount = Object.entries(filterDefaults).filter(([key, fallback]) => (filters[key] ?? fallback) !== fallback).length
   const clear = () => Object.entries(filterDefaults).forEach(([key, fallback]) => onChange(key, fallback))
   // Calculated excess is in cents, so a minimum of 0.01 keeps exactly the numbers that have an excess.
   const excessOnly = filters.calculatedExcessMin === excessOnlyMinimum && !filters.calculatedExcessMax
-  const toggleExcessOnly = () => { onChange('calculatedExcessMin', excessOnly ? '' : excessOnlyMinimum); onChange('calculatedExcessMax', '') }
+  const toggleExcessOnly = () => { onChange('calculatedExcessMin', excessOnly ? '' : excessOnlyMinimum); onChange('calculatedExcessMax', ''); onExcessOnlyChange?.(!excessOnly) }
   return <Stack spacing={1.5}>
     <FilterBar activeCount={activeCount} onClear={clear}>
       <TextField size="small" label="Search mobile / EPF / employee / calling name" value={filters.search ?? ''} onChange={event => onChange('search', event.target.value)} />
