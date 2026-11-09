@@ -102,7 +102,7 @@ public sealed class ReportEmailProcessor(MobileBillDbContext db, IBillingExcelRe
         html.Append("<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1f2933\">");
         if (!string.IsNullOrWhiteSpace(settings.TestRecipient))
             html.Append($"<p style=\"background:#fff4ce;padding:8px;border:1px solid #e0c060\"><b>Test mode.</b> In normal use this email goes to: {Encode(string.Join(", ", recipients))}</p>");
-        html.Append("<p>Dear colleague,</p>");
+        html.Append("<p>Dear All,</p>");
         html.Append($"<p>Please find attached the <b>{Encode(period)}</b> mobile bill report for <b>{Encode(delivery.RuleName)}</b>, as Excel and PDF.</p>");
         html.Append("<table cellpadding=\"6\" style=\"border-collapse:collapse;font-size:14px\">");
         foreach (var (label, value) in rows)

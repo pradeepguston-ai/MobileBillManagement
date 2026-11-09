@@ -32,9 +32,10 @@ public sealed class ReportEmailProcessorTests
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(message.Attachments![1].Content, 0, 4));
         using (var workbook = new XLWorkbook(new MemoryStream(message.Attachments![0].Content)))
             Assert.Equal(["0771000001", "0771000002"], workbook.Worksheet("Monthly Bill Report").Table("MonthlyBillReportTable").DataRange!.Rows().Select(row => row.Cell(2).GetString()));
-        foreach (var text in new[] { "Factory A (FA)", "Executive, Staff", "<td style=\"border:1px solid #d0d7de\">2</td>", "LKR 150.00", "LKR 20.00", BillApprovalEmailNotifier.Footer })
+        foreach (var text in new[] { "<p>Dear All,</p>", "Factory A (FA)", "Executive, Staff", "<td style=\"border:1px solid #d0d7de\">2</td>", "LKR 150.00", "LKR 20.00", BillApprovalEmailNotifier.Footer })
             Assert.Contains(text, message.HtmlBody);
         Assert.DoesNotContain("Test mode", message.HtmlBody);
+        Assert.DoesNotContain("Dear colleague", message.HtmlBody);
 
         var stored = await db.ReportEmailDeliveries.SingleAsync();
         Assert.Equal((ReportEmailStatus.Sent, 1, clock.UtcNow, (string?)null), (stored.Status, stored.Attempts, stored.SentAt, stored.LastError));
