@@ -39,13 +39,15 @@ describe('MonthlyBillOverviewPage', () => {
     expect(screen.getAllByText(/^(Total Actual Bill|Total Calculated Excess|Deduction from Employees|Company Responsibility Amount)$/).map(node => node.textContent)).toEqual(['Total Actual Bill', 'Total Calculated Excess', 'Deduction from Employees', 'Company Responsibility Amount'])
     expect(screen.getByText('Current stage: HR Approval')).toBeTruthy()
     expect(screen.getByText('July 2026')).toBeTruthy()
-    expect(screen.getAllByRole('link', { name: 'Open' })[0].getAttribute('href')).toBe('/billing/newest/review')
+    expect(screen.getAllByRole('link', { name: 'Open Bill Review' })[0].getAttribute('href')).toBe('/billing/newest/review')
+    // The batch name opens it too.
+    expect(screen.getByRole('link', { name: 'August 2026' }).getAttribute('href')).toBe('/billing/newest/review')
     expect(requested[0]).toContain('sortBy=billingYear')
     expect(requested[0]).toContain('sortDirection=desc')
     expect(requested.some(url => url.endsWith('/api/bill-batches/newest/review'))).toBe(true)
   })
 
-  it('shows the latest batch approval history inside the latest batch card above Open', async () => {
+  it('shows the latest batch approval history inside the latest batch card, with Open Bill Review at the top', async () => {
     const approval = { id: 'a1', workflowStage: 'ITReview', action: 'Approve', workflowRole: 'ITReviewer', userRole: 'HeadOfIt', userId: 'u1', displayName: 'Head User', timestamp: '2026-09-10T04:00:00Z', comment: 'Looks right', previousStatus: 'ITReview', newStatus: 'HRApproval' }
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       const url = String(input)
@@ -60,11 +62,11 @@ describe('MonthlyBillOverviewPage', () => {
     expect(within(history).getByText('Head User')).toBeTruthy()
     expect(within(history).getByText('Head of IT')).toBeTruthy()
     expect(within(history).getByText('Looks right')).toBeTruthy()
-    // Inside the Current / Latest Batch card, just above its Open button.
+    // Inside the Current / Latest Batch card; its Open Bill Review button is at the top, before the history, so it is seen without scrolling.
     const latestCard = screen.getByRole('heading', { name: 'August 2026' }).closest('.MuiCard-root')!
     expect(latestCard.contains(history)).toBe(true)
-    const openButton = within(latestCard as HTMLElement).getByRole('link', { name: 'Open' })
-    expect(history.compareDocumentPosition(openButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const openButton = within(latestCard as HTMLElement).getByRole('link', { name: 'Open Bill Review' })
+    expect(history.compareDocumentPosition(openButton) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
   })
 
   it('shows an actionable empty state when no batches exist', async () => {

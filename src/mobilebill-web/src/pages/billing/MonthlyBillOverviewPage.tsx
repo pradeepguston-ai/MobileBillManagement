@@ -1,4 +1,4 @@
-import { Box, Button, Card, CardContent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material'
+import { Box, Button, Card, CardContent, Link, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import { useCallback, useEffect, useState } from 'react'
@@ -56,14 +56,27 @@ function BillOverview() {
   const latest = batches[0]
   return <Stack spacing={3}>
     <Card><CardContent><Stack spacing={2}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}><Box><Typography variant="overline" color="text.secondary">Current / Latest Batch</Typography><Typography component="h2" variant="h4">{billingPeriod(latest.billingYear, latest.billingMonth)}</Typography><Typography color="text.secondary">{latest.provider}</Typography></Box><Stack direction="row" spacing={1}><ValidationLevelChip level={latest.validationLevel} /><BatchStatusChip status={latest.status} /></Stack></Stack>
+      {/* The way into the batch sits at the top, beside its name, so it is seen without scrolling past the history. */}
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}>
+        <Box><Typography variant="overline" color="text.secondary">Current / Latest Batch</Typography>
+          <Typography component="h2" variant="h4"><Link component={RouterLink} to={batchContinuationRoute(latest.id, latest.status)} underline="hover" color="inherit">{billingPeriod(latest.billingYear, latest.billingMonth)}</Link></Typography>
+          <Typography color="text.secondary">{latest.provider}</Typography></Box>
+        <Stack spacing={1.5} sx={{ alignItems: { xs: 'flex-start', md: 'flex-end' } }}>
+          <Button component={RouterLink} to={batchContinuationRoute(latest.id, latest.status)} variant="contained" size="large" endIcon={<ArrowForwardIcon />} sx={{ px: 3, py: 1.25, fontSize: 16 }}>{openLabel(latest.status)}</Button>
+          <Stack direction="row" spacing={1}><ValidationLevelChip level={latest.validationLevel} /><BatchStatusChip status={latest.status} /></Stack>
+        </Stack>
+      </Stack>
       {summaryError && <ErrorState message={summaryError} />}
       {summary && <><Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2 }}><KpiCard label="Total Actual Bill" value={<CurrencyDisplay value={summary.totalActualBill} />} /><KpiCard label="Total Calculated Excess" value={<CurrencyDisplay value={summary.totalCalculatedExcess} />} /><KpiCard label="Deduction from Employees" value={<CurrencyDisplay value={summary.totalFinalDeduction} />} /><KpiCard label="Company Responsibility Amount" value={<CurrencyDisplay value={summary.companyResponsibilityAmount} />} /></Box><WorkflowStepper status={summary.batchStatus} compact /></>}
       {summary && <Box><Typography component="h3" variant="h6" sx={{ mb: 1 }}>Approval History</Typography><ApprovalTimeline history={summary.approvalHistory ?? []} /></Box>}
-      <Button component={RouterLink} to={batchContinuationRoute(latest.id, latest.status)} variant="contained" endIcon={<ArrowForwardIcon />} sx={{ alignSelf: 'flex-start' }}>Open</Button>
     </Stack></CardContent></Card>
-    <Box><Typography component="h2" variant="h5" sx={{ mb: 1 }}>Recent Billing Batches</Typography><TableContainer sx={{ overflowX: 'auto' }}><Table size="small" stickyHeader aria-label="Recent billing batches"><TableHead><TableRow><TableCell>Billing Period</TableCell><TableCell>Provider</TableCell><TableCell align="right">Total</TableCell><TableCell>Status</TableCell><TableCell /></TableRow></TableHead><TableBody>{batches.map(batch => <TableRow hover key={batch.id}><TableCell sx={{ whiteSpace: 'nowrap' }}>{billingPeriod(batch.billingYear, batch.billingMonth)}</TableCell><TableCell>{batch.provider}</TableCell><TableCell align="right"><CurrencyDisplay value={batch.calculatedGrandTotal} /></TableCell><TableCell><BatchStatusChip status={batch.status} /></TableCell><TableCell><Button component={RouterLink} to={batchContinuationRoute(batch.id, batch.status)} size="small" variant="outlined" endIcon={<ArrowForwardIcon />}>Open</Button></TableCell></TableRow>)}</TableBody></Table></TableContainer></Box>
+    <Box><Typography component="h2" variant="h5" sx={{ mb: 1 }}>Recent Billing Batches</Typography><TableContainer sx={{ overflowX: 'auto' }}><Table size="small" stickyHeader aria-label="Recent billing batches"><TableHead><TableRow><TableCell>Billing Period</TableCell><TableCell>Provider</TableCell><TableCell align="right">Total</TableCell><TableCell>Status</TableCell><TableCell /></TableRow></TableHead><TableBody>{batches.map(batch => <TableRow hover key={batch.id}><TableCell sx={{ whiteSpace: 'nowrap' }}>{billingPeriod(batch.billingYear, batch.billingMonth)}</TableCell><TableCell>{batch.provider}</TableCell><TableCell align="right"><CurrencyDisplay value={batch.calculatedGrandTotal} /></TableCell><TableCell><BatchStatusChip status={batch.status} /></TableCell><TableCell sx={{ whiteSpace: 'nowrap' }}><Button component={RouterLink} to={batchContinuationRoute(batch.id, batch.status)} size="small" variant="contained" endIcon={<ArrowForwardIcon />}>{openLabel(batch.status)}</Button></TableCell></TableRow>)}</TableBody></Table></TableContainer></Box>
   </Stack>
 }
 
 function message(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback }
+
+// A validated batch opens on its bill review; before that, on its processing page.
+function openLabel(status: string) {
+  return ['Draft', 'Uploaded', 'Parsed', 'ValidationFailed'].includes(status) ? 'Open Batch' : 'Open Bill Review'
+}
