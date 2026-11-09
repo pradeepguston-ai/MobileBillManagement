@@ -18,6 +18,10 @@ using MobileBill.Application.Reports;
 using MobileBill.Infrastructure.Reports;
 using MobileBill.Application.Identity;
 using MobileBill.Infrastructure.Identity;
+using MobileBill.Application.Notifications;
+using MobileBill.Infrastructure.Notifications;
+using MobileBill.Application.Activity;
+using MobileBill.Infrastructure.Activity;
 
 namespace MobileBill.Infrastructure;
 
@@ -71,6 +75,21 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(provider.GetRequiredService<IOptions<OpenRouterOptions>>().Value.TimeoutSeconds, 10, 300)));
         services.AddScoped<AssistantToolbox>();
         services.AddScoped<IAssistantService, AssistantService>();
+
+        // Approval emails through Microsoft Graph. Until Email:Enabled is true and the credentials are set, nothing is sent.
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.AddHttpClient<IEmailSender, GraphEmailSender>(client => client.Timeout = TimeSpan.FromSeconds(30));
+        services.AddSingleton<IEmailQueue, ChannelEmailQueue>();
+        services.AddTransient<RetryingEmailDelivery>();
+        services.AddScoped<IBillApprovalNotifier, BillApprovalEmailNotifier>();
+        // Emailing the monthly bill report to each distribution rule's recipients (queued in ReportEmailDeliveries).
+        services.AddSingleton<ReportEmailWakeUp>();
+        services.AddScoped<EfReportDistributionService>();
+        services.AddScoped<IReportDistributionService>(provider => provider.GetRequiredService<EfReportDistributionService>());
+        services.AddScoped<IReportLockDistribution>(provider => provider.GetRequiredService<EfReportDistributionService>());
+        services.AddScoped<IReportEmailProcessor, ReportEmailProcessor>();
+        // Activity Log: what each user did, in plain words (recorded by the API's activity filter).
+        services.AddScoped<IActivityLogService, EfActivityLogService>();
 
         return services;
     }

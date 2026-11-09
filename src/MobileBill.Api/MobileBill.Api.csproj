@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Local secrets (dotnet user-secrets), kept outside the repository, for example the Email credentials. -->
+    <UserSecretsId>5b7f3c1e-8d2a-4f6b-9c3e-1a2b3c4d5e6f</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

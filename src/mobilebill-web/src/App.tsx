@@ -19,6 +19,9 @@ import { RegisterPage } from './pages/auth/RegisterPage'
 import { PendingApprovalPage } from './pages/auth/PendingApprovalPage'
 import { UserManagementPage } from './pages/admin/UserManagementPage'
 import { PasswordResetRequestsPage } from './pages/admin/PasswordResetRequestsPage'
+import { ReportDistributionPage } from './pages/admin/ReportDistributionPage'
+import { EmailHistoryPage } from './pages/admin/EmailHistoryPage'
+import { ActivityLogPage } from './pages/ActivityLogPage'
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage'
 
 function App() {
@@ -51,8 +54,11 @@ function App() {
           <Route path="billing/:batchId/review" element={<MonthlyBillReviewPage />} />
           <Route path="reports/monthly-bill" element={<MonthlyBillReportPage />} />
           <Route path="reports/vas" element={<VasReportPage />} />
+          <Route path="activity-log" element={<ActivityLogPage />} />
           <Route path="admin/users" element={<RequireAuth roles={['Administrator']}><UserManagementPage /></RequireAuth>} />
           <Route path="admin/password-resets" element={<RequireAuth roles={['Administrator']}><PasswordResetRequestsPage /></RequireAuth>} />
+          <Route path="admin/report-distribution" element={<RequireAuth roles={['Administrator', 'ITEngineer']}><ReportDistributionPage /></RequireAuth>} />
+          <Route path="admin/email-history" element={<RequireAuth roles={['Administrator', 'ITEngineer']}><EmailHistoryPage /></RequireAuth>} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

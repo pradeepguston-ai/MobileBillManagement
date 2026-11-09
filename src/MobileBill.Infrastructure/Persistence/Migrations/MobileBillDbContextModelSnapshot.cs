@@ -22,6 +22,64 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.ActivityLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Area")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("HttpMethod")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("Area", "OccurredAt");
+
+                    b.HasIndex("UserId", "OccurredAt");
+
+                    b.ToTable("ActivityLogs", (string)null);
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.ApprovalHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1426,6 +1484,160 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.ToTable("PasswordResetRequests", (string)null);
                 });
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.ReportDistributionRecipient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("RuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RuleId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ReportDistributionRecipients", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReportDistributionRecipients_UserOrEmail", "([UserId] IS NULL AND [Email] IS NOT NULL) OR ([UserId] IS NOT NULL AND [Email] IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.ReportDistributionRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CategoryCodes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FactoryCodes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("ReportDistributionRules", (string)null);
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.ReportEmailDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("BillBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CategoryCodes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("FactoryCodes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Recipients")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("RequestedByName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid?>("RuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RuleName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RuleId");
+
+                    b.HasIndex("BillBatchId", "CreatedAtUtc");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("ReportEmailDeliveries", (string)null);
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.Section", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1890,6 +2102,42 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("MobileBill.Domain.Entities.ReportDistributionRecipient", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.ReportDistributionRule", "Rule")
+                        .WithMany("Recipients")
+                        .HasForeignKey("RuleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MobileBill.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Rule");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.ReportEmailDelivery", b =>
+                {
+                    b.HasOne("MobileBill.Domain.Entities.BillBatch", "BillBatch")
+                        .WithMany()
+                        .HasForeignKey("BillBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MobileBill.Domain.Entities.ReportDistributionRule", "Rule")
+                        .WithMany()
+                        .HasForeignKey("RuleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("BillBatch");
+
+                    b.Navigation("Rule");
+                });
+
             modelBuilder.Entity("MobileBill.Domain.Entities.Section", b =>
                 {
                     b.HasOne("MobileBill.Domain.Entities.Department", "Department")
@@ -1982,6 +2230,11 @@ namespace MobileBill.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MobileBill.Domain.Entities.MonthlyBill", b =>
                 {
                     b.Navigation("Exceptions");
+                });
+
+            modelBuilder.Entity("MobileBill.Domain.Entities.ReportDistributionRule", b =>
+                {
+                    b.Navigation("Recipients");
                 });
 
             modelBuilder.Entity("MobileBill.Domain.Entities.Section", b =>

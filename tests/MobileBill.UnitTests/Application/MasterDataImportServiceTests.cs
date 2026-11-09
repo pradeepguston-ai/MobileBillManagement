@@ -290,6 +290,26 @@ public sealed class MasterDataImportServiceTests
         Assert.Equal(AllocationHeadings, allocations.Worksheet(1).Row(1).CellsUsed().Select(cell => cell.GetString()));
     }
 
+    [Fact]
+    public async Task A_workbook_that_unpacks_to_more_than_the_limit_is_refused_before_it_is_opened()
+    {
+        await using var db = await SeedAsync();
+        // A "zip bomb": a few hundred kilobytes that unpack to over 200 MB.
+        var file = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(file, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        await using (var entry = zip.CreateEntry("xl/worksheets/sheet1.xml", System.IO.Compression.CompressionLevel.SmallestSize).Open())
+        {
+            var zeros = new byte[1024 * 1024];
+            for (var megabyte = 0; megabyte <= ClosedXmlMasterDataImportService.MaxUnpackedWorkbookBytes / zeros.Length; megabyte++) await entry.WriteAsync(zeros);
+        }
+        file.Position = 0;
+
+        var refusal = await Assert.ThrowsAsync<MasterDataValidationException>(() => Service(db).ImportEmployeesAsync(file, commit: false, default));
+
+        Assert.Contains("too large to import", refusal.Message);
+        Assert.True(file.Length < 5 * 1024 * 1024);
+    }
+
     private static ClosedXmlMasterDataImportService Service(MobileBillDbContext db) => new(db, new TestUser(), new TestClock());
 
     private static MemoryStream Workbook(string[] headings, params object[][] rows)

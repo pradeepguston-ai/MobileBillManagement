@@ -235,11 +235,28 @@ public sealed class ClosedXmlMasterDataImportService(MobileBillDbContext db, ICu
         return new MasterDataImportResult(total, created, updated, unchanged, errors.OrderBy(error => error.Row).ToList(), save);
     }
 
+    // An .xlsx is a zip file. A small upload can unpack to gigabytes (a "zip bomb") and exhaust the server's memory,
+    // so the unpacked size and the number of parts are checked before the workbook is opened.
+    public const long MaxUnpackedWorkbookBytes = 200L * 1024 * 1024;
+    public const int MaxWorkbookParts = 2000;
+    private static void RequireReasonableUnpackedSize(MemoryStream buffer)
+    {
+        try
+        {
+            using var zip = new System.IO.Compression.ZipArchive(buffer, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true);
+            if (zip.Entries.Count > MaxWorkbookParts || zip.Entries.Sum(entry => entry.Length) > MaxUnpackedWorkbookBytes)
+                throw new MasterDataValidationException("The workbook is too large to import. Split it into smaller files.");
+        }
+        catch (InvalidDataException) { throw new MasterDataValidationException("The file is not a valid Excel workbook (.xlsx)."); }
+        finally { buffer.Position = 0; }
+    }
+
     private static async Task<ImportSheet> ReadSheetAsync(Stream workbook, IReadOnlyCollection<string> requiredColumns, CancellationToken token)
     {
         using var buffer = new MemoryStream();
         await workbook.CopyToAsync(buffer, token);
         buffer.Position = 0;
+        RequireReasonableUnpackedSize(buffer);
         XLWorkbook book;
         try { book = new XLWorkbook(buffer); }
         catch (Exception) { throw new MasterDataValidationException("The file is not a valid Excel workbook (.xlsx)."); }

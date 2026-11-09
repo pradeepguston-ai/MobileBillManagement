@@ -2,6 +2,7 @@ import { Alert, Box, Button, Card, CardContent, Checkbox, Dialog, DialogActions,
 import DownloadIcon from '@mui/icons-material/Download'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { useState, type FormEvent, type ReactNode } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 
 import type { ReportFilters, ReportFormat } from '../../../api/billingApi'
 import { assessMonthlyBill, bulkAssessMonthlyBills, type AssessmentRequest, type BulkAssessmentResult, type ReviewDetail, type ReviewRow, type ReviewSummary } from '../../../api/billReviewApi'
@@ -211,6 +212,26 @@ export function WorkflowActionDialog({ state, comment, remark, error, saving, on
   return <Dialog open={Boolean(state)} onClose={onCancel} fullWidth maxWidth="sm" aria-labelledby="workflow-dialog-title"><DialogTitle id="workflow-dialog-title">{state?.title}</DialogTitle><DialogContent>
     {approving && <FormControl fullWidth margin="dense" required><InputLabel id="approval-remark-label">Approval Remark</InputLabel><Select labelId="approval-remark-label" label="Approval Remark" value={remark} onChange={event => onRemark(event.target.value)}>{approvalRemarks.map(option => <MenuItem key={option} value={option}>{option}</MenuItem>)}</Select></FormControl>}
     <TextField autoFocus={!approving} fullWidth multiline minRows={3} margin="dense" label={state?.commentRequired ? 'Reason' : approving && commentRequired ? 'Conditions' : 'Comment'} required={commentRequired} value={comment} onChange={event => onComment(event.target.value)} helperText={state?.commentRequired ? 'A meaningful reason is required.' : commentRequired ? 'Write the conditions of this approval.' : 'Optional'} />{error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}</DialogContent><DialogActions><Button onClick={onCancel}>Cancel</Button><Button variant="contained" disabled={saving} onClick={onConfirm}>{state?.kind === 'submit' ? 'Confirm Submit' : 'Confirm Action'}</Button></DialogActions></Dialog>
+}
+
+export type WorkflowFailure = { title: string; message: string }
+
+// A refused submission, approval or lock, shown in a pop-up so it cannot be missed. When the server names unassigned
+// numbers or numbers without a responsibility, the dialog offers the way to fix them.
+export function WorkflowErrorDialog({ failure, exceptionReviewPath, onShowUnassigned, onClose }: { failure?: WorkflowFailure; exceptionReviewPath: string; onShowUnassigned: () => void; onClose: () => void }) {
+  const unassignedNumbers = /in Exception Review are not assigned/i.test(failure?.message ?? '')
+  const noResponsibility = /no responsibility assigned/i.test(failure?.message ?? '')
+  // The server joins several problems into one message; show each on its own line.
+  const problems = (failure?.message ?? '').split(/(?<=submitting for IT review\.)\s+/).filter(Boolean)
+  return <Dialog open={Boolean(failure)} onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="workflow-error-title">
+    <DialogTitle id="workflow-error-title">{failure?.title}</DialogTitle>
+    <DialogContent><Stack spacing={1}>{problems.map(problem => <Alert key={problem} severity="error">{problem}</Alert>)}</Stack></DialogContent>
+    <DialogActions>
+      {unassignedNumbers && <Button component={RouterLink} to={exceptionReviewPath} onClick={onClose}>Open Exception Review</Button>}
+      {noResponsibility && <Button onClick={() => { onShowUnassigned(); onClose() }}>Show Unassigned Numbers</Button>}
+      <Button variant="contained" onClick={onClose}>Close</Button>
+    </DialogActions>
+  </Dialog>
 }
 
 export function ReportCard({ summary, period, downloading, onDownload }: { summary: ReviewSummary; period: string; downloading: boolean; onDownload: (format: ReportFormat, filters: ReportFilters) => void }) {

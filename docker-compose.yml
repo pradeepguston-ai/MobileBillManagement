@@ -26,6 +26,14 @@ services:
       BillStorage__MaximumFileSizeBytes: "20971520"
       # AI assistant (OpenRouter). Leave OPENROUTER_API_KEY empty to hide the assistant.
       OpenRouter__ApiKey: ${OPENROUTER_API_KEY:-}
+      # Approval emails (Microsoft Graph). Off unless EMAIL_ENABLED is true and the three credentials are set.
+      Email__Enabled: ${EMAIL_ENABLED:-false}
+      Email__TenantId: ${EMAIL_TENANT_ID:-}
+      Email__ClientId: ${EMAIL_CLIENT_ID:-}
+      Email__ClientSecret: ${EMAIL_CLIENT_SECRET:-}
+      Email__AppBaseUrl: ${EMAIL_APP_BASE_URL:-}
+      Email__TestRecipient: ${EMAIL_TEST_RECIPIENT:-}
+      Email__SendReportsOnLock: ${EMAIL_SEND_REPORTS_ON_LOCK:-true}
       # Only used when the database has no Administrator yet; leave empty to never write anything on start-up.
       Bootstrap__AdminEmail: ${BOOTSTRAP_ADMIN_EMAIL:-}
       Bootstrap__AdminPassword: ${BOOTSTRAP_ADMIN_PASSWORD:-}

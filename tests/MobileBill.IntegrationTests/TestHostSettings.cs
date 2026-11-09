@@ -13,5 +13,10 @@ internal static class TestHostSettings
     {
         Environment.SetEnvironmentVariable("Jwt__ValidateUserOnEachRequest", "false");
         Environment.SetEnvironmentVariable("BackgroundJobs__ResignationCompletion", "false");
+        // The test hosts load appsettings.Development.json, whose connection string is a real database. Tests swap in their
+        // own (in-memory or SQLite) databases; this makes any test that forgets fail at once instead of touching that database.
+        Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", "Server=tcp:127.0.0.1,1;Database=NoDatabaseInTests;User ID=none;Password=none;Connect Timeout=1;Encrypt=False");
+        // Each successful action would add an Activity Log row; ActivityLogApiTests switches this on with its own database.
+        Environment.SetEnvironmentVariable("ActivityLog__Enabled", "false");
     }
 }

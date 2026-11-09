@@ -29,6 +29,9 @@ import FactCheckIcon from '@mui/icons-material/FactCheck'
 import FactoryIcon from '@mui/icons-material/Factory'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import LockResetIcon from '@mui/icons-material/LockReset'
+import ForwardToInboxIcon from '@mui/icons-material/ForwardToInbox'
+import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead'
+import HistoryIcon from '@mui/icons-material/History'
 import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
@@ -40,10 +43,11 @@ import AppsIcon from '@mui/icons-material/Apps'
 import SimCardIcon from '@mui/icons-material/SimCard'
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid'
 import { AssistantChat } from '../components/assistant/AssistantChat'
+import { PendingApprovalsBell } from '../components/notifications/PendingApprovalsBell'
 import { type ReactNode, useState } from 'react'
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
-import { roleLabels } from '../api/authApi'
+import { roleLabels, type UserRole } from '../api/authApi'
 import { useAuth } from '../auth/AuthContext'
 import { navigationTarget } from './navigationTarget'
 import gustonLogo from '../assets/guston-logo.webp'
@@ -70,6 +74,9 @@ const iconByPath: Record<string, ReactNode> = {
   '/reports/vas': <AppsIcon fontSize="small" />,
   '/admin/users': <ManageAccountsIcon fontSize="small" />,
   '/admin/password-resets': <LockResetIcon fontSize="small" />,
+  '/admin/report-distribution': <ForwardToInboxIcon fontSize="small" />,
+  '/admin/email-history': <MarkEmailReadIcon fontSize="small" />,
+  '/activity-log': <HistoryIcon fontSize="small" />,
 }
 
 export function AppLayout() {
@@ -92,6 +99,7 @@ export function AppLayout() {
             <Avatar sx={{ width: 28, height: 28, fontSize: 14, bgcolor: 'rgba(255,255,255,0.22)', border: '1px solid rgba(255,255,255,0.3)' }}>{initials(user.displayName)}</Avatar>
             <Typography variant="body2">{user.displayName} · {roleLabels[user.role]}</Typography>
           </Box>}
+          <PendingApprovalsBell />
           <ColorModeToggle />
           <Button color="inherit" onClick={signOut} startIcon={<LogoutIcon fontSize="small" />}>Sign out</Button>
         </Toolbar>
@@ -105,9 +113,9 @@ export function AppLayout() {
         }}
       >
         <Toolbar />
-        <NavigationContent isAdministrator={user?.role === 'Administrator'} />
+        <NavigationContent role={user?.role} />
       </Drawer>}
-      {isCompact && <Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)} slotProps={{ paper: { sx: { ...sidebarPaperSx, width: drawerWidth } } }}><Toolbar sx={{ justifyContent: 'flex-end' }}><IconButton aria-label="Close navigation" onClick={() => setMobileOpen(false)} sx={{ color: '#fff' }}><CloseIcon /></IconButton></Toolbar><NavigationContent isAdministrator={user?.role === 'Administrator'} onNavigate={() => setMobileOpen(false)} /></Drawer>}
+      {isCompact && <Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)} slotProps={{ paper: { sx: { ...sidebarPaperSx, width: drawerWidth } } }}><Toolbar sx={{ justifyContent: 'flex-end' }}><IconButton aria-label="Close navigation" onClick={() => setMobileOpen(false)} sx={{ color: '#fff' }}><CloseIcon /></IconButton></Toolbar><NavigationContent role={user?.role} onNavigate={() => setMobileOpen(false)} /></Drawer>}
       <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3, md: 4 } }}>
         <Toolbar />
         <Outlet />
@@ -144,14 +152,24 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
 }
 
-function NavigationContent({ isAdministrator, onNavigate }: { isAdministrator?: boolean; onNavigate?: () => void }) {
+// Administration: users and password resets for Administrators; Report Distribution also for IT Engineers.
+function administrationLinks(role?: UserRole) {
+  const links: string[][] = []
+  if (role === 'Administrator') links.push(["/admin/users", "User Management"], ["/admin/password-resets", "Password Resets"])
+  if (role === 'Administrator' || role === 'ITEngineer') links.push(["/admin/report-distribution", "Report Distribution"], ["/admin/email-history", "Email History"])
+  return links
+}
+
+function NavigationContent({ role, onNavigate }: { role?: UserRole; onNavigate?: () => void }) {
+  const adminLinks = administrationLinks(role)
   return <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
   <List aria-label="Primary navigation" sx={{ px: 1 }}>
     <NavigationLink to="/" label="Dashboard" onNavigate={onNavigate} />
     <NavigationGroup label="Billing" links={[["/monthly-bill-review", "Monthly Bill Review"], ["/billing", "Billing Batches"], ["/exception-review", "Exception Review"]]} onNavigate={onNavigate} />
     <NavigationGroup label="Masters" links={[["/employees", "Employees"], ["/mobile-allocations", "Mobile Allocations"], ["/devices", "Mobile Devices"],["/factories", "Factories"], ["/departments", "Departments"], ["/designations", "Designations"], ["/categories", "Categories"], ["/packages", "Mobile Packages"], ["/providers", "Telecom Providers"], ["/third-party-companies", "Third Party Companies"]]} onNavigate={onNavigate} />
     <NavigationGroup label="Reports" links={[["/reports/monthly-bill", "Monthly Bill Report"], ["/reports/vas", "VAS Report"]]} onNavigate={onNavigate} />
-    {isAdministrator && <NavigationGroup label="Administration" links={[["/admin/users", "User Management"], ["/admin/password-resets", "Password Resets"]]} onNavigate={onNavigate} />}
+    <NavigationGroup label="Audit" links={[["/activity-log", "Activity Log"]]} onNavigate={onNavigate} />
+    {adminLinks.length > 0 && <NavigationGroup label="Administration" links={adminLinks} onNavigate={onNavigate} />}
   </List>
   <Box sx={{ mt: 'auto', mx: 2, py: 2, borderTop: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 700, letterSpacing: '0.02em', textAlign: 'center' }}>
     Powered By Concord IT

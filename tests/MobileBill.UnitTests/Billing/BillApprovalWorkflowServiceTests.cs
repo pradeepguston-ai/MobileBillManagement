@@ -123,6 +123,23 @@ public sealed class BillApprovalWorkflowServiceTests
     }
 
     [Fact]
+    public async Task Submit_names_unassigned_numbers_and_numbers_without_responsibility_together()
+    {
+        await using var db = CreateDb();
+        var batch = await AddBatchAsync(db);
+        db.BillExceptions.Add(new BillException { BillBatchId = batch.Id, BillLineId = Guid.NewGuid(), ExceptionType = BillExceptionType.MOBILE_NOT_FOUND, Severity = BillExceptionSeverity.Blocking, Description = "x" });
+        var line = new BillLine { BillBatchId = batch.Id, MobileNumber = "7", RawText = "7" };
+        db.BillLines.Add(line);
+        db.MonthlyBills.Add(new MonthlyBill { EmployeeId = Guid.NewGuid(), MobileAccountId = Guid.NewGuid(), BillLineId = line.Id, EmployeeEpfSnapshot = "E", EmployeeNameSnapshot = "Employee", MobileNumberSnapshot = "7", CategoryCodeSnapshot = "CAT", DesignationCodeSnapshot = "DES", FactoryCodeSnapshot = "FAC", DepartmentCodeSnapshot = "DEP", EntitlementEffectiveFromSnapshot = new DateOnly(2026, 9, 1) });
+        await db.SaveChangesAsync();
+        var service = new EfBillApprovalWorkflowService(db, new AllowWorkflowAuthorization(), new TestUser(), new TestClock());
+
+        var refusal = await Assert.ThrowsAsync<BillWorkflowConflictException>(() => service.SubmitAsync(batch.Id, new WorkflowCommentRequest(null), default));
+
+        Assert.Equal("1 number(s) in Exception Review are not assigned to an employee. Assign them before submitting for IT review. 1 number(s) have no responsibility assigned. Assign By User or By Company before submitting for IT review.", refusal.Message);
+    }
+
+    [Fact]
     public async Task Submit_is_refused_while_a_number_has_no_responsibility_assigned()
     {
         await using var db = CreateDb();
@@ -144,6 +161,91 @@ public sealed class BillApprovalWorkflowServiceTests
         await db.SaveChangesAsync();
         await service.SubmitAsync(batch.Id, new WorkflowCommentRequest(null), default);
         Assert.Equal(BillBatchStatus.ITReview, (await db.BillBatches.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task The_next_approver_is_notified_when_a_batch_reaches_IT_HR_and_Finance_approval_but_not_on_completion_or_return()
+    {
+        await using var db = CreateDb();
+        var batch = await AddBatchAsync(db);
+        var notifier = new RecordingNotifier(db);
+        var service = new EfBillApprovalWorkflowService(db, new AllowWorkflowAuthorization(), new TestUser(), new TestClock(), notifier);
+
+        await service.SubmitAsync(batch.Id, new WorkflowCommentRequest("Ready"), default);
+        await service.DecideAsync(batch.Id, new WorkflowDecisionRequest(ApprovalAction.Approve, "IT checked"), default);
+        await service.DecideAsync(batch.Id, new WorkflowDecisionRequest(ApprovalAction.ReturnForCorrection, "Fix the totals"), default);
+        await service.SubmitAsync(batch.Id, new WorkflowCommentRequest("Fixed"), default);
+        await service.DecideAsync(batch.Id, new WorkflowDecisionRequest(ApprovalAction.Approve, "IT checked"), default);
+        await service.DecideAsync(batch.Id, new WorkflowDecisionRequest(ApprovalAction.Approve, "HR approved"), default);
+        await service.DecideAsync(batch.Id, new WorkflowDecisionRequest(ApprovalAction.Approve, "Finance approved"), default);
+
+        // The status each notification saw, read from the database: the step is saved before anyone is told.
+        Assert.Equal([BillBatchStatus.ITReview, BillBatchStatus.HRApproval, BillBatchStatus.ITReview, BillBatchStatus.HRApproval, BillBatchStatus.FinanceApproval], notifier.Statuses);
+    }
+
+    [Theory]
+    [InlineData(UserRole.HeadOfIt, "IT approval")]
+    [InlineData(UserRole.GroupHrManager, "HR approval")]
+    [InlineData(UserRole.Cfo, "Finance approval")]
+    [InlineData(UserRole.Administrator, "Finance approval,IT approval,HR approval")]
+    [InlineData(UserRole.ITEngineer, "")]
+    [InlineData(UserRole.Viewer, "")]
+    public async Task Pending_approvals_are_the_batches_the_users_role_can_approve_now_longest_waiting_first(UserRole role, string expectedSteps)
+    {
+        await using var db = CreateDb();
+        var provider = new TelecomProvider { Code = "DIALOG", Name = "Dialog Axiata" };
+        db.Add(provider);
+        // Finance has waited longest, then IT, then HR; a Validated and a Completed batch wait for no approver.
+        var waits = new[] { (BillBatchStatus.FinanceApproval, 8, 1), (BillBatchStatus.ITReview, 9, 3), (BillBatchStatus.HRApproval, 10, 5), (BillBatchStatus.Validated, 11, 6), (BillBatchStatus.Completed, 7, 7) };
+        foreach (var (status, month, day) in waits)
+        {
+            var batch = new BillBatch { ProviderId = provider.Id, CorporateCode = "C", BillingYear = 2026, BillingMonth = month, Status = status };
+            db.BillBatches.Add(batch);
+            db.BillLines.Add(new BillLine { BillBatchId = batch.Id, MobileNumber = "1", RawText = "1" });
+            db.ApprovalHistories.Add(new ApprovalHistory { BillBatchId = batch.Id, UserId = "u", DisplayName = "Earlier", ApprovedBy = "Earlier", ApprovedAt = new DateTimeOffset(2026, 10, day, 0, 0, 0, TimeSpan.Zero) });
+            db.ApprovalHistories.Add(new ApprovalHistory { BillBatchId = batch.Id, UserId = "u", DisplayName = "Last Approver", ApprovedBy = "Last Approver", Comment = "Checked", ApprovedAt = new DateTimeOffset(2026, 11, day, 0, 0, 0, TimeSpan.Zero) });
+        }
+        await db.SaveChangesAsync();
+        var user = new RoleUser(role);
+        var service = new EfBillApprovalWorkflowService(db, new MobileBill.Api.Identity.RoleBasedBillReviewAuthorizationService(user), user, new TestClock());
+
+        var pending = await service.GetPendingApprovalsAsync(default);
+
+        Assert.Equal(expectedSteps, string.Join(",", pending.Select(x => x.Step)));
+        Assert.All(pending, x => Assert.Equal(("Dialog Axiata", 1, "Last Approver", "Checked"), (x.Provider, x.NumberCount, x.LastActionBy, x.LastComment)));
+        Assert.All(pending, x => Assert.Equal(11, x.WaitingSince!.Value.Month));
+    }
+
+    [Fact]
+    public async Task Locking_a_batch_queues_its_report_emails_after_the_lock_is_saved()
+    {
+        await using var db = CreateDb();
+        var batch = await AddBatchAsync(db);
+        var reports = new RecordingLockDistribution(db);
+        var service = new EfBillApprovalWorkflowService(db, new AllowWorkflowAuthorization(), new TestUser(), new TestClock(), reportDistribution: reports);
+        await service.SubmitAsync(batch.Id, new WorkflowCommentRequest(null), default);
+        foreach (var comment in new[] { "IT", "HR", "Finance" }) await service.DecideAsync(batch.Id, new WorkflowDecisionRequest(ApprovalAction.Approve, comment), default);
+        Assert.Empty(reports.Statuses);
+
+        await service.LockAsync(batch.Id, default);
+
+        Assert.Equal([BillBatchStatus.Locked], reports.Statuses);
+    }
+
+    private sealed class RecordingLockDistribution(MobileBillDbContext db) : MobileBill.Application.Reports.IReportLockDistribution
+    {
+        public List<BillBatchStatus> Statuses { get; } = [];
+        public async Task QueueOnLockAsync(Guid batchId, CancellationToken cancellationToken) =>
+            Statuses.Add(await db.BillBatches.AsNoTracking().Where(x => x.Id == batchId).Select(x => x.Status).SingleAsync(cancellationToken));
+    }
+
+    private sealed class RoleUser(UserRole role) : ICurrentUserService { public string UserId => "u"; public string DisplayName => "User"; public UserRole Role => role; }
+
+    private sealed class RecordingNotifier(MobileBillDbContext db) : MobileBill.Application.Notifications.IBillApprovalNotifier
+    {
+        public List<BillBatchStatus> Statuses { get; } = [];
+        public async Task NotifyAwaitingApprovalAsync(Guid batchId, CancellationToken cancellationToken) =>
+            Statuses.Add(await db.BillBatches.AsNoTracking().Where(x => x.Id == batchId).Select(x => x.Status).SingleAsync(cancellationToken));
     }
 
     private static MobileBillDbContext CreateDb() => new(new DbContextOptionsBuilder<MobileBillDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);

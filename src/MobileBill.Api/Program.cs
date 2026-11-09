@@ -19,7 +19,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddControllers();
+// Every successful change, sign-in, report download and report email is recorded in the Activity Log.
+builder.Services.AddControllers(options => options.Filters.Add<MobileBill.Api.Activity.ActivityLogFilter>());
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddHealthChecks();
@@ -83,6 +84,12 @@ builder.Services.AddScoped<IBillReviewAuthorizationService, RoleBasedBillReviewA
 // so it does not touch their databases while a test is setting them up).
 if (builder.Configuration.GetValue("BackgroundJobs:ResignationCompletion", true))
     builder.Services.AddHostedService<MobileBill.Api.BackgroundJobs.ResignationCompletionService>();
+// Sends the queued approval and report emails; only while email is switched on (Email:Enabled).
+if (builder.Configuration.GetValue("Email:Enabled", false))
+{
+    builder.Services.AddHostedService<MobileBill.Api.BackgroundJobs.EmailDispatchService>();
+    builder.Services.AddHostedService<MobileBill.Api.BackgroundJobs.ReportEmailDispatchService>();
+}
 
 var app = builder.Build();
 

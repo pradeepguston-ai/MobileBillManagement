@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -118,7 +118,7 @@ describe('MonthlyBillReviewPage workflow and reporting', () => {
   it('shows Lock only for Completed plus CanLock and requires confirmation', async () => {
     const harness = installHarness({ status: 'Completed', capabilities: { canLock: true, currentStage: 'Completed' } }); renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lock Billing Period' }))
-    expect(screen.getByText('Locking this billing period will prevent further bill, matching, exception and deduction changes. Continue?')).toBeTruthy()
+    expect(screen.getByText('Locking this billing period will prevent further bill, matching, exception and deduction changes. The monthly bill report is then emailed to the active Report Distribution rules that have not received it yet. Continue?')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Lock' }))
 
     await waitFor(() => expect(harness.requests.some(request => request.url.endsWith('/lock'))).toBe(true))
@@ -191,6 +191,38 @@ describe('MonthlyBillReviewPage workflow and reporting', () => {
 
     expect(await screen.findByText('The batch status changed.')).toBeTruthy()
     await waitFor(() => expect(harness.requests.filter(request => request.url.endsWith('/workflow-capabilities')).length).toBeGreaterThan(1))
+  })
+
+  it('shows a refused IT review submission in a pop-up, one problem per line, with the way to fix each', async () => {
+    const refusal = '2 number(s) in Exception Review are not assigned to an employee. Assign them before submitting for IT review. 3 number(s) have no responsibility assigned. Assign By User or By Company before submitting for IT review.'
+    const harness = installHarness({ status: 'Validated', capabilities: { canSubmit: true }, commandFailure: { status: 409, detail: refusal } }); renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit for IT Review' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Submit' }))
+
+    const popup = await screen.findByRole('dialog', { name: 'Cannot submit for IT review' })
+    expect(within(popup).getByText('2 number(s) in Exception Review are not assigned to an employee. Assign them before submitting for IT review.')).toBeTruthy()
+    expect(within(popup).getByText('3 number(s) have no responsibility assigned. Assign By User or By Company before submitting for IT review.')).toBeTruthy()
+    expect(within(popup).getByRole('link', { name: 'Open Exception Review' }).getAttribute('href')).toBe('/billing/batch-1/exceptions')
+    // The submit dialog is closed, and the status was not changed.
+    expect(screen.queryByRole('dialog', { name: 'Submit for IT Review' })).toBeNull()
+    expect(harness.getStatus()).toBe('Validated')
+
+    fireEvent.click(within(popup).getByRole('button', { name: 'Show Unassigned Numbers' }))
+    await waitFor(() => expect(harness.requests.some(request => request.url.includes('/rows?') && request.url.includes('responsibility=Unassessed'))).toBe(true))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Cannot submit for IT review' })).toBeNull())
+  })
+
+  it('offers only Close when the refusal has nothing to fix on this screen', async () => {
+    installHarness({ status: 'Validated', capabilities: { canSubmit: true }, commandFailure: { status: 409, detail: 'Only a Validated batch can be submitted for IT review.' } }); renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit for IT Review' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Submit' }))
+
+    const popup = await screen.findByRole('dialog', { name: 'Cannot submit for IT review' })
+    expect(within(popup).getByText('Only a Validated batch can be submitted for IT review.')).toBeTruthy()
+    expect(within(popup).queryByRole('link', { name: 'Open Exception Review' })).toBeNull()
+    expect(within(popup).queryByRole('button', { name: 'Show Unassigned Numbers' })).toBeNull()
+    fireEvent.click(within(popup).getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Cannot submit for IT review' })).toBeNull())
   })
 
   it('shows a server authorization denial and does not guess a new status', async () => {

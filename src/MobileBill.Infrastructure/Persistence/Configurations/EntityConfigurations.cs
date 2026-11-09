@@ -432,3 +432,71 @@ internal sealed class AuditLogConfiguration : AuditableEntityConfiguration<Audit
         builder.HasIndex(entity => new { entity.EntityName, entity.EntityId, entity.PerformedAt });
     }
 }
+
+internal sealed class ReportDistributionRuleConfiguration : AuditableEntityConfiguration<ReportDistributionRule>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<ReportDistributionRule> builder)
+    {
+        builder.ToTable("ReportDistributionRules");
+        builder.Property(entity => entity.Name).HasMaxLength(200).IsRequired();
+        builder.Property(entity => entity.FactoryCodes).HasMaxLength(1000).IsRequired();
+        builder.Property(entity => entity.CategoryCodes).HasMaxLength(1000).IsRequired();
+        builder.HasIndex(entity => entity.IsActive);
+        builder.HasMany(entity => entity.Recipients).WithOne(recipient => recipient.Rule).HasForeignKey(recipient => recipient.RuleId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class ReportDistributionRecipientConfiguration : IEntityTypeConfiguration<ReportDistributionRecipient>
+{
+    public void Configure(EntityTypeBuilder<ReportDistributionRecipient> builder)
+    {
+        builder.ToTable("ReportDistributionRecipients", table =>
+            table.HasCheckConstraint("CK_ReportDistributionRecipients_UserOrEmail", "([UserId] IS NULL AND [Email] IS NOT NULL) OR ([UserId] IS NOT NULL AND [Email] IS NULL)"));
+        builder.HasKey(entity => entity.Id);
+        builder.Property(entity => entity.Id).ValueGeneratedNever();
+        builder.Property(entity => entity.Email).HasMaxLength(256);
+        builder.HasIndex(entity => entity.RuleId);
+        builder.HasOne(entity => entity.User).WithMany().HasForeignKey(entity => entity.UserId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ReportEmailDeliveryConfiguration : AuditableEntityConfiguration<ReportEmailDelivery>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<ReportEmailDelivery> builder)
+    {
+        builder.ToTable("ReportEmailDeliveries");
+        builder.Property(entity => entity.RuleName).HasMaxLength(200).IsRequired();
+        builder.Property(entity => entity.FactoryCodes).HasMaxLength(1000).IsRequired();
+        builder.Property(entity => entity.CategoryCodes).HasMaxLength(1000).IsRequired();
+        builder.Property(entity => entity.Recipients).HasMaxLength(4000).IsRequired();
+        builder.Property(entity => entity.Status).HasConversion<string>().HasMaxLength(50);
+        builder.Property(entity => entity.LastError).HasMaxLength(1000);
+        builder.Property(entity => entity.RequestedByName).HasMaxLength(256).IsRequired();
+        builder.HasIndex(entity => new { entity.Status, entity.NextAttemptAt });
+        builder.HasIndex(entity => new { entity.BillBatchId, entity.CreatedAtUtc });
+        builder.HasOne(entity => entity.BillBatch).WithMany().HasForeignKey(entity => entity.BillBatchId).OnDelete(DeleteBehavior.Restrict);
+        // A deleted rule keeps its log; RuleName stays as it was sent.
+        builder.HasOne(entity => entity.Rule).WithMany().HasForeignKey(entity => entity.RuleId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+internal sealed class ActivityLogConfiguration : IEntityTypeConfiguration<ActivityLog>
+{
+    public void Configure(EntityTypeBuilder<ActivityLog> builder)
+    {
+        builder.ToTable("ActivityLogs");
+        builder.HasKey(entity => entity.Id);
+        builder.Property(entity => entity.Id).ValueGeneratedNever();
+        builder.Property(entity => entity.UserId).HasMaxLength(256).IsRequired();
+        builder.Property(entity => entity.UserName).HasMaxLength(256).IsRequired();
+        builder.Property(entity => entity.Role).HasMaxLength(50).IsRequired();
+        builder.Property(entity => entity.Area).HasMaxLength(100).IsRequired();
+        builder.Property(entity => entity.Description).HasMaxLength(500).IsRequired();
+        builder.Property(entity => entity.TargetId).HasMaxLength(100);
+        builder.Property(entity => entity.HttpMethod).HasMaxLength(10).IsRequired();
+        builder.Property(entity => entity.Path).HasMaxLength(500).IsRequired();
+        builder.HasIndex(entity => entity.OccurredAt);
+        builder.HasIndex(entity => new { entity.UserId, entity.OccurredAt });
+        builder.HasIndex(entity => new { entity.Area, entity.OccurredAt });
+    }
+}

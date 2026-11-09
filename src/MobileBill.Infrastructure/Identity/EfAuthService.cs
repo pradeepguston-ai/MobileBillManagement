@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using MobileBill.Application.Common;
 using MobileBill.Application.Identity;
@@ -8,8 +9,12 @@ using MobileBill.Infrastructure.Persistence;
 
 namespace MobileBill.Infrastructure.Identity;
 
-public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService hasher, ITokenService tokenService, IClock clock) : IAuthService
+public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService hasher, ITokenService tokenService, IClock clock, IMemoryCache cache) : IAuthService
 {
+    // Per account, on top of the per-address rate limit: after this many wrong passwords within the window, sign-in for
+    // that email is refused until the window passes, so a password cannot be guessed from many addresses at once.
+    public const int MaxFailedSignIns = 10;
+    public static readonly TimeSpan FailedSignInWindow = TimeSpan.FromMinutes(15);
     private const int MinPasswordLength = 8;
     private const int MaxPasswordLength = 128;
     private const int MaxEmailLength = 256;
@@ -52,15 +57,25 @@ public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
         var password = request.Password ?? string.Empty;
+        // Unknown emails are counted too, so the limit does not reveal which emails are registered.
+        var failuresKey = $"sign-in-failures:{email}";
+        var failures = cache.Get<FailedSignIns>(failuresKey);
+        if (failures is not null && failures.Count >= MaxFailedSignIns && clock.UtcNow < failures.WindowEnds)
+            throw new TooManySignInAttemptsException((int)Math.Ceiling((failures.WindowEnds - clock.UtcNow).TotalMinutes));
         var user = await db.Users.SingleOrDefaultAsync(x => x.Email == email, token);
         if (user is null)
         {
             // Hash anyway so an unknown email takes as long as a wrong password and cannot be told apart by timing.
             hasher.Verify(TimingDummyUser.Value, password);
+            RecordFailure(failuresKey, failures);
             throw new InvalidCredentialsException();
         }
         if (!hasher.Verify(user, password))
+        {
+            RecordFailure(failuresKey, failures);
             throw new InvalidCredentialsException();
+        }
+        cache.Remove(failuresKey);
         if (user.Status != UserAccountStatus.Active)
             throw new AccountNotActiveException(user.Status);
 
@@ -109,6 +124,17 @@ public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService
         user.PasswordHash = new PasswordHasher<User>().HashPassword(user, Guid.NewGuid().ToString("N"));
         return user;
     });
+
+    // The window starts at the first failure; once it has passed, counting starts again.
+    private void RecordFailure(string key, FailedSignIns? failures)
+    {
+        var now = clock.UtcNow;
+        var current = failures is not null && now < failures.WindowEnds ? failures with { Count = failures.Count + 1 } : new FailedSignIns(1, now + FailedSignInWindow);
+        // Relative to now: the cache measures expiry against the system clock, not IClock.
+        cache.Set(key, current, current.WindowEnds - now);
+    }
+
+    private sealed record FailedSignIns(int Count, DateTimeOffset WindowEnds);
 
     private static UserDto Map(User user) => new(user.Id, user.Email, user.DisplayName, user.Role, user.Status);
 }

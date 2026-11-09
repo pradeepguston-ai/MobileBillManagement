@@ -32,6 +32,27 @@ public sealed class BillBatchWorkflowApiTests
         Assert.Equal("Reviewed", service.Decision.Comment);
     }
 
+    [Fact]
+    public async Task Pending_approvals_endpoint_lists_the_signed_in_users_batches_with_the_status_as_text()
+    {
+        var batchId = Guid.NewGuid();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IBillApprovalWorkflowService>();
+            services.AddSingleton<IBillApprovalWorkflowService>(new FakeWorkflowService(batchId));
+        }));
+        using var client = factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/pending-approvals")).StatusCode);
+        TestAuth.Authorize(client, UserRole.Cfo);
+        var body = await client.GetStringAsync("/api/pending-approvals");
+
+        Assert.Contains($"\"batchId\":\"{batchId}\"", body);
+        Assert.Contains("\"status\":\"FinanceApproval\"", body);
+        Assert.Contains("\"step\":\"Finance approval\"", body);
+        Assert.Contains("\"numberCount\":12", body);
+    }
+
     private sealed class FakeWorkflowService(Guid expectedId) : IBillApprovalWorkflowService
     {
         public Task<BillWorkflowCapabilitiesDto> GetCapabilitiesAsync(Guid batchId, CancellationToken cancellationToken) => Task.FromResult(new BillWorkflowCapabilitiesDto(false, false, false, false, false, "Validation", BillBatchStatus.Validated));
@@ -39,5 +60,7 @@ public sealed class BillBatchWorkflowApiTests
         public Task<BillWorkflowResult> SubmitAsync(Guid batchId, WorkflowCommentRequest request, CancellationToken cancellationToken) => Task.FromResult(new BillWorkflowResult(batchId, BillBatchStatus.ITReview));
         public Task<BillWorkflowResult> DecideAsync(Guid batchId, WorkflowDecisionRequest request, CancellationToken cancellationToken) { Assert.Equal(expectedId, batchId); Decision = request; return Task.FromResult(new BillWorkflowResult(batchId, BillBatchStatus.HRApproval)); }
         public Task<BillWorkflowResult> LockAsync(Guid batchId, CancellationToken cancellationToken) => Task.FromResult(new BillWorkflowResult(batchId, BillBatchStatus.Locked));
+        public Task<IReadOnlyList<PendingApprovalDto>> GetPendingApprovalsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<PendingApprovalDto>>([new PendingApprovalDto(expectedId, 2026, 10, "Dialog", "CORP-1", BillBatchStatus.FinanceApproval, "Finance approval", 12, DateTimeOffset.UnixEpoch, "Kumara", "HR approved")]);
     }
 }

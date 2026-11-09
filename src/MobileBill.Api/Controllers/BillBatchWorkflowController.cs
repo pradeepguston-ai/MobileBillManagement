@@ -21,3 +21,13 @@ public sealed class BillBatchWorkflowController(IBillApprovalWorkflowService wor
     [HttpPost("lock")]
     public Task<BillWorkflowResult> Lock(Guid batchId, CancellationToken cancellationToken) => workflowService.LockAsync(batchId, cancellationToken);
 }
+
+// The batches waiting for the signed-in user's approval, for the notification bell.
+[ApiController]
+[Route("api/pending-approvals")]
+[Authorize]
+public sealed class PendingApprovalsController(IBillApprovalWorkflowService workflowService) : ControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<PendingApprovalDto>> List(CancellationToken cancellationToken) => workflowService.GetPendingApprovalsAsync(cancellationToken);
+}

@@ -6,4 +6,6 @@ public interface IBillApprovalWorkflowService
     Task<BillWorkflowResult> SubmitAsync(Guid batchId, WorkflowCommentRequest request, CancellationToken cancellationToken);
     Task<BillWorkflowResult> DecideAsync(Guid batchId, WorkflowDecisionRequest request, CancellationToken cancellationToken);
     Task<BillWorkflowResult> LockAsync(Guid batchId, CancellationToken cancellationToken);
+    // Batches the signed-in user can approve now (empty for roles that approve nothing).
+    Task<IReadOnlyList<PendingApprovalDto>> GetPendingApprovalsAsync(CancellationToken cancellationToken);
 }

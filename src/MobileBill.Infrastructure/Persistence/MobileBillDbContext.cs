@@ -30,6 +30,10 @@ public sealed class MobileBillDbContext(DbContextOptions<MobileBillDbContext> op
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<User> Users => Set<User>();
     public DbSet<PasswordResetRequest> PasswordResetRequests => Set<PasswordResetRequest>();
+    public DbSet<ReportDistributionRule> ReportDistributionRules => Set<ReportDistributionRule>();
+    public DbSet<ReportDistributionRecipient> ReportDistributionRecipients => Set<ReportDistributionRecipient>();
+    public DbSet<ReportEmailDelivery> ReportEmailDeliveries => Set<ReportEmailDelivery>();
+    public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

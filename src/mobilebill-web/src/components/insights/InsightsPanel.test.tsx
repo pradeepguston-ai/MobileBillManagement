@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardPage } from '../../pages/DashboardPage'
 
+// Signed in as a Viewer: no pending approvals reminder (covered in PendingApprovalsBell.test.tsx).
+vi.mock('../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'v1', role: 'Viewer' } }) }))
+
 // The real charts need a browser layout engine; these stand-ins list the data each chart receives.
 vi.mock('@mui/x-charts', () => ({
   LineChart: ({ xAxis, series }: { xAxis: Array<{ data: string[] }>; series: Array<{ label: string; data: number[] }> }) =>

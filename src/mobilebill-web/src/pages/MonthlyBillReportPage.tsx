@@ -2,6 +2,7 @@ import { Button, Checkbox, FormControlLabel, Pagination, Stack, Table, TableBody
 import AddIcon from '@mui/icons-material/Add'
 import DownloadIcon from '@mui/icons-material/Download'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
+import ForwardToInboxIcon from '@mui/icons-material/ForwardToInbox'
 import { useCallback, useEffect, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 
@@ -16,6 +17,8 @@ import { ErrorState } from '../components/common/ErrorState'
 import { LoadingState } from '../components/common/LoadingState'
 import { PageHeader } from '../components/common/PageHeader'
 import { ReportCategorySelect, ReportFactorySelect, ReportSectionSelect } from '../components/billing/ReportFactorySelect'
+import { EmailReportsDialog } from '../components/billing/EmailReportsDialog'
+import { useCanPrepareBilling } from '../auth/AuthContext'
 
 export function MonthlyBillReportPage() {
   const [items, setItems] = useState<BillBatchListItem[]>([])
@@ -31,6 +34,9 @@ export function MonthlyBillReportPage() {
   const [categoryCodes, setCategoryCodes] = useState<string[]>([])
   const [sectionCodes, setSectionCodes] = useState<string[]>([])
   const [includeVas, setIncludeVas] = useState(false)
+  // IT Engineer and Administrator email the report to the Report Distribution recipients.
+  const canEmail = useCanPrepareBilling()
+  const [emailing, setEmailing] = useState<BillBatchListItem>()
 
   const load = useCallback(async () => {
     setLoading(true); setError(undefined)
@@ -53,8 +59,9 @@ export function MonthlyBillReportPage() {
     <PageHeader title="Monthly Bill Report" subtitle="Download completed and locked monthly reports using server-approved values." />
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'center' } }}><ReportFactorySelect value={factoryCodes} onChange={setFactoryCodes} /><ReportCategorySelect value={categoryCodes} onChange={setCategoryCodes} /><ReportSectionSelect value={sectionCodes} onChange={setSectionCodes} /><FormControlLabel control={<Checkbox checked={includeVas} onChange={event => setIncludeVas(event.target.checked)} />} label="Include VAS sheet (Excel)" /><Typography variant="body2" color="text.secondary">{factoryCodes.length || categoryCodes.length || sectionCodes.length ? `Downloads include only bills for the selected ${[factoryCodes.length ? 'factories' : '', categoryCodes.length ? 'categories' : '', sectionCodes.length ? 'sections' : ''].filter(Boolean).join(' + ')}. Unresolved exception lines appear only in the full report.` : 'Downloads include every factory, category and section (full report).'}</Typography></Stack>
     {error && <ErrorState message={error} />}
-    {loading ? <LoadingState label="Loading reports…" /> : items.length === 0 ? <EmptyState message="No billing batches are available for reporting." action={<Button component={RouterLink} to="/billing/new" variant="contained" startIcon={<AddIcon />}>Create Billing Batch</Button>} /> : <TableContainer sx={{ overflowX: 'auto' }}><Table stickyHeader size="small" aria-label="Monthly bill reports"><TableHead><TableRow><TableCell>Billing Period</TableCell><TableCell>Provider</TableCell><TableCell>Corporate Code</TableCell><TableCell align="right">Actual Bill Total</TableCell><TableCell align="right">Final Deduction Total</TableCell><TableCell>Status</TableCell><TableCell>Actions</TableCell></TableRow></TableHead><TableBody>{items.map(batch => { const summary = summaries[batch.id]; const eligible = canDownloadReport(batch.status); return <TableRow hover key={batch.id}><TableCell>{billingPeriod(batch.billingYear, batch.billingMonth)}</TableCell><TableCell>{batch.provider}</TableCell><TableCell>{batch.corporateCode}</TableCell><CurrencyCell value={summary?.totalActualBill} /><CurrencyCell value={summary?.totalFinalDeduction} /><TableCell><BatchStatusChip status={batch.status} /></TableCell><TableCell><Stack direction="row" spacing={1}><Button component={RouterLink} to={`/billing/${batch.id}/review`}>Open Review</Button><Button variant="contained" startIcon={<DownloadIcon />} disabled={!eligible || downloadingId === batch.id} onClick={() => requestDownload(batch.id, 'excel')}>Download Excel</Button><Button variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={!eligible || downloadingId === batch.id} onClick={() => requestDownload(batch.id, 'pdf')}>Download PDF</Button></Stack></TableCell></TableRow> })}</TableBody></Table></TableContainer>}
+    {loading ? <LoadingState label="Loading reports…" /> : items.length === 0 ? <EmptyState message="No billing batches are available for reporting." action={<Button component={RouterLink} to="/billing/new" variant="contained" startIcon={<AddIcon />}>Create Billing Batch</Button>} /> : <TableContainer sx={{ overflowX: 'auto' }}><Table stickyHeader size="small" aria-label="Monthly bill reports"><TableHead><TableRow><TableCell>Billing Period</TableCell><TableCell>Provider</TableCell><TableCell>Corporate Code</TableCell><TableCell align="right">Actual Bill Total</TableCell><TableCell align="right">Final Deduction Total</TableCell><TableCell>Status</TableCell><TableCell>Actions</TableCell></TableRow></TableHead><TableBody>{items.map(batch => { const summary = summaries[batch.id]; const eligible = canDownloadReport(batch.status); return <TableRow hover key={batch.id}><TableCell>{billingPeriod(batch.billingYear, batch.billingMonth)}</TableCell><TableCell>{batch.provider}</TableCell><TableCell>{batch.corporateCode}</TableCell><CurrencyCell value={summary?.totalActualBill} /><CurrencyCell value={summary?.totalFinalDeduction} /><TableCell><BatchStatusChip status={batch.status} /></TableCell><TableCell><Stack direction="row" spacing={1}><Button component={RouterLink} to={`/billing/${batch.id}/review`}>Open Review</Button><Button variant="contained" startIcon={<DownloadIcon />} disabled={!eligible || downloadingId === batch.id} onClick={() => requestDownload(batch.id, 'excel')}>Download Excel</Button><Button variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={!eligible || downloadingId === batch.id} onClick={() => requestDownload(batch.id, 'pdf')}>Download PDF</Button>{canEmail && <Button variant="outlined" startIcon={<ForwardToInboxIcon />} disabled={!eligible} onClick={() => setEmailing(batch)}>Email Reports</Button>}</Stack></TableCell></TableRow> })}</TableBody></Table></TableContainer>}
     {!loading && items.length > 0 && <Pagination page={page} count={totalPages} onChange={(_, value) => setPage(value)} />}
+    {emailing && <EmailReportsDialog batchId={emailing.id} period={billingPeriod(emailing.billingYear, emailing.billingMonth)} onClose={() => setEmailing(undefined)} />}
     <ConfirmActionDialog open={Boolean(warningBatchId)} title="Unresolved exceptions" message={exceptionDownloadWarning(warningBatchId ? summaries[warningBatchId]?.unresolvedExceptionCount ?? 0 : 0)} confirmLabel="Download anyway" busy={Boolean(downloadingId)} onCancel={() => setWarningBatchId(undefined)} onConfirm={() => { const id = warningBatchId; setWarningBatchId(undefined); if (id) void download(id, warningFormat) }} />
   </Stack>
 }

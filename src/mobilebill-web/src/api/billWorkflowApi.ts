@@ -18,3 +18,15 @@ export function decideWorkflow(batchId: string, action: WorkflowAction, comment?
 export function lockBatch(batchId: string) {
   return apiFetch(`/api/bill-batches/${batchId}/lock`, { method: 'POST' })
 }
+
+// A batch waiting for the signed-in user's approval (the notification bell).
+export type PendingApproval = { batchId: string; billingYear: number; billingMonth: number; provider: string; corporateCode: string; status: string; step: string; numberCount: number; waitingSince: string | null; lastActionBy: string | null; lastComment: string | null }
+export const approverRoles = ['HeadOfIt', 'GroupHrManager', 'Cfo', 'Administrator'] as const
+
+export function getPendingApprovals() {
+  return apiFetch<PendingApproval[]>('/api/pending-approvals')
+}
+
+export function billingPeriod(item: Pick<PendingApproval, 'billingYear' | 'billingMonth'>) {
+  return `${new Date(item.billingYear, item.billingMonth - 1, 1).toLocaleString('en', { month: 'long' })} ${item.billingYear}`
+}

@@ -11,7 +11,8 @@ ENV VITE_API_BASE_URL=
 RUN npm run build
 
 # Runs nginx as a non-root user.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+# 1.28 is the maintained stable branch (1.27 no longer gets security updates).
+FROM nginxinc/nginx-unprivileged:1.28-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/dist /usr/share/nginx/html

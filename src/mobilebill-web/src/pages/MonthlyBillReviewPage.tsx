@@ -11,7 +11,7 @@ import type { PagedResponse } from '../api/types'
 import { billingPeriod, exceptionDownloadWarning } from '../billing/billingRoutes'
 import { BatchContextNavigation } from '../components/billing/BatchContextNavigation'
 import { WorkflowStepper } from '../components/billing/WorkflowStepper'
-import { ApprovalHistorySection, BillDetailDrawer, BulkAssignBar, BulkAssignDialog, ReportCard, ReviewFilters, ReviewHeader, ReviewKpis, ReviewTable, WorkflowActionDialog, WorkflowActions } from '../components/billing/review/MonthlyBillReviewComponents'
+import { ApprovalHistorySection, BillDetailDrawer, BulkAssignBar, BulkAssignDialog, ReportCard, ReviewFilters, ReviewHeader, ReviewKpis, ReviewTable, WorkflowActionDialog, WorkflowActions, WorkflowErrorDialog, type WorkflowFailure } from '../components/billing/review/MonthlyBillReviewComponents'
 import { approvalComment, approvalRemarkNeedingComment, approvalRemarks, isApproval, type MasterOption, type ReviewColumn, type WorkflowDialogState } from '../components/billing/review/reviewPresentation'
 import { ConfirmActionDialog } from '../components/common/ConfirmActionDialog'
 import { ErrorState } from '../components/common/ErrorState'
@@ -33,6 +33,8 @@ export function MonthlyBillReviewPage() {
   const [workflowComment, setWorkflowComment] = useState('')
   const [approvalRemark, setApprovalRemark] = useState<string>(approvalRemarks[0])
   const [workflowDialogError, setWorkflowDialogError] = useState<string>()
+  // A refused workflow action, shown in a pop-up.
+  const [workflowFailure, setWorkflowFailure] = useState<WorkflowFailure>()
   const [lockConfirmationOpen, setLockConfirmationOpen] = useState(false)
   const [workflowSaving, setWorkflowSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -105,13 +107,13 @@ export function MonthlyBillReviewPage() {
       if (workflowDialog.kind === 'submit') await submitForItReview(batchId, comment)
       else await decideWorkflow(batchId, workflowDialog.action!, comment)
       setWorkflowDialog(undefined); setWorkflowComment(''); await refreshAuthoritativeState()
-    } catch (reason) { const errorMessage = message(reason, 'Unable to update the approval workflow.'); await refreshAuthoritativeState(); setError(errorMessage) }
+    } catch (reason) { const errorMessage = message(reason, 'Unable to update the approval workflow.'); const title = workflowFailureTitle(workflowDialog); setWorkflowDialog(undefined); await refreshAuthoritativeState(); setWorkflowFailure({ title, message: errorMessage }) }
     finally { setWorkflowSaving(false) }
   }
   const runLock = async () => {
     setWorkflowSaving(true); setError(undefined)
     try { await lockBatch(batchId); setLockConfirmationOpen(false); await refreshAuthoritativeState() }
-    catch (reason) { const errorMessage = message(reason, 'Unable to lock the billing period.'); await refreshAuthoritativeState(); setError(errorMessage) }
+    catch (reason) { const errorMessage = message(reason, 'Unable to lock the billing period.'); setLockConfirmationOpen(false); await refreshAuthoritativeState(); setWorkflowFailure({ title: 'Cannot lock the billing period', message: errorMessage }) }
     finally { setWorkflowSaving(false) }
   }
   const downloadReport = async (format: ReportFormat, filters?: ReportFilters) => { setDownloading(true); setError(undefined); try { await downloadReportAs(batchId, format, filters) } catch (reason) { setError(message(reason, `Unable to download the ${format === 'pdf' ? 'PDF' : 'Excel'} report.`)) } finally { setDownloading(false) } }
@@ -134,10 +136,18 @@ export function MonthlyBillReviewPage() {
     <ReviewTable rows={rows} loading={loading} sort={sort} direction={direction} selectable={canBulkAssign} selectedIds={selectedIds} allOnPageSelected={allOnPageSelected} onToggleRow={toggleRow} onToggleAllOnPage={toggleAllOnPage} onSort={toggleSort} onOpen={row => void openDetail(row)} />
     <BillDetailDrawer batchId={batchId} canAssess={canAssess} detail={detail} batchStatus={summary?.batchStatus} onClose={() => setDetail(undefined)} onSaved={() => detail ? refreshAfterAssessment(detail.row.id) : Promise.resolve()} />
     <WorkflowActionDialog state={workflowDialog} comment={workflowComment} remark={approvalRemark} error={workflowDialogError} saving={workflowSaving} onComment={setWorkflowComment} onRemark={setApprovalRemark} onCancel={() => setWorkflowDialog(undefined)} onConfirm={() => void runWorkflow()} />
-    <ConfirmActionDialog open={lockConfirmationOpen} title="Lock Billing Period" message="Locking this billing period will prevent further bill, matching, exception and deduction changes. Continue?" confirmLabel="Confirm Lock" busy={workflowSaving} onCancel={() => setLockConfirmationOpen(false)} onConfirm={() => void runLock()} />
+    <WorkflowErrorDialog failure={workflowFailure} exceptionReviewPath={`/billing/${batchId}/exceptions`} onShowUnassigned={() => updateFilter('responsibility', 'Unassessed')} onClose={() => setWorkflowFailure(undefined)} />
+    <ConfirmActionDialog open={lockConfirmationOpen} title="Lock Billing Period" message="Locking this billing period will prevent further bill, matching, exception and deduction changes. The monthly bill report is then emailed to the active Report Distribution rules that have not received it yet. Continue?" confirmLabel="Confirm Lock" busy={workflowSaving} onCancel={() => setLockConfirmationOpen(false)} onConfirm={() => void runLock()} />
     <ConfirmActionDialog open={downloadWarningOpen} title="Unresolved exceptions" message={exceptionDownloadWarning(summary?.unresolvedExceptionCount ?? 0)} confirmLabel="Download anyway" busy={downloading} onCancel={() => setDownloadWarningOpen(false)} onConfirm={() => { setDownloadWarningOpen(false); void downloadReport(pendingFormat, pendingFilters) }} />
     <BulkAssignDialog open={bulkDialogOpen} selectedIds={Array.from(selectedIds)} mobileNumberById={mobileNumberById} onClose={() => setBulkDialogOpen(false)} onCompleted={() => { setBulkDialogOpen(false); clearSelection(); setLoading(true); void load() }} />
   </Stack>
 }
 
 function message(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback }
+
+function workflowFailureTitle(state: WorkflowDialogState) {
+  if (state.kind === 'submit') return 'Cannot submit for IT review'
+  if (state.action === 'Reject') return 'Cannot reject the batch'
+  if (state.action === 'ReturnForCorrection') return 'Cannot return the batch for correction'
+  return 'Cannot approve the batch'
+}

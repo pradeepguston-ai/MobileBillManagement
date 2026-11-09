@@ -2,8 +2,7 @@ import { Box, Button, Pagination, Stack, Table, TableBody, TableCell, TableConta
 import DownloadIcon from '@mui/icons-material/Download'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import AddIcon from '@mui/icons-material/Add'
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import VisibilityIcon from '@mui/icons-material/Visibility'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useCallback, useEffect, useState } from 'react'
 import { useCanPrepareBilling } from '../../auth/AuthContext'
 import { Link as RouterLink } from 'react-router-dom'
@@ -41,7 +40,7 @@ export function BillingBatchListPage() {
 
   return <Stack spacing={2}>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-      <Box><Typography component="h1" variant="h4">Billing Batches</Typography><Typography color="text.secondary">Create and continue monthly telecom bill processing.</Typography></Box>
+      <Box><Typography component="h1" variant="h4">Billing Batches</Typography><Typography color="text.secondary">Create billing batches and open them to process and review the monthly telecom bill.</Typography></Box>
       {canPrepare && <Button component={RouterLink} to="/billing/new" variant="contained" startIcon={<AddIcon />}>New Billing Batch</Button>}
     </Stack>
     {error && <ErrorState message={error} />}
@@ -54,15 +53,26 @@ export function BillingBatchListPage() {
         <Sortable label="Calculated Grand Total" column="calculatedGrandTotal" active={sortBy} direction={sortDirection} onSort={changeSort} align="right" />
         <TableCell>Validation Level</TableCell><TableCell>Status</TableCell><TableCell>Uploaded File</TableCell><TableCell>Uploaded By</TableCell>
         <Sortable label="Uploaded At" column="uploadedAt" active={sortBy} direction={sortDirection} onSort={changeSort} />
-        <TableCell>Actions</TableCell>
+        <TableCell sx={{ whiteSpace: 'nowrap' }}>Actions</TableCell>
       </TableRow></TableHead>
       <TableBody>{items.map(batch => <TableRow key={batch.id} hover>
         <TableCell sx={{ whiteSpace: 'nowrap' }}>{billingPeriod(batch.billingYear, batch.billingMonth)}</TableCell><TableCell>{batch.provider}</TableCell><TableCell>{batch.corporateCode}</TableCell>
         <TableCell align="right"><CurrencyDisplay value={batch.calculatedGrandTotal} unavailable="—" /></TableCell><TableCell><ValidationLevelChip level={batch.validationLevel} /></TableCell><TableCell><BatchStatusChip status={batch.status} /></TableCell><TableCell>{batch.originalFileName ?? '—'}</TableCell><TableCell>{batch.uploadedBy ?? '—'}</TableCell><TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(batch.uploadedAt)}</TableCell>
-        <TableCell><Stack direction="row" spacing={1}><Button component={RouterLink} to={`/billing/${batch.id}/process`} size="small" variant="outlined" startIcon={<VisibilityIcon />}>Open</Button><Button component={RouterLink} to={batchContinuationRoute(batch.id, batch.status)} size="small" variant="contained" startIcon={<PlayArrowIcon />}>Continue Processing</Button>{canDownloadReport(batch.status) && <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={() => void download(batch.id)}>Download Report</Button>}{canDownloadReport(batch.status) && <Button size="small" variant="outlined" startIcon={<PictureAsPdfIcon />} onClick={() => void download(batch.id, 'pdf')}>Download PDF</Button>}</Stack></TableCell>
+        <TableCell><BatchActions batch={batch} onDownload={format => void download(batch.id, format)} /></TableCell>
       </TableRow>)}</TableBody>
     </Table></TableContainer>}
     {totalPages > 0 && <Pagination page={page} count={totalPages} onChange={(_, value) => setPage(value)} />}
+  </Stack>
+}
+
+// Open goes to the batch's Monthly Bill Review once it is validated; before that (no bills to review yet) to its processing page.
+// The download buttons are always shown, disabled until the batch is Completed or Locked, so every row lines up.
+function BatchActions({ batch, onDownload }: { batch: BillBatchListItem; onDownload: (format: ReportFormat) => void }) {
+  const eligible = canDownloadReport(batch.status)
+  return <Stack direction="row" spacing={1} sx={{ flexWrap: 'nowrap', '& .MuiButton-root': { whiteSpace: 'nowrap' } }}>
+    <Button component={RouterLink} to={batchContinuationRoute(batch.id, batch.status)} size="small" variant="contained" startIcon={<OpenInNewIcon />}>Open</Button>
+    <Button size="small" variant="outlined" startIcon={<DownloadIcon />} disabled={!eligible} onClick={() => onDownload('excel')}>Download Excel</Button>
+    <Button size="small" variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={!eligible} onClick={() => onDownload('pdf')}>Download PDF</Button>
   </Stack>
 }
 

@@ -1,13 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using MobileBill.Application.Billing;
 using MobileBill.Application.Common;
+using MobileBill.Application.Notifications;
+using MobileBill.Application.Reports;
 using MobileBill.Domain.Entities;
 using MobileBill.Domain.Enums;
 using MobileBill.Infrastructure.Persistence;
 
 namespace MobileBill.Infrastructure.Billing;
 
-public sealed class EfBillApprovalWorkflowService(MobileBillDbContext db, IBillReviewAuthorizationService authorization, ICurrentUserService currentUser, IClock clock) : IBillApprovalWorkflowService
+// notifier: emails the next approver when a batch reaches IT, HR or Finance approval (none in tests that do not need it).
+// reportDistribution: emails the monthly bill report to the Report Distribution rules when a batch is locked.
+public sealed class EfBillApprovalWorkflowService(MobileBillDbContext db, IBillReviewAuthorizationService authorization, ICurrentUserService currentUser, IClock clock, IBillApprovalNotifier? notifier = null, IReportLockDistribution? reportDistribution = null) : IBillApprovalWorkflowService
 {
     public async Task<BillWorkflowCapabilitiesDto> GetCapabilitiesAsync(Guid batchId, CancellationToken token)
     {
@@ -49,10 +53,13 @@ public sealed class EfBillApprovalWorkflowService(MobileBillDbContext db, IBillR
         var batch = await Find(batchId, token);
         Require(batch.Status == BillBatchStatus.Validated, "Only a Validated batch can be submitted for IT review.");
         Require(batch.ValidationLevel != ValidationLevel.None, "A batch must pass validation before IT submission.");
+        // Both problems are reported together, so they can be fixed in one go.
         var unassignedNumbers = await UnassignedNumberCount(batchId, token);
-        Require(unassignedNumbers == 0, $"{unassignedNumbers} number(s) in Exception Review are not assigned to an employee. Assign them before submitting for IT review.");
         var unassessed = await db.MonthlyBills.CountAsync(x => x.BillLine.BillBatchId == batchId && x.AssessedAt == null, token);
-        Require(unassessed == 0, $"{unassessed} number(s) have no responsibility assigned. Assign By User or By Company before submitting for IT review.");
+        var problems = new List<string>();
+        if (unassignedNumbers > 0) problems.Add($"{unassignedNumbers} number(s) in Exception Review are not assigned to an employee. Assign them before submitting for IT review.");
+        if (unassessed > 0) problems.Add($"{unassessed} number(s) have no responsibility assigned. Assign By User or By Company before submitting for IT review.");
+        Require(problems.Count == 0, string.Join(" ", problems));
         return await TransitionWithHistory(batch, ApprovalStage.ITReview, WorkflowRole.ITReviewer, ApprovalAction.Submit, ApprovalDecision.Pending, BillBatchStatus.ITReview, request.Comment, token);
     }
 
@@ -92,7 +99,40 @@ public sealed class EfBillApprovalWorkflowService(MobileBillDbContext db, IBillR
         batch.UpdatedBy = currentUser.UserId;
         db.AuditLogs.Add(new AuditLog { EntityName = nameof(BillBatch), EntityId = batch.Id, Action = "Locked", BeforeDataJson = $"{{\"Status\":\"{previous}\"}}", AfterDataJson = $"{{\"Status\":\"{BillBatchStatus.Locked}\",\"WorkflowRole\":\"{WorkflowRole.PeriodLocker}\"}}", PerformedBy = currentUser.UserId, PerformedAt = now, CreatedAtUtc = now, CreatedBy = currentUser.UserId });
         await db.SaveChangesAsync(token);
+        // Only once the lock is saved; queuing the report emails never undoes it.
+        if (reportDistribution is not null) await reportDistribution.QueueOnLockAsync(batch.Id, token);
         return new BillWorkflowResult(batch.Id, batch.Status);
+    }
+
+    // Each approval step, the action that approves it and its name; a user sees the steps their role may approve.
+    private static readonly (BillBatchStatus Status, BillWorkflowAction Action, string Step)[] ApprovalSteps =
+    [
+        (BillBatchStatus.ITReview, BillWorkflowAction.ApproveIt, "IT approval"),
+        (BillBatchStatus.HRApproval, BillWorkflowAction.ApproveHr, "HR approval"),
+        (BillBatchStatus.FinanceApproval, BillWorkflowAction.ApproveFinance, "Finance approval"),
+    ];
+
+    public async Task<IReadOnlyList<PendingApprovalDto>> GetPendingApprovalsAsync(CancellationToken token)
+    {
+        var steps = new Dictionary<BillBatchStatus, string>();
+        foreach (var (status, action, step) in ApprovalSteps)
+            if (await authorization.AuthorizeAsync(action, token)) steps[status] = step;
+        if (steps.Count == 0) return [];
+
+        var statuses = steps.Keys.ToList();
+        var batches = await db.BillBatches.AsNoTracking()
+            .Where(x => statuses.Contains(x.Status))
+            .Select(x => new { x.Id, x.BillingYear, x.BillingMonth, Provider = x.Provider.Name, x.CorporateCode, x.Status, Numbers = x.BillLines.Count() })
+            .ToListAsync(token);
+        var ids = batches.Select(x => x.Id).ToList();
+        // The latest step of each batch is the one that sent it to the current approver.
+        var latest = (await db.ApprovalHistories.AsNoTracking().Where(x => ids.Contains(x.BillBatchId)).ToListAsync(token))
+            .GroupBy(x => x.BillBatchId).ToDictionary(group => group.Key, group => group.OrderByDescending(x => x.ApprovedAt).First());
+        return batches
+            .Select(x => { var last = latest.GetValueOrDefault(x.Id); return new PendingApprovalDto(x.Id, x.BillingYear, x.BillingMonth, x.Provider, x.CorporateCode, x.Status, steps[x.Status], x.Numbers, last?.ApprovedAt, last?.DisplayName, last?.Comment); })
+            // Longest waiting first.
+            .OrderBy(x => x.WaitingSince ?? DateTimeOffset.MinValue).ThenBy(x => x.BillingYear).ThenBy(x => x.BillingMonth)
+            .ToList();
     }
 
     private async Task<BillWorkflowResult> TransitionWithHistory(BillBatch batch, ApprovalStage stage, WorkflowRole role, ApprovalAction action, ApprovalDecision decision, BillBatchStatus next, string? comment, CancellationToken token)
@@ -104,6 +144,9 @@ public sealed class EfBillApprovalWorkflowService(MobileBillDbContext db, IBillR
         batch.UpdatedBy = currentUser.UserId;
         db.ApprovalHistories.Add(new ApprovalHistory { BillBatchId = batch.Id, Stage = stage, WorkflowRole = role, Action = action, Decision = decision, Comment = Trim(comment), UserId = currentUser.UserId, DisplayName = currentUser.DisplayName, ApprovedBy = currentUser.DisplayName, ApprovedAt = now, PreviousStatus = previous, NewStatus = next, CreatedAtUtc = now, CreatedBy = currentUser.UserId });
         await db.SaveChangesAsync(token);
+        // Only once the step is saved; a batch returned for correction goes back to Validated and emails no one.
+        if (notifier is not null && next is BillBatchStatus.ITReview or BillBatchStatus.HRApproval or BillBatchStatus.FinanceApproval)
+            await notifier.NotifyAwaitingApprovalAsync(batch.Id, token);
         return new BillWorkflowResult(batch.Id, next);
     }
 
