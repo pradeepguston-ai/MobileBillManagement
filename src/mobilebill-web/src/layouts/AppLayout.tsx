@@ -47,8 +47,9 @@ import { PendingApprovalsBell } from '../components/notifications/PendingApprova
 import { type ReactNode, useState } from 'react'
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
-import { roleLabels, type UserRole } from '../api/authApi'
-import { useAuth } from '../auth/AuthContext'
+import { roleLabels } from '../api/authApi'
+import { useAuth, usePermission, usePermissions } from '../auth/AuthContext'
+import { modulesByPath } from '../auth/permissions'
 import { navigationTarget } from './navigationTarget'
 import gustonLogo from '../assets/guston-logo.webp'
 import { brand, brandGradients } from '../theme/theme'
@@ -84,6 +85,7 @@ export function AppLayout() {
   const isCompact = useMediaQuery(theme.breakpoints.down('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
   const { user, logout } = useAuth()
+  const canUseAssistant = usePermission('ai-assistant')
   const navigate = useNavigate()
   const signOut = () => { logout(); navigate('/login', { replace: true }) }
   return (
@@ -113,14 +115,14 @@ export function AppLayout() {
         }}
       >
         <Toolbar />
-        <NavigationContent role={user?.role} />
+        <NavigationContent />
       </Drawer>}
-      {isCompact && <Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)} slotProps={{ paper: { sx: { ...sidebarPaperSx, width: drawerWidth } } }}><Toolbar sx={{ justifyContent: 'flex-end' }}><IconButton aria-label="Close navigation" onClick={() => setMobileOpen(false)} sx={{ color: '#fff' }}><CloseIcon /></IconButton></Toolbar><NavigationContent role={user?.role} onNavigate={() => setMobileOpen(false)} /></Drawer>}
+      {isCompact && <Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)} slotProps={{ paper: { sx: { ...sidebarPaperSx, width: drawerWidth } } }}><Toolbar sx={{ justifyContent: 'flex-end' }}><IconButton aria-label="Close navigation" onClick={() => setMobileOpen(false)} sx={{ color: '#fff' }}><CloseIcon /></IconButton></Toolbar><NavigationContent onNavigate={() => setMobileOpen(false)} /></Drawer>}
       <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3, md: 4 } }}>
         <Toolbar />
         <Outlet />
       </Box>
-      <AssistantChat />
+      {canUseAssistant && <AssistantChat />}
     </Box>
   )
 }
@@ -152,24 +154,17 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
 }
 
-// Administration: users and password resets for Administrators; Report Distribution also for IT Engineers.
-function administrationLinks(role?: UserRole) {
-  const links: string[][] = []
-  if (role === 'Administrator') links.push(["/admin/users", "User Management"], ["/admin/password-resets", "Password Resets"])
-  if (role === 'Administrator' || role === 'ITEngineer') links.push(["/admin/report-distribution", "Report Distribution"], ["/admin/email-history", "Email History"])
-  return links
-}
-
-function NavigationContent({ role, onNavigate }: { role?: UserRole; onNavigate?: () => void }) {
-  const adminLinks = administrationLinks(role)
+function NavigationContent({ onNavigate }: { onNavigate?: () => void }) {
+  const can = usePermissions()
   return <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
   <List aria-label="Primary navigation" sx={{ px: 1 }}>
-    <NavigationLink to="/" label="Dashboard" onNavigate={onNavigate} />
+    {can('dashboard', 'View') && <NavigationLink to="/" label="Dashboard" onNavigate={onNavigate} />}
     <NavigationGroup label="Billing" links={[["/monthly-bill-review", "Monthly Bill Review"], ["/billing", "Billing Batches"], ["/exception-review", "Exception Review"]]} onNavigate={onNavigate} />
     <NavigationGroup label="Masters" links={[["/employees", "Employees"], ["/mobile-allocations", "Mobile Allocations"], ["/devices", "Mobile Devices"],["/factories", "Factories"], ["/departments", "Departments"], ["/designations", "Designations"], ["/categories", "Categories"], ["/packages", "Mobile Packages"], ["/providers", "Telecom Providers"], ["/third-party-companies", "Third Party Companies"]]} onNavigate={onNavigate} />
     <NavigationGroup label="Reports" links={[["/reports/monthly-bill", "Monthly Bill Report"], ["/reports/vas", "VAS Report"]]} onNavigate={onNavigate} />
     <NavigationGroup label="Audit" links={[["/activity-log", "Activity Log"]]} onNavigate={onNavigate} />
-    {adminLinks.length > 0 && <NavigationGroup label="Administration" links={adminLinks} onNavigate={onNavigate} />}
+    {/* Each administration screen shows for whoever may view it (User Management > Permissions). */}
+    <NavigationGroup label="Administration" links={[["/admin/users", "User Management"], ["/admin/password-resets", "Password Resets"], ["/admin/report-distribution", "Report Distribution"], ["/admin/email-history", "Email History"]]} onNavigate={onNavigate} />
   </List>
   <Box sx={{ mt: 'auto', mx: 2, py: 2, borderTop: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 700, letterSpacing: '0.02em', textAlign: 'center' }}>
     Powered By Concord IT
@@ -178,7 +173,11 @@ function NavigationContent({ role, onNavigate }: { role?: UserRole; onNavigate?:
   </Box>
 }
 
-function NavigationGroup({ label, links, onNavigate }: { label: string; links: string[][]; onNavigate?: () => void }) {
+// Links to screens the role may not view are left out, and a group with none left is not shown.
+function NavigationGroup({ label, links: allLinks, onNavigate }: { label: string; links: string[][]; onNavigate?: () => void }) {
+  const can = usePermissions()
+  const links = allLinks.filter(([to]) => !modulesByPath[to] || can(modulesByPath[to], 'View'))
+  if (links.length === 0) return null
   return <>
     <ListSubheader disableSticky sx={{ lineHeight: 2.5, mt: 1, bgcolor: 'transparent', color: 'rgba(255,255,255,0.94)', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', '&::after': { content: '""', display: 'block', height: 2, width: 24, mt: -0.5, borderRadius: 1, backgroundImage: `linear-gradient(90deg, ${brand.yellow}, ${brand.orange}, ${brand.red})` } }}>{label}</ListSubheader>
     {links.map(([to, linkLabel]) => <NavigationLink key={`${label}-${linkLabel}`} to={to} label={linkLabel} onNavigate={onNavigate} />)}

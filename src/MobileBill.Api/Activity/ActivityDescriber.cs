@@ -71,6 +71,9 @@ public static class ActivityDescriber
                 return new("Report Emails", $"Emailed the {{0}} report to {count} distribution {(count == 1 ? "rule" : "rules")}", ActivityTarget.BillBatch, id);
             case ("ReportDistribution", "Resend"): return new("Report Emails", "Resent the {0}", ActivityTarget.ReportEmail, id, Fallback: "report email");
 
+            case ("Permissions", "Save"): return new("Users", $"Changed the screen permissions of the {RoleName(Property<UserRole?>(result, "Role"))} role");
+            case ("Permissions", "Reset"): return new("Users", $"Reset the screen permissions of the {RoleName(Property<UserRole?>(result, "Role"))} role to the defaults");
+            case ("Users", "Create"): return new("Users", $"Created the account of {{0}} as {RoleName(Property<UserRole?>(result, "Role"))}", Label: Property<string>(result, "DisplayName"));
             case ("Users", "ChangeRole"): return new("Users", $"Changed the role of {{0}} to {RoleName(Property<UserRole?>(result, "Role"))}", ActivityTarget.User, id);
             case ("Users", "Activate"): return new("Users", "Activated the account of {0}", ActivityTarget.User, id);
             case ("Users", "Deactivate"): return new("Users", "Deactivated the account of {0}", ActivityTarget.User, id);

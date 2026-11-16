@@ -18,7 +18,7 @@ import { LoadingState } from '../components/common/LoadingState'
 import { PageHeader } from '../components/common/PageHeader'
 import { ReportCategorySelect, ReportFactorySelect, ReportSectionSelect } from '../components/billing/ReportFactorySelect'
 import { EmailReportsDialog } from '../components/billing/EmailReportsDialog'
-import { useCanPrepareBilling } from '../auth/AuthContext'
+import { usePermission } from '../auth/AuthContext'
 
 export function MonthlyBillReportPage() {
   const [items, setItems] = useState<BillBatchListItem[]>([])
@@ -35,7 +35,7 @@ export function MonthlyBillReportPage() {
   const [sectionCodes, setSectionCodes] = useState<string[]>([])
   const [includeVas, setIncludeVas] = useState(false)
   // IT Engineer and Administrator email the report to the Report Distribution recipients.
-  const canEmail = useCanPrepareBilling()
+  const canEmail = usePermission('report-distribution', 'Edit')
   const [emailing, setEmailing] = useState<BillBatchListItem>()
 
   const load = useCallback(async () => {

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // Signed in as an IT Engineer (SIM Pool actions are for Administrator and IT Engineer).
-vi.mock('../../auth/AuthContext', () => ({ useCanEditMasterData: (roles: readonly string[] = ['Administrator', 'ITEngineer']) => roles.includes('ITEngineer') }))
+vi.mock('../../auth/AuthContext', async () => (await import('../../test/roleAuthMock')).roleAuthMock(() => 'ITEngineer'))
 
 import { EmployeesPage, MobileAllocationsPage } from './MasterPages'
 

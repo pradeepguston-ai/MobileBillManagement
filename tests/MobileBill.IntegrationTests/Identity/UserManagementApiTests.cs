@@ -80,6 +80,50 @@ public sealed class UserManagementApiTests
     }
 
     [Fact]
+    public async Task Administrator_creates_an_active_account_that_can_sign_in()
+    {
+        using var fixture = new UsersApiFixture();
+        TestAuth.Authorize(fixture.Client, UserRole.Administrator);
+
+        var create = await fixture.Client.PostAsJsonAsync("/api/users", new { email = "  New.User@Concord.lk ", displayName = " New User ", role = "Administrator", password = "Str0ngPass!" });
+
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var created = await create.Content.ReadFromJsonAsync<ManagedUserItem>();
+        Assert.Equal(("new.user@concord.lk", "New User", "Administrator", "Active"), (created!.Email, created.DisplayName, created.Role, created.Status));
+
+        fixture.Client.DefaultRequestHeaders.Authorization = null;
+        var login = await fixture.Client.PostAsJsonAsync("/api/auth/login", new { email = "new.user@concord.lk", password = "Str0ngPass!" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    }
+
+    [Fact]
+    public async Task Creating_an_account_rejects_a_taken_email_and_a_short_password()
+    {
+        using var fixture = new UsersApiFixture();
+        await fixture.SeedPendingUserAsync("taken@concord.lk", UserRole.Viewer, UserAccountStatus.Active);
+        TestAuth.Authorize(fixture.Client, UserRole.Administrator);
+
+        var taken = await fixture.Client.PostAsJsonAsync("/api/users", new { email = "TAKEN@concord.lk", displayName = "Someone", role = "Viewer", password = "Str0ngPass!" });
+        var shortPassword = await fixture.Client.PostAsJsonAsync("/api/users", new { email = "other@concord.lk", displayName = "Someone", role = "Viewer", password = "short" });
+
+        Assert.Equal(HttpStatusCode.Conflict, taken.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, shortPassword.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(UserRole.ITEngineer)]
+    [InlineData(UserRole.HeadOfIt)]
+    public async Task Only_an_administrator_can_create_accounts(UserRole role)
+    {
+        using var fixture = new UsersApiFixture();
+        TestAuth.Authorize(fixture.Client, role);
+
+        var response = await fixture.Client.PostAsJsonAsync("/api/users", new { email = "x@concord.lk", displayName = "X", role = "Viewer", password = "Str0ngPass!" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Non_administrator_cannot_list_users_or_change_roles()
     {
         using var fixture = new UsersApiFixture();

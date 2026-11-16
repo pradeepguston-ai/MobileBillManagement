@@ -1,6 +1,7 @@
 using MobileBill.Api.Activity;
 using MobileBill.Application.Activity;
 using MobileBill.Application.Billing;
+using MobileBill.Application.Identity;
 using MobileBill.Application.MasterData;
 using MobileBill.Application.Reports;
 using MobileBill.Domain.Enums;
@@ -41,6 +42,23 @@ public sealed class ActivityDescriberTests
             arguments: new Dictionary<string, object?> { ["request"] = new WorkflowDecisionRequest(action, "comment") }, result: new BillWorkflowResult(Id, newStatus));
 
         Assert.Equal(expected, plan!.Describe("October 2026"));
+    }
+
+    [Fact]
+    public void A_permission_change_names_the_role()
+    {
+        var saved = new RolePermissionsDto(UserRole.HrUser, false, true, []);
+
+        Assert.Equal("Changed the screen permissions of the HR User role", Plan("Permissions", "Save", "PUT", result: saved)!.Describe(null));
+        Assert.Equal("Reset the screen permissions of the HR User role to the defaults", Plan("Permissions", "Reset", "POST", result: saved)!.Describe(null));
+    }
+
+    [Fact]
+    public void A_created_account_is_named_with_its_role()
+    {
+        var plan = Plan("Users", "Create", "POST", result: new ManagedUserDto(Id, "new@concord.lk", "Nimal Perera", UserRole.HrUser, UserAccountStatus.Active, DateTimeOffset.UnixEpoch, null));
+
+        Assert.Equal(("Users", "Created the account of Nimal Perera as HR User"), (plan!.Area, plan.Describe(null)));
     }
 
     [Fact]

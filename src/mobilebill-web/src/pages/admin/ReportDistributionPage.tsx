@@ -2,6 +2,8 @@ import { Alert, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogCo
 import AddIcon from '@mui/icons-material/Add'
 import { useCallback, useEffect, useState } from 'react'
 
+import { usePermissions } from '../../auth/AuthContext'
+
 import {
   createReportDistributionRule, deleteReportDistributionRule, getReportDistributionRules, getReportRecipientOptions, updateReportDistributionRule,
   type ReportDistributionRule, type ReportRecipientOption,
@@ -22,6 +24,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Who receives the monthly bill report by email: each rule sends the report for its factories and categories
 // (none chosen means all) to its system users and typed addresses. Reports are sent from Monthly Bill Report.
 export function ReportDistributionPage() {
+  const can = usePermissions()
   const [rules, setRules] = useState<ReportDistributionRule[]>()
   const [options, setOptions] = useState<ReportRecipientOption[]>([])
   const [error, setError] = useState<string>()
@@ -76,7 +79,7 @@ export function ReportDistributionPage() {
 
   return <Stack spacing={2}>
     <PageHeader title="Report Distribution" subtitle="Who receives the monthly bill report by email, for which factories and categories. Active rules are emailed automatically when a batch is locked, and can be sent any time from Monthly Bill Report."
-      action={<Button variant="contained" startIcon={<AddIcon />} onClick={() => { setFormError(undefined); setForm(emptyForm) }}>Add Rule</Button>} />
+      action={can('report-distribution', 'Create') ? <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setFormError(undefined); setForm(emptyForm) }}>Add Rule</Button> : undefined} />
     {error && <ErrorState message={error} onRetry={() => void load()} />}
     {!rules ? (!error && <LoadingState label="Loading rules…" />) : rules.length === 0
       ? <EmptyState message="No report distribution rules yet. Add a rule for each factory and the categories its recipients should receive." />
@@ -90,7 +93,7 @@ export function ReportDistributionPage() {
             <Chip key={recipient.userId ?? recipient.email} size="small" color={recipient.inactive ? 'warning' : 'default'} variant={recipient.userId ? 'filled' : 'outlined'}
               label={recipient.userId ? `${recipient.displayName}${recipient.inactive ? ' (inactive)' : ''}` : recipient.email} title={recipient.email} />)}</Box></TableCell>
           <TableCell><Chip size="small" color={rule.isActive ? 'success' : 'default'} label={rule.isActive ? 'Active' : 'Off'} /></TableCell>
-          <TableCell><Stack direction="row" spacing={1}><Button size="small" onClick={() => edit(rule)}>Edit</Button><Button size="small" color="error" onClick={() => setDeleting(rule)}>Delete</Button></Stack></TableCell>
+          <TableCell><Stack direction="row" spacing={1}>{can('report-distribution', 'Edit') && <Button size="small" onClick={() => edit(rule)}>Edit</Button>}{can('report-distribution', 'Delete') && <Button size="small" color="error" onClick={() => setDeleting(rule)}>Delete</Button>}</Stack></TableCell>
         </TableRow>)}</TableBody>
       </Table></TableContainer>}
 

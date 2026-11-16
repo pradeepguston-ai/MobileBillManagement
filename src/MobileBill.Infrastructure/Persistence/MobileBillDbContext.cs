@@ -34,6 +34,7 @@ public sealed class MobileBillDbContext(DbContextOptions<MobileBillDbContext> op
     public DbSet<ReportDistributionRecipient> ReportDistributionRecipients => Set<ReportDistributionRecipient>();
     public DbSet<ReportEmailDelivery> ReportEmailDeliveries => Set<ReportEmailDelivery>();
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

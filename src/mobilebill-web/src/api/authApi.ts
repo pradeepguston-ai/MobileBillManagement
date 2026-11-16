@@ -131,3 +131,10 @@ export const statusLabels: Record<UserStatus, string> = {
   Active: 'Active',
   Deactivated: 'Deactivated',
 }
+
+export type CreateUserInput = { email: string; displayName: string; role: UserRole; password: string }
+
+// Administrators only: the account is active at once.
+export function createUser(input: CreateUserInput) {
+  return apiFetch<ManagedUser>('/api/users', { method: 'POST', body: JSON.stringify(input) })
+}

@@ -15,12 +15,12 @@ public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService
     // that email is refused until the window passes, so a password cannot be guessed from many addresses at once.
     public const int MaxFailedSignIns = 10;
     public static readonly TimeSpan FailedSignInWindow = TimeSpan.FromMinutes(15);
-    private const int MinPasswordLength = 8;
-    private const int MaxPasswordLength = 128;
-    private const int MaxEmailLength = 256;
-    private const int MaxDisplayNameLength = 200;
+    internal const int MinPasswordLength = 8;
+    internal const int MaxPasswordLength = 128;
+    internal const int MaxEmailLength = 256;
+    internal const int MaxDisplayNameLength = 200;
 
-    private static bool IsAcceptablePassword(string? password) =>
+    internal static bool IsAcceptablePassword(string? password) =>
         !string.IsNullOrWhiteSpace(password) && password.Length is >= MinPasswordLength and <= MaxPasswordLength;
 
     public async Task<UserDto> RegisterAsync(RegisterRequest request, CancellationToken token)

@@ -2,13 +2,20 @@ import { Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, 
 import { useCallback, useEffect, useState } from 'react'
 
 import { approvePasswordReset, listPasswordResetRequests, rejectPasswordReset, roleLabels, type PasswordResetRequest } from '../../api/authApi'
+import { useCurrentUser, usePermission } from '../../auth/AuthContext'
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/common/ErrorState'
 import { LoadingState } from '../../components/common/LoadingState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { formatDateTime } from '../../utils/formatters'
 
+// Deciding needs the User Management Edit permission. Only an Administrator decides resets for Administrator accounts,
+// and nobody decides their own.
 export function PasswordResetRequestsPage() {
+  const user = useCurrentUser()
+  const canEdit = usePermission('user-management', 'Edit')
+  const canDecide = (request: PasswordResetRequest) => canEdit && (!user
+    || (request.userId !== user.id && (user.role === 'Administrator' || request.role !== 'Administrator')))
   const [requests, setRequests] = useState<PasswordResetRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
@@ -58,10 +65,10 @@ export function PasswordResetRequestsPage() {
                   <TableCell>{roleLabels[request.role]}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(request.requestedAtUtc)}</TableCell>
                   <TableCell>
-                    <Stack direction="row" spacing={1}>
+                    {canDecide(request) && <Stack direction="row" spacing={1}>
                       <Button size="small" variant="contained" disabled={busyId === request.id} onClick={() => void decide(request.id, approvePasswordReset, 'Unable to approve this request.')}>Approve</Button>
                       <Button size="small" color="error" disabled={busyId === request.id} onClick={() => void decide(request.id, rejectPasswordReset, 'Unable to reject this request.')}>Reject</Button>
-                    </Stack>
+                    </Stack>}
                   </TableCell>
                 </TableRow>
               ))}

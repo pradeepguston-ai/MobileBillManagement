@@ -2,8 +2,7 @@ import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogC
 import { useEffect, useState } from 'react'
 
 import { cancelResignation, getResignations, type EmployeeResignation, type ResignationStatus } from '../../api/masterDataApi'
-import { useCanEditMasterData } from '../../auth/AuthContext'
-import { organisationMasterEditorRoles } from '../../auth/roles'
+import { usePermission } from '../../auth/AuthContext'
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/master-data/ErrorState'
 import { LoadingState } from '../../components/master-data/LoadingState'
@@ -12,7 +11,7 @@ import { LoadingState } from '../../components/master-data/LoadingState'
 // employee becomes inactive and their numbers move to the SIM Pool.
 export function ResignationsPanel({ status }: { status: ResignationStatus }) {
   const pending = status === 'Pending'
-  const canEdit = useCanEditMasterData(organisationMasterEditorRoles)
+  const canEdit = usePermission('employees', 'Edit')
   const [items, setItems] = useState<EmployeeResignation[]>()
   const [error, setError] = useState<string>()
   const [reloadKey, setReloadKey] = useState(0)

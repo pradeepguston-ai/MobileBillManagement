@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, EfAuthService>();
         services.AddScoped<IUserSessionValidator, EfUserSessionValidator>();
         services.AddScoped<IUserManagementService, EfUserManagementService>();
+        services.AddScoped<IPermissionService, EfPermissionService>();
         services.AddSingleton<IBillFileStorage, FileSystemBillFileStorage>();
         services.AddScoped<IBillBatchService, EfBillBatchService>();
         services.AddScoped<IBillMatchingService, EfBillMatchingService>();

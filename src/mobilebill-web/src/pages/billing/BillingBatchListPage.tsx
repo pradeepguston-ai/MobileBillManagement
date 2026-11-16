@@ -4,7 +4,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import AddIcon from '@mui/icons-material/Add'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { useCallback, useEffect, useState } from 'react'
-import { useCanPrepareBilling } from '../../auth/AuthContext'
+import { useCanPrepareBilling, usePermission } from '../../auth/AuthContext'
 import { Link as RouterLink } from 'react-router-dom'
 
 import { downloadReportAs, getBatches, type BillBatchListItem, type ReportFormat } from '../../api/billingApi'
@@ -68,11 +68,12 @@ export function BillingBatchListPage() {
 // Open goes to the batch's Monthly Bill Review once it is validated; before that (no bills to review yet) to its processing page.
 // The download buttons are always shown, disabled until the batch is Completed or Locked, so every row lines up.
 function BatchActions({ batch, onDownload }: { batch: BillBatchListItem; onDownload: (format: ReportFormat) => void }) {
+  const canDownload = usePermission('monthly-bill-report')
   const eligible = canDownloadReport(batch.status)
   return <Stack direction="row" spacing={1} sx={{ flexWrap: 'nowrap', '& .MuiButton-root': { whiteSpace: 'nowrap' } }}>
     <Button component={RouterLink} to={batchContinuationRoute(batch.id, batch.status)} size="small" variant="contained" startIcon={<OpenInNewIcon />}>Open</Button>
-    <Button size="small" variant="outlined" startIcon={<DownloadIcon />} disabled={!eligible} onClick={() => onDownload('excel')}>Download Excel</Button>
-    <Button size="small" variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={!eligible} onClick={() => onDownload('pdf')}>Download PDF</Button>
+    {canDownload && <Button size="small" variant="outlined" startIcon={<DownloadIcon />} disabled={!eligible} onClick={() => onDownload('excel')}>Download Excel</Button>}
+    {canDownload && <Button size="small" variant="outlined" startIcon={<PictureAsPdfIcon />} disabled={!eligible} onClick={() => onDownload('pdf')}>Download PDF</Button>}
   </Stack>
 }
 

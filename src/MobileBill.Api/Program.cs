@@ -80,6 +80,9 @@ builder.Services.AddRateLimiter(options =>
 });
 builder.Services.AddScoped<ICurrentUserService, HttpContextCurrentUserService>();
 builder.Services.AddScoped<IBillReviewAuthorizationService, RoleBasedBillReviewAuthorizationService>();
+// Per-role screen permissions set in User Management ([Permission(...)] on controllers).
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider, MobileBill.Api.Identity.PermissionPolicyProvider>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, MobileBill.Api.Identity.PermissionHandler>();
 // Completes pending resignations hourly. BackgroundJobs:ResignationCompletion = false turns it off (the test hosts do,
 // so it does not touch their databases while a test is setting them up).
 if (builder.Configuration.GetValue("BackgroundJobs:ResignationCompletion", true))

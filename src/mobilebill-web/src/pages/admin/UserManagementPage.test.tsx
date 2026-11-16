@@ -18,6 +18,7 @@ function mockApi() {
     const url = String(input)
     if (url.includes('/api/auth/me')) return json(me)
     if (url.includes('/api/users/pending')) return json([{ id: 'p1', email: 'new@example.com', displayName: 'New Person', requestedRole: 'HeadOfIt', registeredAtUtc: '2026-09-20T04:00:00Z' }])
+    if (url.endsWith('/api/users') && init?.method === 'POST') return json({ id: 'user-9', ...JSON.parse(String(init.body)), status: 'Active', registeredAtUtc: '2026-11-16T04:00:00Z', updatedAtUtc: null })
     if (url.endsWith('/role') && init?.method === 'PUT') return json({ ...users[1], role: 'HeadOfIt' })
     if (url.endsWith('/deactivate') || url.endsWith('/activate')) return json(users[1])
     if (url.includes('/api/users')) return json(users)
@@ -34,13 +35,71 @@ describe('UserManagementPage', () => {
     mockApi(); renderPage()
 
     expect(screen.getByRole('heading', { name: 'User Management' })).toBeTruthy()
-    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['All Users', 'Pending Users'])
+    await screen.findByRole('tab', { name: 'Create User' })
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['All Users', 'Pending Users', 'Create User', 'Permissions'])
     expect(await screen.findByText('Engineer Two')).toBeTruthy()
     expect(screen.getByText('Former User')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('tab', { name: 'Pending Users' }))
     expect(await screen.findByText('New Person')).toBeTruthy()
     expect(screen.queryByText('Engineer Two')).toBeNull()
+  })
+
+  it('creates an active account from the Create User tab after checking the passwords match', async () => {
+    const fetchMock = mockApi(); renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Create User' }))
+
+    fireEvent.change(screen.getByLabelText(/Full Name/), { target: { value: ' Nimal Perera ' } })
+    fireEvent.change(screen.getByLabelText(/Email/), { target: { value: 'nimal@concord.lk' } })
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Role/ }))
+    fireEvent.click(await screen.findByRole('option', { name: 'HR User' }))
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'Str0ngPass!' } })
+    fireEvent.change(screen.getByLabelText(/Confirm Password/), { target: { value: 'different1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create User' }))
+    expect(await screen.findByText('The passwords do not match.')).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+
+    fireEvent.change(screen.getByLabelText(/Confirm Password/), { target: { value: 'Str0ngPass!' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create User' }))
+
+    expect(await screen.findByText('Nimal Perera (nimal@concord.lk) can now sign in as HR User.')).toBeTruthy()
+    const post = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/api/users') && init?.method === 'POST')!
+    expect(JSON.parse(String(post[1]!.body))).toEqual({ displayName: 'Nimal Perera', email: 'nimal@concord.lk', role: 'HrUser', password: 'Str0ngPass!' })
+  })
+
+  it('lets a granted role manage other accounts but never Administrator accounts, the Administrator role or permissions', async () => {
+    const granted = [{ module: 'user-management', canView: true, canCreate: false, canEdit: true, canDelete: false }]
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('/api/auth/me')) return json({ ...me, id: 'head-1', role: 'HeadOfIt' })
+      if (url.includes('/api/permissions/mine')) return json(granted)
+      if (url.includes('/api/users/pending')) return json([])
+      if (url.includes('/api/users')) return json(users)
+      return json({})
+    })
+    localStorage.setItem('mobilebill.token', 'test-token')
+    renderPage()
+
+    const engineerRow = (await screen.findByText('Engineer Two')).closest('tr')!
+    // Enabled once the role's saved permissions have loaded (HeadOfIt has no User Management rights by default).
+    await waitFor(() => expect(within(engineerRow).getByRole('combobox').getAttribute('aria-disabled')).not.toBe('true'))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['All Users', 'Pending Users'])
+    expect(within(screen.getByText('Admin One').closest('tr')!).getByRole('combobox').getAttribute('aria-disabled')).toBe('true')
+    expect(within(engineerRow).queryByRole('button', { name: 'Deactivate' })).toBeNull()
+
+    fireEvent.mouseDown(within(engineerRow).getByRole('combobox'))
+    expect(await screen.findByRole('option', { name: 'Head of IT' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Administrator' })).toBeNull()
+  })
+
+  it('hides the Create User tab from anyone but an administrator', async () => {
+    const fetchMock = mockApi()
+    fetchMock.mockImplementation(async input => String(input).includes('/api/auth/me') ? json({ ...me, role: 'ITEngineer' }) : json([]))
+    renderPage()
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/auth/me'))).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['All Users', 'Pending Users'])
   })
 
   it('changes a role, confirms before deactivating, and protects the signed-in administrator', async () => {

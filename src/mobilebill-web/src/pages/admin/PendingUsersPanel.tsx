@@ -2,13 +2,17 @@ import { Button, Stack, Table, TableBody, TableCell, TableContainer, TableHead, 
 import { useCallback, useEffect, useState } from 'react'
 
 import { activateUser, deactivateUser, listPendingUsers, roleLabels, type PendingUser } from '../../api/authApi'
+import { usePermission } from '../../auth/AuthContext'
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/common/ErrorState'
 import { LoadingState } from '../../components/common/LoadingState'
 import { formatDateTime } from '../../utils/formatters'
 
-// Pending registrations list, shown as a tab of the User Management screen.
+// Pending registrations list, shown as a tab of the User Management screen. Activate needs the User Management Edit
+// permission, Reject needs Delete.
 export function PendingUsersPanel({ onChanged }: { onChanged?: () => void }) {
+  const canActivate = usePermission('user-management', 'Edit')
+  const canReject = usePermission('user-management', 'Delete')
   const [users, setUsers] = useState<PendingUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>()
@@ -66,8 +70,8 @@ export function PendingUsersPanel({ onChanged }: { onChanged?: () => void }) {
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(user.registeredAtUtc)}</TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={1}>
-                      <Button size="small" variant="contained" disabled={busyId === user.id} onClick={() => void activate(user.id)}>Activate</Button>
-                      <Button size="small" color="error" disabled={busyId === user.id} onClick={() => void deactivate(user.id)}>Reject</Button>
+                      {canActivate && <Button size="small" variant="contained" disabled={busyId === user.id} onClick={() => void activate(user.id)}>Activate</Button>}
+                      {canReject && <Button size="small" color="error" disabled={busyId === user.id} onClick={() => void deactivate(user.id)}>Reject</Button>}
                     </Stack>
                   </TableCell>
                 </TableRow>

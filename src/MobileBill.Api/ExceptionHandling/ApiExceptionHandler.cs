@@ -44,6 +44,8 @@ public sealed class ApiExceptionHandler(IProblemDetailsService problemDetailsSer
             PasswordResetRequestNotFoundException => StatusCodes.Status404NotFound,
             PasswordResetConflictException => StatusCodes.Status409Conflict,
             UserManagementConflictException => StatusCodes.Status400BadRequest,
+            UserManagementForbiddenException => StatusCodes.Status403Forbidden,
+            PermissionValidationException => StatusCodes.Status400BadRequest,
             AssistantValidationException => StatusCodes.Status400BadRequest,
             AssistantUnavailableException => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status500InternalServerError

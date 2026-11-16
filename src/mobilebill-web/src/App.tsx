@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { RequireAuth } from './auth/RequireAuth'
+import { RequirePermission } from './auth/RequirePermission'
 import { AppLayout } from './layouts/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
 import { MonthlyBillReportPage } from './pages/MonthlyBillReportPage'
@@ -33,32 +34,33 @@ function App() {
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="pending-approval" element={<PendingApprovalPage />} />
         <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-          <Route index element={<DashboardPage />} />
-          <Route path="employees" element={<EmployeesPage />} />
-          <Route path="mobile-allocations" element={<MobileAllocationsPage />} />
-          <Route path="devices" element={<MobileDevicesPage />} />
+          <Route index element={<RequirePermission module="dashboard"><DashboardPage /></RequirePermission>} />
+          <Route path="employees" element={<RequirePermission module="employees"><EmployeesPage /></RequirePermission>} />
+          <Route path="mobile-allocations" element={<RequirePermission module="mobile-allocations"><MobileAllocationsPage /></RequirePermission>} />
+          <Route path="devices" element={<RequirePermission module="mobile-devices"><MobileDevicesPage /></RequirePermission>} />
 
-          <Route path="factories" element={<FactoriesPage />} />
-          <Route path="departments" element={<DepartmentsPage />} />          <Route path="designations" element={<DesignationsPage />} />
-          <Route path="categories" element={<CategoriesPage />} />
-          <Route path="providers" element={<ProvidersPage />} />
-          <Route path="third-party-companies" element={<ThirdPartyCompaniesPage />} />
-          <Route path="packages" element={<MobilePackagesPage />} />
-          <Route path="billing" element={<BillingBatchListPage />} />
-          <Route path="monthly-bill-review" element={<MonthlyBillOverviewPage />} />
-          <Route path="billing/new" element={<CreateBillingBatchPage />} />
-          <Route path="billing/:batchId/process" element={<BillingProcessingPage />} />
-          <Route path="billing/:batchId/lines" element={<BillLinesPage />} />
-          <Route path="exception-review" element={<ExceptionReviewPage />} />
-          <Route path="billing/:batchId/exceptions" element={<ExceptionReviewPage />} />
-          <Route path="billing/:batchId/review" element={<MonthlyBillReviewPage />} />
-          <Route path="reports/monthly-bill" element={<MonthlyBillReportPage />} />
-          <Route path="reports/vas" element={<VasReportPage />} />
-          <Route path="activity-log" element={<ActivityLogPage />} />
-          <Route path="admin/users" element={<RequireAuth roles={['Administrator']}><UserManagementPage /></RequireAuth>} />
-          <Route path="admin/password-resets" element={<RequireAuth roles={['Administrator']}><PasswordResetRequestsPage /></RequireAuth>} />
-          <Route path="admin/report-distribution" element={<RequireAuth roles={['Administrator', 'ITEngineer']}><ReportDistributionPage /></RequireAuth>} />
-          <Route path="admin/email-history" element={<RequireAuth roles={['Administrator', 'ITEngineer']}><EmailHistoryPage /></RequireAuth>} />
+          <Route path="factories" element={<RequirePermission module="factories"><FactoriesPage /></RequirePermission>} />
+          <Route path="departments" element={<RequirePermission module="departments"><DepartmentsPage /></RequirePermission>} />
+          <Route path="designations" element={<RequirePermission module="designations"><DesignationsPage /></RequirePermission>} />
+          <Route path="categories" element={<RequirePermission module="categories"><CategoriesPage /></RequirePermission>} />
+          <Route path="providers" element={<RequirePermission module="providers"><ProvidersPage /></RequirePermission>} />
+          <Route path="third-party-companies" element={<RequirePermission module="third-party-companies"><ThirdPartyCompaniesPage /></RequirePermission>} />
+          <Route path="packages" element={<RequirePermission module="mobile-packages"><MobilePackagesPage /></RequirePermission>} />
+          <Route path="billing" element={<RequirePermission module="billing-batches"><BillingBatchListPage /></RequirePermission>} />
+          <Route path="monthly-bill-review" element={<RequirePermission module="monthly-bill-review"><MonthlyBillOverviewPage /></RequirePermission>} />
+          <Route path="billing/new" element={<RequirePermission module="billing-batches"><CreateBillingBatchPage /></RequirePermission>} />
+          <Route path="billing/:batchId/process" element={<RequirePermission module="billing-batches"><BillingProcessingPage /></RequirePermission>} />
+          <Route path="billing/:batchId/lines" element={<RequirePermission module="billing-batches"><BillLinesPage /></RequirePermission>} />
+          <Route path="exception-review" element={<RequirePermission module="exception-review"><ExceptionReviewPage /></RequirePermission>} />
+          <Route path="billing/:batchId/exceptions" element={<RequirePermission module="exception-review"><ExceptionReviewPage /></RequirePermission>} />
+          <Route path="billing/:batchId/review" element={<RequirePermission module="monthly-bill-review"><MonthlyBillReviewPage /></RequirePermission>} />
+          <Route path="reports/monthly-bill" element={<RequirePermission module="monthly-bill-report"><MonthlyBillReportPage /></RequirePermission>} />
+          <Route path="reports/vas" element={<RequirePermission module="vas-report"><VasReportPage /></RequirePermission>} />
+          <Route path="activity-log" element={<RequirePermission module="activity-log"><ActivityLogPage /></RequirePermission>} />
+          <Route path="admin/users" element={<RequirePermission module="user-management"><UserManagementPage /></RequirePermission>} />
+          <Route path="admin/password-resets" element={<RequirePermission module="user-management"><PasswordResetRequestsPage /></RequirePermission>} />
+          <Route path="admin/report-distribution" element={<RequirePermission module="report-distribution"><ReportDistributionPage /></RequirePermission>} />
+          <Route path="admin/email-history" element={<RequirePermission module="report-distribution"><EmailHistoryPage /></RequirePermission>} />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

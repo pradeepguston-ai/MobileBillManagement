@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // Signed in as an IT Engineer unless a test says otherwise.
 const signedIn = vi.hoisted(() => ({ role: 'ITEngineer' }))
-vi.mock('../../auth/AuthContext', () => ({ useCanEditMasterData: (roles: readonly string[] = ['Administrator', 'ITEngineer']) => roles.includes(signedIn.role) }))
+vi.mock('../../auth/AuthContext', async () => (await import('../../test/roleAuthMock')).roleAuthMock(() => signedIn.role))
 
 import { MobileDevicesPage } from './MasterPages'
 

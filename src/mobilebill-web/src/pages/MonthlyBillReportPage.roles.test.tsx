@@ -4,12 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { UserRole } from '../api/authApi'
 
-// The signed-in role, applied through the real role list behind useCanPrepareBilling.
+// The signed-in role, applied through the default Report Distribution permissions (Edit sends report emails).
 const auth = vi.hoisted(() => ({ role: 'ITEngineer' as string }))
-vi.mock('../auth/AuthContext', async () => {
-  const { billingPreparerRoles } = await import('../auth/roles')
-  return { useCanPrepareBilling: () => (billingPreparerRoles as readonly string[]).includes(auth.role) }
-})
+vi.mock('../auth/AuthContext', async () => (await import('../test/roleAuthMock')).roleAuthMock(() => auth.role))
 
 import { MonthlyBillReportPage } from './MonthlyBillReportPage'
 

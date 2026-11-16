@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MobileBill.Domain.Enums;
+using MobileBill.Application.Identity;
+using MobileBill.Api.Identity;
 using MobileBill.Application.Reports;
 
 namespace MobileBill.Api.Controllers;
 
 // Value Added Services report. View-only, so every signed-in role may use it, like the other reports.
-[ApiController, Authorize]
+[ApiController, Permission(PermissionModules.VasReport, PermissionAction.View)]
 [Route("api/reports/vas")]
 public sealed class VasReportsController(IVasReportService vasReports) : ControllerBase
 {

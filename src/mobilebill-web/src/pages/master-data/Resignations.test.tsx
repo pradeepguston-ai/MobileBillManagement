@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // Signed in as an HR User.
-vi.mock('../../auth/AuthContext', () => ({ useCanEditMasterData: (roles: readonly string[] = ['Administrator', 'ITEngineer']) => roles.includes('HrUser') }))
+vi.mock('../../auth/AuthContext', async () => (await import('../../test/roleAuthMock')).roleAuthMock(() => 'HrUser'))
 
 import { EmployeesPage } from './MasterPages'
 

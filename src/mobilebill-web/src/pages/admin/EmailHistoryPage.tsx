@@ -1,6 +1,8 @@
 import { Alert, Button, FormControl, InputLabel, MenuItem, Pagination, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { useCallback, useEffect, useState } from 'react'
 
+import { usePermission } from '../../auth/AuthContext'
+
 import { resendReportEmail, searchReportEmails, type ReportEmailDelivery, type ReportEmailStatus } from '../../api/reportDistributionApi'
 import type { PagedResponse } from '../../api/types'
 import { billingPeriod } from '../../billing/billingRoutes'
@@ -17,6 +19,7 @@ export const historyRefreshMs = 10_000
 // Every monthly bill report email, across batches and newest first: sent by hand from Monthly Bill Report or automatically
 // when a batch was locked. Filter by status or search a rule name or recipient; a failed or sent email can be sent again.
 export function EmailHistoryPage() {
+  const canResend = usePermission('report-distribution', 'Edit')
   const [result, setResult] = useState<PagedResponse<ReportEmailDelivery>>()
   const [error, setError] = useState<string>()
   const [actionError, setActionError] = useState<string>()
@@ -76,7 +79,7 @@ export function EmailHistoryPage() {
             <TableCell sx={{ maxWidth: 320, wordBreak: 'break-word' }}>{item.recipients}</TableCell>
             <TableCell sx={{ maxWidth: 280 }}><DeliveryStatus delivery={item} /></TableCell>
             <TableCell>{item.requestedBy}</TableCell>
-            <TableCell>{item.status !== 'Pending' && <Button size="small" onClick={() => void resend(item.id)}>Resend</Button>}</TableCell>
+            <TableCell>{canResend && item.status !== 'Pending' && <Button size="small" onClick={() => void resend(item.id)}>Resend</Button>}</TableCell>
           </TableRow>)}</TableBody>
         </Table></TableContainer>
         {result.totalPages > 1 && <Pagination page={page} count={result.totalPages} onChange={(_, value) => setPage(value)} />}

@@ -12,9 +12,14 @@ import { formatDateTime } from '../../utils/formatters'
 
 const statusTone: Record<ManagedUser['status'], StatusTone> = { Active: 'success', PendingActivation: 'warning', Deactivated: 'neutral' }
 
-// Every account: change its role, or activate / deactivate it. Administrators cannot lock themselves out.
+// Every account: change its role, or activate / deactivate it, as the User Management permission allows (Edit, Delete).
+// Nobody can lock themselves out, and only Administrators can touch Administrator accounts or give that role.
 export function AllUsersPanel({ refreshKey }: { refreshKey?: number }) {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, can } = useAuth()
+  const isAdministrator = currentUser?.role === 'Administrator'
+  const canEdit = can('user-management', 'Edit')
+  const canDelete = can('user-management', 'Delete')
+  const roleOptions = isAdministrator ? allRoles : allRoles.filter(option => option.value !== 'Administrator')
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -74,14 +79,15 @@ export function AllUsersPanel({ refreshKey }: { refreshKey?: number }) {
               {users.map(item => {
                 const isSelf = item.id === currentUser?.id
                 const busy = busyId === item.id
+                const administratorOnly = !isAdministrator && item.role === 'Administrator'
                 return (
                   <TableRow key={item.id} hover>
                     <TableCell>{item.displayName}{isSelf && <Typography component="span" variant="caption" color="text.secondary"> (you)</Typography>}</TableCell>
                     <TableCell>{item.email}</TableCell>
                     <TableCell>
                       <FormControl size="small" sx={{ minWidth: 180 }}>
-                        <Select value={item.role} disabled={busy || isSelf} onChange={event => changeRole(item, event.target.value as UserRole)} slotProps={{ input: { 'aria-label': `Role for ${item.displayName}` } }}>
-                          {allRoles.map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+                        <Select value={item.role} disabled={busy || isSelf || !canEdit || administratorOnly} onChange={event => changeRole(item, event.target.value as UserRole)} slotProps={{ input: { 'aria-label': `Role for ${item.displayName}` } }}>
+                          {(administratorOnly ? allRoles : roleOptions).map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
                         </Select>
                       </FormControl>
                     </TableCell>
@@ -89,8 +95,8 @@ export function AllUsersPanel({ refreshKey }: { refreshKey?: number }) {
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(item.registeredAtUtc)}</TableCell>
                     <TableCell>
                       {item.status === 'Active'
-                        ? <Button size="small" color="error" disabled={busy || isSelf} onClick={() => setConfirmDeactivate(item)}>Deactivate</Button>
-                        : <Button size="small" variant="contained" disabled={busy} onClick={() => void run(item.id, () => activateUser(item.id), `${item.displayName} has been activated.`, 'Unable to activate this account.')}>Activate</Button>}
+                        ? canDelete && <Button size="small" color="error" disabled={busy || isSelf || administratorOnly} onClick={() => setConfirmDeactivate(item)}>Deactivate</Button>
+                        : canEdit && <Button size="small" variant="contained" disabled={busy || administratorOnly} onClick={() => void run(item.id, () => activateUser(item.id), `${item.displayName} has been activated.`, 'Unable to activate this account.')}>Activate</Button>}
                     </TableCell>
                   </TableRow>
                 )

@@ -21,6 +21,7 @@ public sealed class ReportDistributionApiTests
         {
             services.RemoveAll<IReportDistributionService>();
             services.AddSingleton<IReportDistributionService>(new FakeService());
+            services.UseDefaultPermissions();
         }));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, role);
@@ -38,6 +39,7 @@ public sealed class ReportDistributionApiTests
         {
             services.RemoveAll<IReportDistributionService>();
             services.AddSingleton<IReportDistributionService>(new FakeService());
+            services.UseDefaultPermissions();
         }));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, UserRole.ITEngineer);
@@ -56,6 +58,7 @@ public sealed class ReportDistributionApiTests
         {
             services.RemoveAll<IReportDistributionService>();
             services.AddSingleton<IReportDistributionService>(service);
+            services.UseDefaultPermissions();
         }));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, UserRole.Administrator);

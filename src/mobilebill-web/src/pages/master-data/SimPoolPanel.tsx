@@ -2,7 +2,7 @@ import { Alert, Box, Button, Chip, Table, TableBody, TableCell, TableHead, Table
 import { useEffect, useState } from 'react'
 
 import { disconnectSim, getSimPool, type SimPoolItem } from '../../api/masterDataApi'
-import { useCanEditMasterData } from '../../auth/AuthContext'
+import { usePermission } from '../../auth/AuthContext'
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/master-data/ErrorState'
 import { LoadingState } from '../../components/master-data/LoadingState'
@@ -23,7 +23,7 @@ export function SimPoolPanel({ reloadKey = 0 }: { reloadKey?: number }) {
   const [error, setError] = useState<string>()
   const [reloads, setReloads] = useState(0)
   const [disconnecting, setDisconnecting] = useState<Disconnecting>()
-  const canDisconnect = useCanEditMasterData()
+  const canDisconnect = usePermission('mobile-allocations', 'Delete')
   useEffect(() => {
     let active = true
     getSimPool()

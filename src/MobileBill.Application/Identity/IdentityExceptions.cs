@@ -8,5 +8,7 @@ public sealed class AccountNotActiveException(MobileBill.Domain.Enums.UserAccoun
 public sealed class TooManySignInAttemptsException(int minutes) : Exception($"Too many failed sign-in attempts for this account. Try again in {minutes} minutes.");
 public sealed class UserNotFoundException(Guid userId) : Exception($"User '{userId}' was not found.");
 public sealed class UserManagementConflictException(string message) : Exception(message);
+// A non-Administrator with the User Management permission tried something kept for Administrators.
+public sealed class UserManagementForbiddenException(string message) : Exception(message);
 public sealed class PasswordResetRequestNotFoundException(Guid requestId) : Exception($"Password reset request '{requestId}' was not found.");
 public sealed class PasswordResetConflictException(string message) : Exception(message);

@@ -20,7 +20,7 @@ public sealed class MasterDataAuthorizationApiTests
     [MemberData(nameof(WriteRequests))]
     public async Task Anonymous_users_cannot_change_master_data(string method, string url, object? body)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await Send(client, method, url, body)).StatusCode);
@@ -33,7 +33,7 @@ public sealed class MasterDataAuthorizationApiTests
     [InlineData(UserRole.Viewer)]
     public async Task Read_only_roles_cannot_change_any_master_data(UserRole role)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, role);
 
@@ -84,7 +84,7 @@ public sealed class MasterDataAuthorizationApiTests
     [MemberData(nameof(SimPoolActions))]
     public async Task Head_of_it_cannot_change_the_sim_pool(string url, object? body)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, UserRole.HeadOfIt);
 
@@ -96,7 +96,7 @@ public sealed class MasterDataAuthorizationApiTests
     [InlineData(UserRole.FinanceUser)]
     public async Task Hr_and_finance_users_cannot_change_providers_packages_allocations_or_billing(UserRole role)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, role);
 
@@ -109,7 +109,7 @@ public sealed class MasterDataAuthorizationApiTests
     [InlineData(UserRole.FinanceUser)]
     public async Task Hr_and_finance_users_may_maintain_organisation_masters(UserRole role)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, role);
 
@@ -133,7 +133,7 @@ public sealed class MasterDataAuthorizationApiTests
     [Fact]
     public async Task Viewer_cannot_change_masters_devices_billing_or_users()
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, UserRole.Viewer);
 
@@ -148,7 +148,7 @@ public sealed class MasterDataAuthorizationApiTests
     [InlineData(UserRole.Cfo)]
     public async Task Other_read_only_roles_cannot_reassign_mobile_numbers(UserRole role)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, role);
 
@@ -164,7 +164,7 @@ public sealed class MasterDataAuthorizationApiTests
     [InlineData(UserRole.HeadOfIt, "/api/employees/import/template", HttpStatusCode.Forbidden)]
     public async Task Import_templates_follow_the_master_data_edit_rights(UserRole role, string url, HttpStatusCode expected)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, role);
 
@@ -180,7 +180,7 @@ public sealed class MasterDataAuthorizationApiTests
     [InlineData(UserRole.HrUser, "/api/employees/import", HttpStatusCode.BadRequest)]   // allowed; a non-Excel file is rejected before any database work
     public async Task Import_uploads_follow_the_master_data_edit_rights(UserRole role, string url, HttpStatusCode expected)
     {
-        using var factory = new WebApplicationFactory<Program>();
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services => services.UseDefaultPermissions()));
         using var client = factory.CreateClient();
         TestAuth.Authorize(client, role);
         using var form = new MultipartFormDataContent { { new ByteArrayContent("not excel"u8.ToArray()), "file", "employees.csv" } };

@@ -1,8 +1,8 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-// Signed in as an HR User: allowed only where the page's role list includes HrUser.
-vi.mock('../../auth/AuthContext', () => ({ useCanEditMasterData: (roles: readonly string[] = ['Administrator', 'ITEngineer']) => roles.includes('HrUser') }))
+// Signed in as an HR User with the default permissions.
+vi.mock('../../auth/AuthContext', async () => (await import('../../test/roleAuthMock')).roleAuthMock(() => 'HrUser'))
 
 import { FactoriesPage, MobileAllocationsPage, ProvidersPage } from './MasterPages'
 

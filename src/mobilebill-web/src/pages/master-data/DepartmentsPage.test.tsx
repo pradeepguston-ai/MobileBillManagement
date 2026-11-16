@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../auth/AuthContext', () => ({ useCanEditMasterData: () => false }))
+vi.mock('../../auth/AuthContext', async () => (await import('../../test/roleAuthMock')).roleAuthMock(() => 'Viewer'))
 
 import { DepartmentsPage } from './MasterPages'
 

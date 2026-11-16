@@ -38,6 +38,7 @@ const deviceOption = (row: Row) => ({ value: String(row.id), label: `${value(row
 export const mobileDevicesConfig: MasterDataPageConfig<Row> = {
   title: 'Mobile Devices',
   path: '/api/mobile-devices',
+  module: 'mobile-devices',
   editRoles: masterDataEditorRoles,
   noDeactivate: true,
   columns: [
@@ -131,6 +132,7 @@ export const mobileDevicesConfig: MasterDataPageConfig<Row> = {
     },
     {
       label: 'Retire',
+      permission: 'Delete',
       color: 'warning',
       show: row => ['InStock', 'UnderRepair', 'Damaged'].includes(status(row)),
       title: row => `Retire ${value(row, 'assetTag')} (take it out of use)`,

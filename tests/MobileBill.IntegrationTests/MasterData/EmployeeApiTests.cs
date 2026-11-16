@@ -33,6 +33,7 @@ public sealed class EmployeeApiTests
                 services.RemoveAll<IDbContextOptionsConfiguration<MobileBillDbContext>>();
                 services.RemoveAll<MobileBillDbContext>();
                 services.AddDbContext<MobileBillDbContext>(options => options.UseSqlite(connection));
+                services.UseDefaultPermissions();
             });
         });
 
@@ -363,6 +364,7 @@ public sealed class EmployeeApiTests
                 services.RemoveAll<IDbContextOptionsConfiguration<MobileBillDbContext>>();
                 services.RemoveAll<MobileBillDbContext>();
                 services.AddDbContext<MobileBillDbContext>(options => options.UseSqlite(connection));
+                services.UseDefaultPermissions();
             });
         });
 

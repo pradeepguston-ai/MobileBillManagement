@@ -500,3 +500,14 @@ internal sealed class ActivityLogConfiguration : IEntityTypeConfiguration<Activi
         builder.HasIndex(entity => new { entity.Area, entity.OccurredAt });
     }
 }
+
+internal sealed class RolePermissionConfiguration : AuditableEntityConfiguration<RolePermission>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<RolePermission> builder)
+    {
+        builder.ToTable("RolePermissions");
+        builder.Property(entity => entity.Role).HasConversion<string>().HasMaxLength(50);
+        builder.Property(entity => entity.Module).HasMaxLength(64).IsRequired();
+        builder.HasIndex(entity => new { entity.Role, entity.Module }).IsUnique();
+    }
+}

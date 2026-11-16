@@ -1,3 +1,4 @@
+import type { PermissionModule } from '../../api/permissionsApi'
 import { applyPackageRental, assignFromPool, disconnectSim, releaseToPool, resignEmployee, type SimStatus } from '../../api/masterDataApi'
 import { createElement } from 'react'
 
@@ -15,17 +16,17 @@ const simStatus = (row: Row) => (row.status as SimStatus | undefined) ?? 'Assign
 const simStatusLabel = (row: Row) => simStatus(row) === 'Pooled' ? `SIM Pool since ${value(row, 'pooledOn')}` : simStatus(row) === 'Disconnected' ? `Disconnected ${value(row, 'disconnectedOn')}`.trim() : 'Assigned'
 // Factories have codes people choose (CAL, CML). Departments, Designations, Categories, Sections, Sub Sections and
 // Telecom Providers get a generated code on the server that is never shown: people only see and type their names.
-const reference = (title: string, path: string, editRoles = organisationMasterEditorRoles): MasterDataPageConfig<Row> => ({ title, path, editRoles, columns: [{ key: 'code', header: 'Code' }, { key: 'name', header: 'Name' }, { key: 'isActive', header: 'Status' }], fields: [{ key: 'code', label: 'Code', required: true }, { key: 'name', label: 'Name', required: true }], toForm: row => ({ code: value(row, 'code'), name: value(row, 'name') }), toRequest: values => ({ code: values.code, name: values.name }) })
-const namedReference = (title: string, path: string, editRoles = organisationMasterEditorRoles): MasterDataPageConfig<Row> => ({ title, path, editRoles, columns: [{ key: 'name', header: 'Name' }, { key: 'isActive', header: 'Status' }], fields: [{ key: 'name', label: 'Name', required: true }], toForm: row => ({ name: value(row, 'name') }), toRequest: values => ({ name: values.name }) })
+const reference = (title: string, path: string, module: PermissionModule, editRoles = organisationMasterEditorRoles): MasterDataPageConfig<Row> => ({ title, path, module, editRoles, columns: [{ key: 'code', header: 'Code' }, { key: 'name', header: 'Name' }, { key: 'isActive', header: 'Status' }], fields: [{ key: 'code', label: 'Code', required: true }, { key: 'name', label: 'Name', required: true }], toForm: row => ({ code: value(row, 'code'), name: value(row, 'name') }), toRequest: values => ({ code: values.code, name: values.name }) })
+const namedReference = (title: string, path: string, module: PermissionModule, editRoles = organisationMasterEditorRoles): MasterDataPageConfig<Row> => ({ title, path, module, editRoles, columns: [{ key: 'name', header: 'Name' }, { key: 'isActive', header: 'Status' }], fields: [{ key: 'name', label: 'Name', required: true }], toForm: row => ({ name: value(row, 'name') }), toRequest: values => ({ name: values.name }) })
 
-export const factoriesConfig = reference('Factories', '/api/factories')
-export const designationsConfig = namedReference('Designations', '/api/designations')
-export const categoriesConfig = namedReference('Categories', '/api/categories')
+export const factoriesConfig = reference('Factories', '/api/factories', 'factories')
+export const designationsConfig = namedReference('Designations', '/api/designations', 'designations')
+export const categoriesConfig = namedReference('Categories', '/api/categories', 'categories')
 // Telecom providers stay with Administrator and IT Engineer; HR and Finance users see them read-only.
-export const providersConfig = namedReference('Providers', '/api/providers', masterDataEditorRoles)
-export const departmentsConfig = namedReference('Departments', '/api/departments')
+export const providersConfig = namedReference('Providers', '/api/providers', 'providers', masterDataEditorRoles)
+export const departmentsConfig = namedReference('Departments', '/api/departments', 'departments')
 // Outside companies whose staff work at the factories, such as a security agency; chosen on OTHER - THIRD-PARTY employees.
-export const thirdPartyCompaniesConfig = namedReference('Third Party Companies', '/api/third-party-companies')
+export const thirdPartyCompaniesConfig = namedReference('Third Party Companies', '/api/third-party-companies', 'third-party-companies')
 // Third Party Allocation is only for the OTHER - THIRD-PARTY category (the server checks the same rule).
 const isThirdParty = (categoryOption?: { label: string }) => categoryOption?.label.replace(/\s+/g, ' ').trim().toUpperCase() === 'OTHER - THIRD-PARTY'
 // The same EPF can exist in different factories, so employees are picked by ID and shown with their factory.
@@ -49,6 +50,7 @@ const organisationFilters: MasterDataListFilter[] = [
 export const sectionsConfig: MasterDataPageConfig<Row> = {
   title: 'Sections',
   path: '/api/sections',
+  module: 'departments',
   editRoles: organisationMasterEditorRoles,
   columns: [{ key: 'name', header: 'Name' }, { key: 'departmentName', header: 'Department' }, { key: 'isActive', header: 'Status' }],
   fields: [{ key: 'departmentCode', label: 'Department', type: 'select', required: true }, { key: 'name', label: 'Name', required: true }],
@@ -59,6 +61,7 @@ export const sectionsConfig: MasterDataPageConfig<Row> = {
 export const subSectionsConfig: MasterDataPageConfig<Row> = {
   title: 'Sub Sections',
   path: '/api/sub-sections',
+  module: 'departments',
   editRoles: organisationMasterEditorRoles,
   columns: [{ key: 'name', header: 'Name' }, { key: 'sectionName', header: 'Section' }, { key: 'departmentName', header: 'Department' }, { key: 'isActive', header: 'Status' }],
   fields: [{ key: 'departmentCode', label: 'Department', type: 'select', required: true }, { key: 'sectionCode', label: 'Section', type: 'select', required: true, dependsOn: 'departmentCode' }, { key: 'name', label: 'Name', required: true }],
@@ -79,6 +82,7 @@ const employeeStatus = (row: Row) => createElement(StatusBadge, row.isActive
 export const employeesConfig: MasterDataPageConfig<Row> = {
   title: 'Employees',
   path: '/api/employees',
+  module: 'employees',
   editRoles: organisationMasterEditorRoles,
   importer: { roles: organisationMasterEditorRoles, title: 'Import employees from Excel' },
   listFilters: organisationFilters,
@@ -115,6 +119,7 @@ export const employeesConfig: MasterDataPageConfig<Row> = {
 export const mobileAllocationsConfig: MasterDataPageConfig<Row> = {
   title: 'Mobile Allocations',
   path: '/api/mobile-accounts',
+  module: 'mobile-allocations',
   editRoles: masterDataEditorRoles,
   listFilters: organisationFilters,
   // Importing creates allocations and sets amounts, so it is for Administrator and IT Engineer only.
@@ -149,6 +154,7 @@ export const mobileAllocationsConfig: MasterDataPageConfig<Row> = {
     },
     {
       label: 'Disconnect',
+      permission: 'Delete',
       color: 'error',
       show: row => Boolean(row.isActive),
       title: row => `Disconnect ${value(row, 'mobileNumber')}`,
@@ -226,6 +232,7 @@ export const disconnectedNumbersConfig: MasterDataPageConfig<Row> = {
 export const mobilePackagesConfig: MasterDataPageConfig<Row> = {
   title: 'Mobile Packages',
   path: '/api/mobile-packages',
+  module: 'mobile-packages',
   editRoles: masterDataEditorRoles,
   columns: [
     { key: 'code', header: 'Package Code' },
