@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { AuthProvider } from '../../auth/AuthContext'
 import { PermissionsPanel } from './PermissionsPanel'
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -101,5 +102,60 @@ describe('Permissions tab', () => {
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Discard' }))
     await waitFor(() => expect(screen.getByRole('region', { name: 'Permissions for HR User' })).toBeTruthy())
+  })
+})
+
+describe('Permissions tab for a role given Role Permissions', () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear() })
+
+  const adminModules = [
+    ...modules,
+    { key: 'user-management', label: 'User Management & Password Resets', group: 'Administration', note: null, actions: ['View', 'Create', 'Edit', 'Delete'], administratorOnly: true },
+  ]
+  const none = (module: string) => ({ module, canView: false, canCreate: false, canEdit: false, canDelete: false })
+  const roles = ['ITEngineer', 'HeadOfIt'].map(role => ({ role, locked: false, customised: false, permissions: [full('dashboard'), full('employees'), none('user-management')] }))
+
+  function signInAsHeadOfIt(canEdit: boolean) {
+    localStorage.setItem('mobilebill.token', 'test-token')
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('/api/auth/me')) return json({ id: 'head-1', email: 'head@example.com', displayName: 'Head', role: 'HeadOfIt', status: 'Active' })
+      if (url.includes('/api/permissions/mine')) return json([{ module: 'role-permissions', canView: true, canCreate: false, canEdit, canDelete: false }])
+      return json({ modules: adminModules, roles })
+    })
+    render(<AuthProvider><PermissionsPanel /></AuthProvider>)
+  }
+
+  it('changes other roles but leaves the Administration screens to Administrators', async () => {
+    signInAsHeadOfIt(true)
+    await screen.findByRole('region', { name: 'Permissions for IT Engineer' })
+
+    await waitFor(() => expect(box('Create Employees').disabled).toBe(false))
+    expect(box('View User Management & Password Resets').disabled).toBe(true)
+    expect(screen.getByText('Set by Administrators')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Full access for Masters' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Full access for Administration' })).toBeNull()
+
+    fireEvent.click(box('Delete Employees'))
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeTruthy()
+  })
+
+  it('cannot change its own role', async () => {
+    signInAsHeadOfIt(true)
+    await screen.findByRole('region', { name: 'Permissions for IT Engineer' })
+    await waitFor(() => expect(box('Create Employees').disabled).toBe(false))
+
+    await chooseRole('Head of IT')
+    expect(await screen.findByText('This is your own role. Only an Administrator can change its permissions.')).toBeTruthy()
+    expect(box('Create Employees').disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Reset to Defaults' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Full access for Masters' })).toBeNull()
+  })
+
+  it('only looks with View', async () => {
+    signInAsHeadOfIt(false)
+    expect(await screen.findByText('You can view these permissions but not change them.')).toBeTruthy()
+    expect(box('Create Employees').disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Reset to Defaults' })).toBeNull()
   })
 })

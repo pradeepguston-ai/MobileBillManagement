@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
-import { fetchCurrentUser, login as apiLogin, type CurrentUser, type UserRole } from '../api/authApi'
+import { changePassword as apiChangePassword, fetchCurrentUser, login as apiLogin, type CurrentUser, type UserRole } from '../api/authApi'
 import { getMyPermissions, type ModulePermission, type PermissionAction, type PermissionModule } from '../api/permissionsApi'
 import { allows } from './permissions'
 import { billingPreparerRoles, masterDataEditorRoles } from './roles'
@@ -11,6 +11,8 @@ type AuthContextValue = {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
+  // Replaces the password and switches to the fresh token (ends the one-time password restriction).
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   // Whether the signed-in user's role may do this on the screen (User Management > Permissions).
   can: (module: PermissionModule, action: PermissionAction) => boolean
 }
@@ -36,16 +38,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Reloaded whenever someone signs in; until then (or if it fails) the built-in defaults apply.
   const role = user?.role
   const userId = user?.id
+  // A one-time password's token may only change the password, so nothing else is loaded until that is done.
+  const restricted = Boolean(user?.mustChangePassword)
   const key = `${userId}:${role}`
   const permissions = loaded?.key === key ? loaded.list : null
   useEffect(() => {
-    if (!userId || role === 'Administrator') return
+    if (!userId || role === 'Administrator' || restricted) return
     let current = true
     getMyPermissions()
       .then(result => { if (current && Array.isArray(result)) setLoaded({ key: `${userId}:${role}`, list: result }) })
       .catch(() => { /* the defaults stay in place; the API still enforces the saved permissions */ })
     return () => { current = false }
-  }, [userId, role])
+  }, [userId, role, restricted])
 
   const login = async (email: string, password: string) => {
     const result = await apiLogin(email, password)
@@ -55,9 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => { clearToken(); setUser(null) }
 
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    const result = await apiChangePassword(currentPassword, newPassword)
+    setToken(result.token)
+    setUser(result.user)
+  }
+
   const can = useCallback((module: PermissionModule, action: PermissionAction) => Boolean(user && allows(permissions, user.role, module, action)), [user, permissions])
 
-  return <AuthContext.Provider value={{ user, loading, login, logout, can }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading, login, logout, changePassword, can }}>{children}</AuthContext.Provider>
 }
 
 // Billing preparation, assessment and approvals follow the fixed approval chain, not the screen permissions.

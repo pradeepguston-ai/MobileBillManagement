@@ -118,6 +118,32 @@ public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService
         await db.SaveChangesAsync(token);
     }
 
+    public async Task<AuthResultDto> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken token)
+    {
+        var current = request.CurrentPassword ?? string.Empty;
+        if (!IsAcceptablePassword(request.NewPassword))
+            throw new UserManagementConflictException($"The new password must be {MinPasswordLength} to {MaxPasswordLength} characters.");
+        var user = await db.Users.SingleOrDefaultAsync(x => x.Id == userId, token) ?? throw new UserNotFoundException(userId);
+        if (user.Status != UserAccountStatus.Active)
+            throw new AccountNotActiveException(user.Status);
+        // Not InvalidCredentialsException: a 401 would sign the user out instead of letting them retype it.
+        if (!hasher.Verify(user, current))
+            throw new UserManagementConflictException(user.MustChangePassword ? "The one-time password is incorrect." : "The current password is incorrect.");
+        if (string.Equals(current, request.NewPassword, StringComparison.Ordinal))
+            throw new UserManagementConflictException(user.MustChangePassword
+                ? "Choose a new password that is different from the one-time password."
+                : "Choose a new password that is different from the current one.");
+
+        user.PasswordHash = hasher.Hash(user, request.NewPassword);
+        user.MustChangePassword = false;
+        user.UpdatedAtUtc = clock.UtcNow;
+        user.UpdatedBy = user.Id.ToString();
+        await db.SaveChangesAsync(token);
+
+        var (accessToken, expiresAtUtc) = tokenService.CreateAccessToken(user);
+        return new AuthResultDto(accessToken, expiresAtUtc, Map(user));
+    }
+
     private static readonly Lazy<User> TimingDummyUser = new(() =>
     {
         var user = new User { Email = string.Empty, DisplayName = string.Empty, PasswordHash = string.Empty };
@@ -136,5 +162,5 @@ public sealed class EfAuthService(MobileBillDbContext db, IPasswordHasherService
 
     private sealed record FailedSignIns(int Count, DateTimeOffset WindowEnds);
 
-    private static UserDto Map(User user) => new(user.Id, user.Email, user.DisplayName, user.Role, user.Status);
+    private static UserDto Map(User user) => new(user.Id, user.Email, user.DisplayName, user.Role, user.Status, user.MustChangePassword);
 }

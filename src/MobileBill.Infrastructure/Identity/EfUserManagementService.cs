@@ -33,11 +33,12 @@ public sealed class EfUserManagementService(MobileBillDbContext db, ICurrentUser
             PasswordHash = string.Empty,
             CreatedAtUtc = clock.UtcNow,
             CreatedBy = currentUser.UserId,
+            MustChangePassword = true,
         };
         user.PasswordHash = hasher.Hash(user, request.Password);
         db.Users.Add(user);
         await db.SaveChangesAsync(token);
-        return new ManagedUserDto(user.Id, user.Email, user.DisplayName, user.Role, user.Status, user.CreatedAtUtc, user.UpdatedAtUtc);
+        return new ManagedUserDto(user.Id, user.Email, user.DisplayName, user.Role, user.Status, user.CreatedAtUtc, user.UpdatedAtUtc, user.MustChangePassword);
     }
 
     public async Task<IReadOnlyList<PendingUserDto>> GetPendingUsersAsync(CancellationToken token) =>
@@ -55,7 +56,7 @@ public sealed class EfUserManagementService(MobileBillDbContext db, ICurrentUser
             query = query.Where(x => x.Email.ToLower().Contains(term) || x.DisplayName.ToLower().Contains(term));
         return await query
             .OrderBy(x => x.DisplayName)
-            .Select(x => new ManagedUserDto(x.Id, x.Email, x.DisplayName, x.Role, x.Status, x.CreatedAtUtc, x.UpdatedAtUtc))
+            .Select(x => new ManagedUserDto(x.Id, x.Email, x.DisplayName, x.Role, x.Status, x.CreatedAtUtc, x.UpdatedAtUtc, x.MustChangePassword))
             .ToListAsync(token);
     }
 
@@ -128,6 +129,8 @@ public sealed class EfUserManagementService(MobileBillDbContext db, ICurrentUser
             throw new PasswordResetConflictException("Only active accounts can have their password reset.");
         var now = clock.UtcNow;
         request.User.PasswordHash = request.NewPasswordHash;
+        // The user chose this password, so a pending one-time password no longer needs replacing.
+        request.User.MustChangePassword = false;
         request.User.UpdatedAtUtc = now;
         request.User.UpdatedBy = currentUser.UserId;
         Decide(request, PasswordResetStatus.Approved, now);

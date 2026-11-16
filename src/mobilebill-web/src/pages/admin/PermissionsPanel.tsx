@@ -22,6 +22,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } f
 
 import { allRoles, roleLabels, type UserRole } from '../../api/authApi'
 import { getPermissionMatrix, resetRolePermissions, saveRolePermissions, type ModulePermission, type PermissionAction, type PermissionMatrix, type RolePermissions } from '../../api/permissionsApi'
+import { useCurrentUser, usePermission } from '../../auth/AuthContext'
 import { ConfirmActionDialog } from '../../components/common/ConfirmActionDialog'
 import { ErrorState } from '../../components/common/ErrorState'
 import { LoadingState } from '../../components/common/LoadingState'
@@ -58,7 +59,12 @@ const summarise = (permissions: ModulePermission[]) => ({
 
 // Which screens each role may open (View) and change (Create, Edit, Delete = Deactivate). Administrator always has
 // everything. Billing preparation and the IT / HR / Finance approvals keep their fixed roles and are not set here.
+// Open to roles with Role Permissions (View to look, Edit to change). A non-Administrator cannot change their own role or
+// access to the Administration screens (the API refuses it as well).
 export function PermissionsPanel() {
+  const user = useCurrentUser()
+  const isAdministrator = !user || user.role === 'Administrator'
+  const canEditPermissions = usePermission('role-permissions', 'Edit')
   const [matrix, setMatrix] = useState<PermissionMatrix>()
   const [error, setError] = useState<string>()
   const [notice, setNotice] = useState<string>()
@@ -88,7 +94,12 @@ export function PermissionsPanel() {
     return result
   }, [matrix])
 
-  const chooseRole = (next: UserRole) => { if (next === role) return; if (dirty) setPendingRole(next); else { setRole(next); setNotice(undefined) } }
+  const locked = current?.locked ?? false
+  const ownRole = !isAdministrator && user?.role === role
+  const editable = !locked && canEditPermissions && !ownRole
+  const moduleEditable = (module: PermissionMatrix['modules'][number]) => editable && (isAdministrator || !module.administratorOnly)
+
+  const chooseRole =(next: UserRole) => { if (next === role) return; if (dirty) setPendingRole(next); else { setRole(next); setNotice(undefined) } }
 
   const update = (changes: Draft) => { if (current) setEdits({ base: current, values: { ...draft, ...changes } }) }
 
@@ -101,7 +112,7 @@ export function PermissionsPanel() {
     update({ [module]: item })
   }
 
-  const setGroup = (modules: PermissionMatrix['modules'], level: 'full' | 'view' | 'none') => update(Object.fromEntries(modules.map(module => {
+  const setGroup = (modules: PermissionMatrix['modules'], level: 'full' | 'view' | 'none') => update(Object.fromEntries(modules.filter(moduleEditable).map(module => {
     const has = (action: PermissionAction) => module.actions.includes(action)
     return [module.key, { module: module.key, canView: level !== 'none', canCreate: level === 'full' && has('Create'), canEdit: level === 'full' && has('Edit'), canDelete: level === 'full' && has('Delete') }]
   })))
@@ -123,7 +134,6 @@ export function PermissionsPanel() {
   }
 
   if (!matrix) return error ? <ErrorState message={error} onRetry={() => void load()} /> : <LoadingState label="Loading permissions…" />
-  const locked = current?.locked ?? false
   const totals = summarise(Object.values(draft))
 
   return <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '280px minmax(0, 1fr)' }, gap: 3, alignItems: 'start' }}>
@@ -183,14 +193,16 @@ export function PermissionsPanel() {
               <Stat value={totals.changes} label="screens with changes" />
             </Stack>
           </Box>
-          {!locked && <Button color="warning" variant="outlined" disabled={busy || !current?.customised} onClick={() => setConfirmReset(true)}>Reset to Defaults</Button>}
+          {editable && <Button color="warning" variant="outlined" disabled={busy || !current?.customised} onClick={() => setConfirmReset(true)}>Reset to Defaults</Button>}
         </Stack>
       </Paper>
 
       {locked && <Alert severity="info" icon={<AdminPanelSettingsIcon />}>The Administrator role always has full access to every screen, including User Management, and cannot be changed.</Alert>}
+      {!locked && !canEditPermissions && <Alert severity="info" icon={<VisibilityOutlinedIcon />}>You can view these permissions but not change them.</Alert>}
+      {!locked && canEditPermissions && ownRole && <Alert severity="info" icon={<LockIcon />}>This is your own role. Only an Administrator can change its permissions.</Alert>}
       <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
         Deactivate keeps the record. Billing preparation, assessments, submitting and the IT / HR / Finance approvals follow the fixed approval chain.
-        Only Administrators set permissions and manage Administrator accounts.
+        Only Administrators manage Administrator accounts, change their own role's permissions and decide which roles can use User Management and Role Permissions.
       </Alert>
       {error && <ErrorState message={error} />}
       {notice && <Alert severity="success">{notice}</Alert>}
@@ -205,7 +217,7 @@ export function PermissionsPanel() {
                 <Typography component="h4" variant="subtitle1" sx={{ fontWeight: 800 }}>{group}</Typography>
                 <Typography variant="caption" color="text.secondary">{opened} of {modules.length} opened</Typography>
               </Stack>
-              {!locked && <Stack direction="row" spacing={0.5}>
+              {editable && modules.some(moduleEditable) && <Stack direction="row" spacing={0.5}>
                 {([['full', 'Full access'], ['view', 'View only'], ['none', 'No access']] as const).map(([level, label]) =>
                   <Button key={level} size="small" disabled={busy} aria-label={`${label} for ${group}`} onClick={() => setGroup(modules, level)} sx={{ textTransform: 'none', fontWeight: 600 }}>{label}</Button>)}
               </Stack>}
@@ -216,11 +228,12 @@ export function PermissionsPanel() {
                 <Box role="group" aria-label={module.label} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) auto' }, gap: { xs: 1, lg: 2 }, alignItems: 'center', px: 2, py: 1.5, borderTop: index ? '1px solid' : 'none', borderColor: 'divider', '&:hover': { bgcolor: 'action.hover' } }}>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>{module.label}</Typography>
+                    {!isAdministrator && module.administratorOnly && <Chip size="small" variant="outlined" icon={<LockIcon />} label="Set by Administrators" sx={{ mb: 0.5, height: 22 }} />}
                     {module.note && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4 }}>{module.note}</Typography>}
                   </Box>
                   <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
                     {actions.map(action => module.actions.includes(action)
-                      ? <ActionToggle key={action} action={action} checked={Boolean(item?.[field[action]])} disabled={locked || busy} label={`${action} ${module.label}`} onChange={checked => toggle(module.key, action, checked)} />
+                      ? <ActionToggle key={action} action={action} checked={Boolean(item?.[field[action]])} disabled={!moduleEditable(module) || busy} label={`${action} ${module.label}`} onChange={checked => toggle(module.key, action, checked)} />
                       : <NotApplicable key={action} action={action} />)}
                   </Stack>
                 </Box>
@@ -230,7 +243,7 @@ export function PermissionsPanel() {
         })}
       </Stack>
 
-      {!locked && dirty && <Paper elevation={8} sx={{ position: 'sticky', bottom: 16, zIndex: 2, borderRadius: 3, overflow: 'hidden' }}>
+      {editable && dirty && <Paper elevation={8} sx={{ position: 'sticky', bottom: 16, zIndex: 2, borderRadius: 3, overflow: 'hidden' }}>
         <Box sx={{ height: 4, backgroundImage: brandGradients.stripe }} />
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ px: 2, py: 1.5, alignItems: { sm: 'center' } }}>
           <Typography variant="body2" sx={{ flexGrow: 1, fontWeight: 600 }}>Unsaved changes for {roleLabels[role]}</Typography>
@@ -244,7 +257,7 @@ export function PermissionsPanel() {
 
     <ConfirmActionDialog open={Boolean(pendingRole)} title="Discard unsaved changes?" message={`The changes to ${roleLabels[role]} have not been saved.`} confirmLabel="Discard" busy={false}
       onCancel={() => setPendingRole(undefined)} onConfirm={() => { if (pendingRole) { setRole(pendingRole); setNotice(undefined); setEdits(undefined) } setPendingRole(undefined) }} />
-    <ConfirmActionDialog open={confirmReset} title="Reset to defaults" message={`${roleLabels[role]} will go back to the built-in permissions. Your changes for this role are removed.`} confirmLabel="Reset" busy={busy}
+    <ConfirmActionDialog open={confirmReset} title="Reset to defaults" message={`${roleLabels[role]} will go back to the built-in permissions. Your changes for this role are removed.${isAdministrator ? '' : ' Access to User Management and Role Permissions stays as an Administrator set it.'}`} confirmLabel="Reset" busy={busy}
       onCancel={() => setConfirmReset(false)} onConfirm={() => void reset()} />
   </Box>
 }

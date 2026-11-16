@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { RequireAuth } from './auth/RequireAuth'
 import { RequirePermission } from './auth/RequirePermission'
+import { userManagementPage } from './auth/permissions'
 import { AppLayout } from './layouts/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
 import { MonthlyBillReportPage } from './pages/MonthlyBillReportPage'
@@ -57,7 +58,7 @@ function App() {
           <Route path="reports/monthly-bill" element={<RequirePermission module="monthly-bill-report"><MonthlyBillReportPage /></RequirePermission>} />
           <Route path="reports/vas" element={<RequirePermission module="vas-report"><VasReportPage /></RequirePermission>} />
           <Route path="activity-log" element={<RequirePermission module="activity-log"><ActivityLogPage /></RequirePermission>} />
-          <Route path="admin/users" element={<RequirePermission module="user-management"><UserManagementPage /></RequirePermission>} />
+          <Route path="admin/users" element={<RequirePermission module={userManagementPage}><UserManagementPage /></RequirePermission>} />
           <Route path="admin/password-resets" element={<RequirePermission module="user-management"><PasswordResetRequestsPage /></RequirePermission>} />
           <Route path="admin/report-distribution" element={<RequirePermission module="report-distribution"><ReportDistributionPage /></RequirePermission>} />
           <Route path="admin/email-history" element={<RequirePermission module="report-distribution"><EmailHistoryPage /></RequirePermission>} />

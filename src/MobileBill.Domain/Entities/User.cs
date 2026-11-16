@@ -10,4 +10,6 @@ public sealed class User : AuditableEntity
     public required string PasswordHash { get; set; }
     public UserRole Role { get; set; }
     public UserAccountStatus Status { get; set; } = UserAccountStatus.PendingActivation;
+    // Set for an account created with a one-time password; the user must choose a new password at the first sign-in.
+    public bool MustChangePassword { get; set; }
 }

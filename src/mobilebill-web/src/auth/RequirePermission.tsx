@@ -4,13 +4,15 @@ import { Navigate } from 'react-router-dom'
 
 import type { PermissionModule } from '../api/permissionsApi'
 import { PageHeader } from '../components/common/PageHeader'
-import { useAuth, usePermission } from './AuthContext'
+import { useAuth, usePermissions } from './AuthContext'
+import { canViewAny } from './permissions'
 
 // Opens the screen only for roles allowed to view it (User Management > Permissions); others go to the start page.
-// The start page is the Dashboard, so a role that may not view the Dashboard gets a plain welcome there instead.
-export function RequirePermission({ module, children }: { module: PermissionModule; children: ReactNode }) {
-  const allowed = usePermission(module, 'View')
-  if (allowed) return <>{children}</>
+// With several modules, viewing any of them opens it. The start page is the Dashboard, so a role that may not view the
+// Dashboard gets a plain welcome there instead.
+export function RequirePermission({ module, children }: { module: PermissionModule | readonly PermissionModule[]; children: ReactNode }) {
+  const can = usePermissions()
+  if (canViewAny(can, module)) return <>{children}</>
   return module === 'dashboard' ? <Welcome /> : <Navigate to="/" replace />
 }
 

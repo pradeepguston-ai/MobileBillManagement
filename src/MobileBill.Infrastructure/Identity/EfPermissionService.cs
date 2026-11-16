@@ -33,7 +33,7 @@ public sealed class EfPermissionService(MobileBillDbContext db, IMemoryCache cac
     public async Task<PermissionMatrixDto> GetMatrixAsync(CancellationToken token)
     {
         var saved = await LoadAsync(token);
-        var modules = PermissionCatalog.Modules.Select(module => new PermissionModuleDto(module.Key, module.Label, module.Group, module.Note, module.Actions.Select(action => action.ToString()).ToList())).ToList();
+        var modules = PermissionCatalog.Modules.Select(module => new PermissionModuleDto(module.Key, module.Label, module.Group, module.Note, module.Actions.Select(action => action.ToString()).ToList(), PermissionCatalog.AdministratorControlled.Contains(module.Key))).ToList();
         var roles = Enum.GetValues<UserRole>().Select(role => RoleDto(role, saved)).ToList();
         return new PermissionMatrixDto(modules, roles);
     }
@@ -46,6 +46,14 @@ public sealed class EfPermissionService(MobileBillDbContext db, IMemoryCache cac
         if (unknown.Count > 0) throw new PermissionValidationException($"Unknown screen: {string.Join(", ", unknown)}.");
         var duplicates = request.Permissions.GroupBy(item => item.Module).Where(group => group.Count() > 1).Select(group => group.Key).ToList();
         if (duplicates.Count > 0) throw new PermissionValidationException($"Each screen can be listed only once: {string.Join(", ", duplicates)}.");
+
+        var current = await LoadAsync(token);
+        if (!IsAdministrator)
+        {
+            var changed = request.Permissions.Where(item => PermissionCatalog.AdministratorControlled.Contains(item.Module))
+                .Where(item => Normalise(PermissionCatalog.Find(item.Module)!, item) != Effective(PermissionCatalog.Find(item.Module)!, role, current));
+            if (changed.Any()) throw new UserManagementForbiddenException("Only an Administrator can change access to User Management and Role Permissions.");
+        }
 
         var rows = await db.RolePermissions.Where(row => row.Role == role).ToDictionaryAsync(row => row.Module, StringComparer.Ordinal, token);
         var now = clock.UtcNow;
@@ -73,16 +81,23 @@ public sealed class EfPermissionService(MobileBillDbContext db, IMemoryCache cac
     {
         EnsureEditable(role);
         var rows = await db.RolePermissions.Where(row => row.Role == role).ToListAsync(token);
+        // A non-Administrator resets everything except access to the Administration screens, which only an Administrator changes.
+        if (!IsAdministrator) rows = rows.Where(row => !PermissionCatalog.AdministratorControlled.Contains(row.Module)).ToList();
         db.RolePermissions.RemoveRange(rows);
         await db.SaveChangesAsync(token);
         cache.Remove(CacheKey);
         return RoleDto(role, await LoadAsync(token));
     }
 
-    private static void EnsureEditable(UserRole role)
+    private bool IsAdministrator => currentUser.Role == UserRole.Administrator;
+
+    // A role that may set permissions (Role Permissions > Edit) could otherwise widen its own access.
+    private void EnsureEditable(UserRole role)
     {
         if (!Enum.IsDefined(role)) throw new PermissionValidationException("A valid role is required.");
         if (role == UserRole.Administrator) throw new PermissionValidationException("The Administrator role always has full access and cannot be changed.");
+        if (!IsAdministrator && role == currentUser.Role)
+            throw new UserManagementForbiddenException("Only an Administrator can change the permissions of your own role.");
     }
 
     private RolePermissionsDto RoleDto(UserRole role, IReadOnlyDictionary<(UserRole, string), RolePermission> saved)

@@ -12,6 +12,12 @@ public interface ITokenService
     (string Token, DateTimeOffset ExpiresAtUtc) CreateAccessToken(User user);
 }
 
+public static class PasswordChangeClaim
+{
+    public const string Type = "pwd_change";
+    public const string Required = "required";
+}
+
 public sealed class JwtTokenService(IOptions<JwtOptions> options) : ITokenService
 {
     public (string Token, DateTimeOffset ExpiresAtUtc) CreateAccessToken(User user)
@@ -25,6 +31,8 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options) : ITokenServic
             new Claim(ClaimTypes.Name, user.DisplayName),
             new Claim(ClaimTypes.Role, user.Role.ToString())
         };
+        // A token issued for a one-time password only lets the user change it (PasswordChangeRequiredMiddleware).
+        if (user.MustChangePassword) claims = [.. claims, new Claim(PasswordChangeClaim.Type, PasswordChangeClaim.Required)];
         var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.SigningKey));
         var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(

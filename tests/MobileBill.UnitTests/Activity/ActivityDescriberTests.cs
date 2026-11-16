@@ -124,6 +124,7 @@ public sealed class ActivityDescriberTests
     public void Sign_ins_and_assistant_questions_are_recorded_without_any_private_content()
     {
         Assert.Equal("Signed in", Plan("Auth", "Login", "POST", arguments: new Dictionary<string, object?> { ["request"] = new { Email = "a@b.lk", Password = "secret-password" } })!.Describe(null));
+        Assert.Equal("Changed their password", Plan("Auth", "ChangePassword", "POST", arguments: new Dictionary<string, object?> { ["request"] = new { CurrentPassword = "OneTime#123", NewPassword = "MyOwn#Pass1" } })!.Describe(null));
         var assistant = Plan("Assistant", "Ask", "POST", arguments: new Dictionary<string, object?> { ["request"] = new { Question = "What is Kamal's salary?" } })!.Describe(null);
         Assert.Equal("Asked the AI assistant a question", assistant);
     }

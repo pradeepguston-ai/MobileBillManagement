@@ -9,6 +9,8 @@ export type CurrentUser = {
   displayName: string
   role: UserRole
   status: UserStatus
+  // Signed in with a one-time password that must be replaced before anything else.
+  mustChangePassword?: boolean
 }
 
 export type AuthResult = {
@@ -65,6 +67,11 @@ export function rejectPasswordReset(id: string) {
   return apiFetch<void>(`/api/users/password-resets/${id}/reject`, { method: 'POST' })
 }
 
+// Replaces the password (also the one-time password of a new account); the result carries a fresh token.
+export function changePassword(currentPassword: string, newPassword: string) {
+  return apiFetch<AuthResult>('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) })
+}
+
 export function fetchCurrentUser() {
   return apiFetch<CurrentUser>('/api/auth/me')
 }
@@ -110,6 +117,8 @@ export type ManagedUser = {
   status: UserStatus
   registeredAtUtc: string
   updatedAtUtc: string | null
+  // Still has the one-time password the account was created with.
+  mustChangePassword?: boolean
 }
 
 export function listUsers(search = '') {

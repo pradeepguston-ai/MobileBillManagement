@@ -43,6 +43,7 @@ public static class ActivityDescriber
         switch (controller, action)
         {
             case ("Auth", "Login"): return new("Sign-in", "Signed in");
+            case ("Auth", "ChangePassword"): return new("Sign-in", "Changed their password");
             case ("Auth", _): return null;   // registering and requesting a password reset happen before signing in
             case ("Assistant", "Ask"): return new("AI Assistant", "Asked the AI assistant a question");
 

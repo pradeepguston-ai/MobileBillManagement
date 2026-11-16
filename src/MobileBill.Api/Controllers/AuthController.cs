@@ -27,6 +27,11 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         return Accepted();
     }
 
+    // Also how a user signed in with a one-time password replaces it; the result carries a token without that restriction.
+    [HttpPost("change-password"), Authorize, EnableRateLimiting(RateLimitPolicies.Authentication)]
+    public Task<AuthResultDto> ChangePassword(ChangePasswordRequest request, CancellationToken token) =>
+        authService.ChangePasswordAsync(Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!), request, token);
+
     [HttpGet("me"), Authorize]
     public Task<UserDto> Me(CancellationToken token)
     {

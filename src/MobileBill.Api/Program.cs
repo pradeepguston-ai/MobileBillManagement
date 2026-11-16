@@ -106,6 +106,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors(CorsPolicies.LocalReactDevelopment);
 app.UseAuthentication();
+app.UseMiddleware<MobileBill.Api.Identity.PasswordChangeRequiredMiddleware>();
 app.UseAuthorization();
 app.UseRateLimiter();
 app.MapControllers();

@@ -23,10 +23,12 @@ public sealed class EfUserSessionValidator(MobileBillDbContext db, IOptions<JwtO
 
         var user = await db.Users.AsNoTracking()
             .Where(x => x.Id == userId)
-            .Select(x => new { x.Status, x.Role })
+            .Select(x => new { x.Status, x.Role, x.MustChangePassword })
             .SingleOrDefaultAsync(cancellationToken);
         return user is not null
             && user.Status == UserAccountStatus.Active
-            && string.Equals(user.Role.ToString(), tokenRole, StringComparison.Ordinal);
+            && string.Equals(user.Role.ToString(), tokenRole, StringComparison.Ordinal)
+            // A one-time password still to be replaced needs the restricted token issued for it.
+            && (!user.MustChangePassword || principal.HasClaim(PasswordChangeClaim.Type, PasswordChangeClaim.Required));
     }
 }

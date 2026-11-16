@@ -91,7 +91,12 @@ export function AllUsersPanel({ refreshKey }: { refreshKey?: number }) {
                         </Select>
                       </FormControl>
                     </TableCell>
-                    <TableCell><StatusBadge label={statusLabels[item.status]} tone={statusTone[item.status]} /></TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                        <StatusBadge label={statusLabels[item.status]} tone={statusTone[item.status]} />
+                        {item.mustChangePassword && item.status === 'Active' && <StatusBadge label="One-time password" tone="info" />}
+                      </Stack>
+                    </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(item.registeredAtUtc)}</TableCell>
                     <TableCell>
                       {item.status === 'Active'

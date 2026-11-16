@@ -49,7 +49,7 @@ import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-rout
 
 import { roleLabels } from '../api/authApi'
 import { useAuth, usePermission, usePermissions } from '../auth/AuthContext'
-import { modulesByPath } from '../auth/permissions'
+import { canViewAny, modulesByPath } from '../auth/permissions'
 import { navigationTarget } from './navigationTarget'
 import gustonLogo from '../assets/guston-logo.webp'
 import { brand, brandGradients } from '../theme/theme'
@@ -176,7 +176,7 @@ function NavigationContent({ onNavigate }: { onNavigate?: () => void }) {
 // Links to screens the role may not view are left out, and a group with none left is not shown.
 function NavigationGroup({ label, links: allLinks, onNavigate }: { label: string; links: string[][]; onNavigate?: () => void }) {
   const can = usePermissions()
-  const links = allLinks.filter(([to]) => !modulesByPath[to] || can(modulesByPath[to], 'View'))
+  const links = allLinks.filter(([to]) => !modulesByPath[to] || canViewAny(can, modulesByPath[to]))
   if (links.length === 0) return null
   return <>
     <ListSubheader disableSticky sx={{ lineHeight: 2.5, mt: 1, bgcolor: 'transparent', color: 'rgba(255,255,255,0.94)', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', '&::after': { content: '""', display: 'block', height: 2, width: 24, mt: -0.5, borderRadius: 1, backgroundImage: `linear-gradient(90deg, ${brand.yellow}, ${brand.orange}, ${brand.red})` } }}>{label}</ListSubheader>

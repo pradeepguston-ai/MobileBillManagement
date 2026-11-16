@@ -14,7 +14,14 @@ const defaults: Record<PermissionModule, { view?: readonly UserRole[]; change?: 
   'third-party-companies': { change: organisationEditors },
   'monthly-bill-report': {}, 'vas-report': {}, 'report-distribution': { view: itEditors, change: itEditors }, 'activity-log': {}, 'ai-assistant': {},
   // Administrator only until granted (Administrator is always allowed).
-  'user-management': { view: [], change: [] },
+  'user-management': { view: [], change: [] }, 'role-permissions': { view: [], change: [] },
+}
+
+// The User Management page holds the user tabs and the Permissions tab, so either permission opens it.
+export const userManagementPage: readonly PermissionModule[] = ['user-management', 'role-permissions']
+
+export function canViewAny(can: (module: PermissionModule, action: PermissionAction) => boolean, modules: PermissionModule | readonly PermissionModule[]) {
+  return (typeof modules === 'string' ? [modules] : modules).some(module => can(module, 'View'))
 }
 
 export function defaultAllows(role: UserRole, module: PermissionModule, action: PermissionAction) {
@@ -31,8 +38,9 @@ export function allows(permissions: ModulePermission[] | null, role: UserRole, m
   return { View: entry.canView, Create: entry.canCreate, Edit: entry.canEdit, Delete: entry.canDelete }[action]
 }
 
-// The screen each menu path opens, so the menu and the routes can hide what a role may not view.
-export const modulesByPath: Record<string, PermissionModule> = {
+// The screen each menu path opens, so the menu and the routes can hide what a role may not view. A path listing several
+// opens for a role that may view any of them.
+export const modulesByPath: Record<string, PermissionModule | readonly PermissionModule[]> = {
   '/': 'dashboard',
   '/monthly-bill-review': 'monthly-bill-review', '/billing': 'billing-batches', '/exception-review': 'exception-review',
   '/employees': 'employees', '/mobile-allocations': 'mobile-allocations', '/devices': 'mobile-devices', '/factories': 'factories',
@@ -40,5 +48,5 @@ export const modulesByPath: Record<string, PermissionModule> = {
   '/providers': 'providers', '/third-party-companies': 'third-party-companies',
   '/reports/monthly-bill': 'monthly-bill-report', '/reports/vas': 'vas-report',
   '/admin/report-distribution': 'report-distribution', '/admin/email-history': 'report-distribution', '/activity-log': 'activity-log',
-  '/admin/users': 'user-management', '/admin/password-resets': 'user-management',
+  '/admin/users': userManagementPage, '/admin/password-resets': 'user-management',
 }

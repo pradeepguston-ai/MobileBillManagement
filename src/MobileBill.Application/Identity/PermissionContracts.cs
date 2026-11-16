@@ -28,6 +28,7 @@ public static class PermissionModules
     public const string ActivityLog = "activity-log";
     public const string AiAssistant = "ai-assistant";
     public const string UserManagement = "user-management";
+    public const string RolePermissions = "role-permissions";
 }
 
 // A screen, the actions that apply to it, and which roles have each action by default (today's access rules).
@@ -46,6 +47,7 @@ public static class PermissionCatalog
     private static readonly UserRole[] OrganisationEditors = [UserRole.Administrator, UserRole.ITEngineer, UserRole.HrUser, UserRole.FinanceUser];
     private static readonly PermissionAction[] ViewOnly = [PermissionAction.View];
     private static readonly PermissionAction[] AllActions = [PermissionAction.View, PermissionAction.Create, PermissionAction.Edit, PermissionAction.Delete];
+    private static readonly PermissionAction[] ViewAndEdit = [PermissionAction.View, PermissionAction.Edit];
 
     private static PermissionModuleDefinition Screen(string key, string label, string group, string? note = null, UserRole[]? viewers = null) =>
         new(key, label, group, note, ViewOnly, new Dictionary<PermissionAction, UserRole[]> { [PermissionAction.View] = viewers ?? Everyone });
@@ -81,8 +83,16 @@ public static class PermissionCatalog
         Screen(PermissionModules.AiAssistant, "AI Assistant", "General"),
         Master(PermissionModules.UserManagement, "User Management & Password Resets", "Administration", Nobody,
             "Create adds accounts; Edit changes roles, activates accounts and decides password resets; Delete deactivates or rejects. " +
-            "Only Administrators can manage Administrator accounts, change their own role or set permissions.", Nobody),
+            "Only Administrators can manage Administrator accounts or change their own role.", Nobody),
+        new(PermissionModules.RolePermissions, "Role Permissions", "Administration",
+            "View opens the Permissions tab; Edit changes and resets the permissions of other roles. " +
+            "Only Administrators can change their own role's permissions or access to the Administration screens.",
+            ViewAndEdit, new Dictionary<PermissionAction, UserRole[]> { [PermissionAction.View] = Nobody, [PermissionAction.Edit] = Nobody }),
     ];
+
+    // Access to these stays with Administrators even for a role that may set permissions, so nobody can hand out the
+    // rights to manage users or permissions except an Administrator.
+    public static IReadOnlySet<string> AdministratorControlled { get; } = new HashSet<string>(StringComparer.Ordinal) { PermissionModules.UserManagement, PermissionModules.RolePermissions };
 
     private static readonly Dictionary<string, PermissionModuleDefinition> ByKey = Modules.ToDictionary(module => module.Key, StringComparer.Ordinal);
 
@@ -95,7 +105,8 @@ public static class PermissionCatalog
 
 public sealed record ModulePermissionDto(string Module, bool CanView, bool CanCreate, bool CanEdit, bool CanDelete);
 // Actions are the PermissionAction names that apply to the screen ("View", "Create", "Edit", "Delete").
-public sealed record PermissionModuleDto(string Key, string Label, string Group, string? Note, IReadOnlyList<string> Actions);
+// AdministratorOnly: only an Administrator can change which roles have this screen.
+public sealed record PermissionModuleDto(string Key, string Label, string Group, string? Note, IReadOnlyList<string> Actions, bool AdministratorOnly = false);
 // Locked: the Administrator role, which always has full access. Customised: at least one screen differs from the defaults.
 public sealed record RolePermissionsDto([property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role, bool Locked, bool Customised, IReadOnlyList<ModulePermissionDto> Permissions);
 public sealed record PermissionMatrixDto(IReadOnlyList<PermissionModuleDto> Modules, IReadOnlyList<RolePermissionsDto> Roles);

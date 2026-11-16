@@ -95,7 +95,7 @@ public sealed class PermissionsApiTests
     [Theory]
     [InlineData(UserRole.ITEngineer)]
     [InlineData(UserRole.HeadOfIt)]
-    public async Task Only_administrators_see_and_change_the_permissions(UserRole role)
+    public async Task Only_administrators_see_and_change_the_permissions_until_granted(UserRole role)
     {
         using var api = new PermissionsApi();
         api.As(role);
@@ -104,6 +104,61 @@ public sealed class PermissionsApiTests
         Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PutAsJsonAsync("/api/permissions/roles/Viewer", new { permissions = Array.Empty<object>() })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PostAsync("/api/permissions/roles/Viewer/reset", null)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await api.Client.GetAsync("/api/permissions/mine")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Role_permissions_view_opens_the_matrix_and_edit_changes_other_roles()
+    {
+        using var api = new PermissionsApi();
+        api.As(UserRole.Administrator);
+        var matrix = await api.Client.GetFromJsonAsync<Matrix>("/api/permissions");
+        var module = matrix!.Modules.Single(item => item.Key == "role-permissions");
+        Assert.Equal(("Administration", "View,Edit", true), (module.Group, string.Join(",", module.Actions), module.AdministratorOnly));
+        Assert.True(matrix.Modules.Single(item => item.Key == "user-management").AdministratorOnly);
+        Assert.False(matrix.Modules.Single(item => item.Key == "employees").AdministratorOnly);
+        await api.Client.PutAsJsonAsync("/api/permissions/roles/HeadOfIt", new { permissions = new[] { Permission("role-permissions") } });
+
+        api.As(UserRole.HeadOfIt);
+        Assert.Equal(HttpStatusCode.OK, (await api.Client.GetAsync("/api/permissions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PutAsJsonAsync("/api/permissions/roles/Viewer", new { permissions = new[] { Permission("providers", create: true) } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PostAsync("/api/permissions/roles/Viewer/reset", null)).StatusCode);
+
+        api.As(UserRole.Administrator);
+        await api.Client.PutAsJsonAsync("/api/permissions/roles/HeadOfIt", new { permissions = new[] { Permission("role-permissions", edit: true) } });
+
+        api.As(UserRole.HeadOfIt);
+        var saved = await api.Client.PutAsJsonAsync("/api/permissions/roles/Viewer", new { permissions = new[] { Permission("providers", create: true) } });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        Assert.Equal((true, true, false, false), Flags((await saved.Content.ReadFromJsonAsync<RoleRow>())!, "providers"));
+        var reset = await api.Client.PostAsync("/api/permissions/roles/Viewer/reset", null);
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+        Assert.False((await reset.Content.ReadFromJsonAsync<RoleRow>())!.Customised);
+    }
+
+    [Fact]
+    public async Task A_permissions_editor_cannot_change_its_own_role_or_access_to_the_administration_screens()
+    {
+        using var api = new PermissionsApi();
+        api.As(UserRole.Administrator);
+        await api.Client.PutAsJsonAsync("/api/permissions/roles/HeadOfIt", new { permissions = new[] { Permission("role-permissions", edit: true) } });
+        await api.Client.PutAsJsonAsync("/api/permissions/roles/Viewer", new { permissions = new[] { Permission("user-management") } });
+
+        api.As(UserRole.HeadOfIt);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PutAsJsonAsync("/api/permissions/roles/HeadOfIt", new { permissions = new[] { Permission("providers", create: true) } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PostAsync("/api/permissions/roles/HeadOfIt/reset", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PutAsJsonAsync("/api/permissions/roles/Cfo", new { permissions = new[] { Permission("user-management") } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PutAsJsonAsync("/api/permissions/roles/Cfo", new { permissions = new[] { Permission("role-permissions") } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await api.Client.PutAsJsonAsync("/api/permissions/roles/Viewer", new { permissions = new[] { Permission("user-management", view: false) } })).StatusCode);
+
+        // The whole list can still be sent, as long as the Administration screens are left as they are.
+        var saved = await api.Client.PutAsJsonAsync("/api/permissions/roles/Viewer", new { permissions = new[] { Permission("user-management"), Permission("role-permissions", view: false), Permission("providers", create: true) } });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+
+        // Resetting keeps the Administrator's choice for the Administration screens.
+        var reset = await (await api.Client.PostAsync("/api/permissions/roles/Viewer/reset", null)).Content.ReadFromJsonAsync<RoleRow>();
+        Assert.Equal((true, false, false, false), Flags(reset!, "user-management"));
+        Assert.Equal((true, false, false, false), Flags(reset!, "providers"));
+        Assert.True(reset!.Customised);
     }
 
     [Fact]
@@ -178,7 +233,7 @@ public sealed class PermissionsApiTests
 
     private sealed record Row(string Module, bool CanView, bool CanCreate, bool CanEdit, bool CanDelete);
     private sealed record RoleRow(string Role, bool Locked, bool Customised, List<Row> Permissions);
-    private sealed record ModuleRow(string Key, string Label, string Group, string? Note, List<string> Actions);
+    private sealed record ModuleRow(string Key, string Label, string Group, string? Note, List<string> Actions, bool AdministratorOnly);
     private sealed record Matrix(List<ModuleRow> Modules, List<RoleRow> Roles);
 
     private sealed class PermissionsApi : IDisposable

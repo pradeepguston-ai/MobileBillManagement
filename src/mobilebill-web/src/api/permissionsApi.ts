@@ -6,10 +6,11 @@ export type PermissionModule =
   | 'dashboard' | 'monthly-bill-review' | 'billing-batches' | 'exception-review'
   | 'employees' | 'mobile-allocations' | 'mobile-devices' | 'factories' | 'departments' | 'designations' | 'categories'
   | 'mobile-packages' | 'providers' | 'third-party-companies'
-  | 'monthly-bill-report' | 'vas-report' | 'report-distribution' | 'activity-log' | 'ai-assistant' | 'user-management'
+  | 'monthly-bill-report' | 'vas-report' | 'report-distribution' | 'activity-log' | 'ai-assistant' | 'user-management' | 'role-permissions'
 export type PermissionAction = 'View' | 'Create' | 'Edit' | 'Delete'
 export type ModulePermission = { module: PermissionModule; canView: boolean; canCreate: boolean; canEdit: boolean; canDelete: boolean }
-export type PermissionModuleInfo = { key: PermissionModule; label: string; group: string; note: string | null; actions: PermissionAction[] }
+// administratorOnly: only an Administrator can change which roles have this screen.
+export type PermissionModuleInfo = { key: PermissionModule; label: string; group: string; note: string | null; actions: PermissionAction[]; administratorOnly?: boolean }
 export type RolePermissions = { role: UserRole; locked: boolean; customised: boolean; permissions: ModulePermission[] }
 export type PermissionMatrix = { modules: PermissionModuleInfo[]; roles: RolePermissions[] }
 

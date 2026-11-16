@@ -5,15 +5,18 @@ namespace MobileBill.Application.Identity;
 
 public sealed record RegisterRequest(string Email, string Password, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole RequestedRole);
 public sealed record LoginRequest(string Email, string Password);
-public sealed record UserDto(Guid Id, string Email, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserAccountStatus Status);
+// MustChangePassword: signed in with a one-time password; only changing the password is allowed until it is done.
+public sealed record UserDto(Guid Id, string Email, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserAccountStatus Status, bool MustChangePassword = false);
 public sealed record AuthResultDto(string Token, DateTimeOffset ExpiresAtUtc, UserDto User);
 public sealed record PendingUserDto(Guid Id, string Email, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole RequestedRole, DateTimeOffset RegisteredAtUtc);
 public sealed record ActivateUserRequest([property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole? RoleOverride);
-public sealed record ManagedUserDto(Guid Id, string Email, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserAccountStatus Status, DateTimeOffset RegisteredAtUtc, DateTimeOffset? UpdatedAtUtc);
+public sealed record ManagedUserDto(Guid Id, string Email, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserAccountStatus Status, DateTimeOffset RegisteredAtUtc, DateTimeOffset? UpdatedAtUtc, bool MustChangePassword = false);
 public sealed record ChangeUserRoleRequest([property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role);
 // An administrator creates an account directly; it is active at once and can have any role, Administrator included.
+// Password is a one-time password: the user has to replace it at the first sign-in.
 public sealed record CreateUserRequest(string Email, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role, string Password);
 public sealed record ForgotPasswordRequest(string Email, string NewPassword);
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 public sealed record PasswordResetRequestDto(Guid Id, Guid UserId, string Email, string DisplayName, [property: JsonConverter(typeof(JsonStringEnumConverter))] UserRole Role, DateTimeOffset RequestedAtUtc);
 
 public interface IAuthService
@@ -22,6 +25,8 @@ public interface IAuthService
     Task<AuthResultDto> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
     Task<UserDto> GetCurrentUserAsync(Guid userId, CancellationToken cancellationToken);
     Task RequestPasswordResetAsync(ForgotPasswordRequest request, CancellationToken cancellationToken);
+    // Returns a fresh token, since the one issued for a one-time password only allows changing the password.
+    Task<AuthResultDto> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken cancellationToken);
 }
 
 public interface IUserManagementService

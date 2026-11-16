@@ -97,6 +97,64 @@ public sealed class UserManagementApiTests
     }
 
     [Fact]
+    public async Task A_created_account_must_replace_its_one_time_password_before_using_the_system()
+    {
+        using var fixture = new UsersApiFixture();
+        TestAuth.Authorize(fixture.Client, UserRole.Administrator);
+        var created = await (await fixture.Client.PostAsJsonAsync("/api/users", new { email = "otp@concord.lk", displayName = "Otp User", role = "Viewer", password = "OneTime#123" })).Content.ReadFromJsonAsync<ManagedUserItem>();
+        Assert.True(created!.MustChangePassword);
+
+        fixture.Client.DefaultRequestHeaders.Authorization = null;
+        var login = await (await fixture.Client.PostAsJsonAsync("/api/auth/login", new { email = "otp@concord.lk", password = "OneTime#123" })).Content.ReadFromJsonAsync<AuthItem>();
+        Assert.True(login!.User.MustChangePassword);
+        fixture.Client.DefaultRequestHeaders.Authorization = new("Bearer", login.Token);
+
+        // Only reading their own account and changing the password are allowed with the one-time password's token.
+        var blocked = await fixture.Client.GetAsync("/api/permissions/mine");
+        Assert.Equal(HttpStatusCode.Forbidden, blocked.StatusCode);
+        Assert.Contains("Password change required", await blocked.Content.ReadAsStringAsync());
+        Assert.True((await fixture.Client.GetFromJsonAsync<UserItem>("/api/auth/me"))!.MustChangePassword);
+
+        var wrong = await fixture.Client.PostAsJsonAsync("/api/auth/change-password", new { currentPassword = "Wrong#123", newPassword = "MyOwn#Pass1" });
+        var same = await fixture.Client.PostAsJsonAsync("/api/auth/change-password", new { currentPassword = "OneTime#123", newPassword = "OneTime#123" });
+        var tooShort = await fixture.Client.PostAsJsonAsync("/api/auth/change-password", new { currentPassword = "OneTime#123", newPassword = "short" });
+        Assert.Equal((HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest), (wrong.StatusCode, same.StatusCode, tooShort.StatusCode));
+        Assert.Contains("one-time password is incorrect", await wrong.Content.ReadAsStringAsync());
+
+        var changed = await fixture.Client.PostAsJsonAsync("/api/auth/change-password", new { currentPassword = "OneTime#123", newPassword = "MyOwn#Pass1" });
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        var fresh = await changed.Content.ReadFromJsonAsync<AuthItem>();
+        Assert.False(fresh!.User.MustChangePassword);
+        fixture.Client.DefaultRequestHeaders.Authorization = new("Bearer", fresh.Token);
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.GetAsync("/api/permissions/mine")).StatusCode);
+
+        fixture.Client.DefaultRequestHeaders.Authorization = null;
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Client.PostAsJsonAsync("/api/auth/login", new { email = "otp@concord.lk", password = "OneTime#123" })).StatusCode);
+        var again = await (await fixture.Client.PostAsJsonAsync("/api/auth/login", new { email = "otp@concord.lk", password = "MyOwn#Pass1" })).Content.ReadFromJsonAsync<AuthItem>();
+        Assert.False(again!.User.MustChangePassword);
+        TestAuth.Authorize(fixture.Client, UserRole.Administrator);
+        Assert.False((await fixture.Client.GetFromJsonAsync<List<ManagedUserItem>>("/api/users"))!.Single(x => x.Email == "otp@concord.lk").MustChangePassword);
+    }
+
+    [Fact]
+    public async Task An_approved_password_reset_replaces_a_one_time_password()
+    {
+        using var fixture = new UsersApiFixture();
+        TestAuth.Authorize(fixture.Client, UserRole.Administrator);
+        await fixture.Client.PostAsJsonAsync("/api/users", new { email = "forgot@concord.lk", displayName = "Forgot User", role = "Viewer", password = "OneTime#123" });
+        fixture.Client.DefaultRequestHeaders.Authorization = null;
+        await fixture.Client.PostAsJsonAsync("/api/auth/forgot-password", new { email = "forgot@concord.lk", newPassword = "Chosen#Pass1" });
+
+        TestAuth.Authorize(fixture.Client, UserRole.Administrator);
+        var reset = (await fixture.Client.GetFromJsonAsync<List<ResetItem>>("/api/users/password-resets"))!.Single();
+        Assert.Equal(HttpStatusCode.NoContent, (await fixture.Client.PostAsync($"/api/users/password-resets/{reset.Id}/approve", null)).StatusCode);
+
+        fixture.Client.DefaultRequestHeaders.Authorization = null;
+        var login = await (await fixture.Client.PostAsJsonAsync("/api/auth/login", new { email = "forgot@concord.lk", password = "Chosen#Pass1" })).Content.ReadFromJsonAsync<AuthItem>();
+        Assert.False(login!.User.MustChangePassword);
+    }
+
+    [Fact]
     public async Task Creating_an_account_rejects_a_taken_email_and_a_short_password()
     {
         using var fixture = new UsersApiFixture();
@@ -134,9 +192,11 @@ public sealed class UserManagementApiTests
         Assert.Equal(HttpStatusCode.Forbidden, (await fixture.Client.PutAsJsonAsync($"/api/users/{userId}/role", new { role = "Cfo" })).StatusCode);
     }
 
-    private sealed record ManagedUserItem(Guid Id, string Email, string DisplayName, string Role, string Status, DateTimeOffset RegisteredAtUtc, DateTimeOffset? UpdatedAtUtc);
+    private sealed record ManagedUserItem(Guid Id, string Email, string DisplayName, string Role, string Status, DateTimeOffset RegisteredAtUtc, DateTimeOffset? UpdatedAtUtc, bool MustChangePassword);
     private sealed record PendingUserItem(Guid Id, string Email, string DisplayName, string RequestedRole, DateTimeOffset RegisteredAtUtc);
-    private sealed record UserItem(Guid Id, string Email, string DisplayName, string Role, string Status);
+    private sealed record UserItem(Guid Id, string Email, string DisplayName, string Role, string Status, bool MustChangePassword);
+    private sealed record AuthItem(string Token, UserItem User);
+    private sealed record ResetItem(Guid Id, Guid UserId, string Email);
 
     private sealed class UsersApiFixture : IDisposable
     {
