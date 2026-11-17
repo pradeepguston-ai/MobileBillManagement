@@ -15,7 +15,7 @@ namespace MobileBill.UnitTests.Reports;
 public sealed class ReportEmailProcessorTests
 {
     [Fact]
-    public async Task Sends_the_rules_excel_and_pdf_reports_to_its_recipients_and_marks_the_email_sent()
+    public async Task Sends_the_rules_excel_pdf_and_deduction_reports_to_its_recipients_and_marks_the_email_sent()
     {
         await using var db = CreateDb();
         var (batchId, _, _) = await SeedAsync(db);
@@ -28,11 +28,19 @@ public sealed class ReportEmailProcessorTests
         var message = Assert.Single(sender.Sent);
         Assert.Equal(["manager.fa@concord.lk", "hr@concord.lk"], message.To);
         Assert.Equal("[Mobile Billing System] October 2026 Mobile Bill Report - Factory A", message.Subject);
-        Assert.Equal(["Mobile_Bill_Report_2026_10_FA_Executive-Staff.xlsx", "Mobile_Bill_Report_2026_10_FA_Executive-Staff.pdf"], message.Attachments!.Select(x => x.FileName));
+        Assert.Equal(["Mobile_Bill_Report_2026_10_FA_Executive-Staff.xlsx", "Mobile_Bill_Report_2026_10_FA_Executive-Staff.pdf", "Mobile_Bill_Deduction_2026_10_FA_Executive-Staff.xlsx"], message.Attachments!.Select(x => x.FileName));
+        // The deduction sheet uses the rule's own factory and category filters: only Factory A's By User deduction (Factory B's is another rule's).
+        using (var deduction = new XLWorkbook(new MemoryStream(message.Attachments![2].Content)))
+        {
+            var sheet = deduction.Worksheet("Mobile Bill Deduction");
+            Assert.Equal("Filters: Factory Factory A; Category Executive, Staff", sheet.Cell("A3").GetString());
+            Assert.Equal(("E1", "By User", 20m), (sheet.Cell(6, 2).GetString(), sheet.Cell(6, 10).GetString(), sheet.Cell(6, 9).GetValue<decimal>()));
+            Assert.Equal(("TOTAL", 20m), (sheet.Cell(7, 3).GetString(), sheet.Cell(7, 9).GetValue<decimal>()));
+        }
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(message.Attachments![1].Content, 0, 4));
         using (var workbook = new XLWorkbook(new MemoryStream(message.Attachments![0].Content)))
             Assert.Equal(["0771000001", "0771000002"], workbook.Worksheet("Monthly Bill Report").Table("MonthlyBillReportTable").DataRange!.Rows().Select(row => row.Cell(2).GetString()));
-        foreach (var text in new[] { "<p>Dear All,</p>", "Factory A (FA)", "Executive, Staff", "<td style=\"border:1px solid #d0d7de\">2</td>", "LKR 150.00", "LKR 20.00", BillApprovalEmailNotifier.Footer })
+        foreach (var text in new[] { "<p>Dear All,</p>", "Factory A (FA)", "Executive, Staff", "<td style=\"border:1px solid #d0d7de\">2</td>", "LKR 150.00", "LKR 20.00", "with the mobile bill deduction sheet (Excel) for payroll", "Employees on the deduction sheet", BillApprovalEmailNotifier.Footer })
             Assert.Contains(text, message.HtmlBody);
         Assert.DoesNotContain("Test mode", message.HtmlBody);
         Assert.DoesNotContain("Dear colleague", message.HtmlBody);
@@ -131,6 +139,6 @@ public sealed class ReportEmailProcessorTests
     }
 
     private static ReportEmailProcessor Processor(MobileBillDbContext db, IEmailSender sender, TestClock clock, EmailOptions? options = null) =>
-        new(db, new ClosedXmlBillingExcelReportService(db, clock, null!), new PdfBillingReportService(db, clock), sender,
+        new(db, new ClosedXmlBillingExcelReportService(db, clock, null!), new PdfBillingReportService(db, clock), new ClosedXmlDeductionReportService(db, clock), sender,
             Options.Create(options ?? new EmailOptions()), clock, NullLogger<ReportEmailProcessor>.Instance);
 }

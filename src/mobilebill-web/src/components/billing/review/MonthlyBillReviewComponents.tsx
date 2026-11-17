@@ -46,7 +46,9 @@ export function ReviewKpis({ summary }: { summary: ReviewSummary }) {
 }
 
 // onExcessOnlyChange: told when Numbers with Deduction is switched on or off, so the page can sort by the deduction.
-export function ReviewFilters({ filters, options, onChange, onExcessOnlyChange }: { filters: Record<string, string>; options: { factories: MasterOption[]; departments: MasterOption[]; sections?: MasterOption[]; categories: MasterOption[] }; onChange: (key: string, value: string) => void; onExcessOnlyChange?: (excessOnly: boolean) => void }) {
+// The report variant (Monthly Bill Report > Open Report) has no Exception filter and spreads the fields evenly across the row.
+// deductionAction is shown at the right of the Deduction Range box (the report's deduction Excel download).
+export function ReviewFilters({ filters, options, onChange, onExcessOnlyChange, variant = 'review', deductionAction }: { filters: Record<string, string>; options: { factories: MasterOption[]; departments: MasterOption[]; sections?: MasterOption[]; categories: MasterOption[] }; onChange: (key: string, value: string) => void; onExcessOnlyChange?: (excessOnly: boolean) => void; variant?: 'review' | 'report'; deductionAction?: ReactNode }) {
   // Sections narrow to the chosen department.
   const sections = (options.sections ?? []).filter(section => !filters.departmentCode || section.departmentCode === filters.departmentCode)
   const activeCount = Object.entries(filterDefaults).filter(([key, fallback]) => (filters[key] ?? fallback) !== fallback).length
@@ -54,15 +56,19 @@ export function ReviewFilters({ filters, options, onChange, onExcessOnlyChange }
   // Calculated excess is in cents, so a minimum of 0.01 keeps exactly the numbers that have an excess.
   const excessOnly = filters.calculatedExcessMin === excessOnlyMinimum && !filters.calculatedExcessMax
   const toggleExcessOnly = () => { onChange('calculatedExcessMin', excessOnly ? '' : excessOnlyMinimum); onChange('calculatedExcessMax', ''); onExcessOnlyChange?.(!excessOnly) }
+  const report = variant === 'report'
+  const fields = <>
+    <TextField size="small" fullWidth={report} label="Search mobile / EPF / employee / calling name" value={filters.search ?? ''} onChange={event => onChange('search', event.target.value)} />
+    <MasterFilter label="Factory" fullWidth={report} value={filters.factoryCode ?? ''} onChange={value => onChange('factoryCode', value)} options={options.factories} />
+    <MasterFilter label="Department" fullWidth={report} value={filters.departmentCode ?? ''} onChange={value => { onChange('departmentCode', value); onChange('sectionCode', '') }} options={options.departments} />
+    <MasterFilter label="Section" fullWidth={report} value={filters.sectionCode ?? ''} onChange={value => onChange('sectionCode', value)} options={sections} />
+    <MasterFilter label="Category" fullWidth={report} value={filters.categoryCode ?? ''} onChange={value => onChange('categoryCode', value)} options={options.categories} />
+    <FilterSelect label="Responsibility" fullWidth={report} value={filters.responsibility ?? ''} onChange={value => onChange('responsibility', value)} options={[['', 'All responsibilities'], ['Unassessed', 'Unassigned'], ['ByUser', 'By User'], ['ByCompany', 'By Company']]} />
+    {!report && <FilterSelect label="Exception" value={filters.exception ?? 'All'} onChange={value => onChange('exception', value)} options={[['All', 'All exceptions'], ['HasException', 'Has exception'], ['NoException', 'No exception']]} />}
+  </>
   return <Stack spacing={1.5}>
     <FilterBar activeCount={activeCount} onClear={clear}>
-      <TextField size="small" label="Search mobile / EPF / employee / calling name" value={filters.search ?? ''} onChange={event => onChange('search', event.target.value)} />
-      <MasterFilter label="Factory" value={filters.factoryCode ?? ''} onChange={value => onChange('factoryCode', value)} options={options.factories} />
-      <MasterFilter label="Department" value={filters.departmentCode ?? ''} onChange={value => { onChange('departmentCode', value); onChange('sectionCode', '') }} options={options.departments} />
-      <MasterFilter label="Section" value={filters.sectionCode ?? ''} onChange={value => onChange('sectionCode', value)} options={sections} />
-      <MasterFilter label="Category" value={filters.categoryCode ?? ''} onChange={value => onChange('categoryCode', value)} options={options.categories} />
-      <FilterSelect label="Responsibility" value={filters.responsibility ?? ''} onChange={value => onChange('responsibility', value)} options={[['', 'All responsibilities'], ['Unassessed', 'Unassigned'], ['ByUser', 'By User'], ['ByCompany', 'By Company']]} />
-      <FilterSelect label="Exception" value={filters.exception ?? 'All'} onChange={value => onChange('exception', value)} options={[['All', 'All exceptions'], ['HasException', 'Has exception'], ['NoException', 'No exception']]} />
+      {report ? <Box sx={{ flex: 1, minWidth: 0, width: '100%', display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))', lg: 'minmax(0, 1.6fr) repeat(5, minmax(0, 1fr))' } }}>{fields}</Box> : fields}
     </FilterBar>
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={1}>
@@ -71,6 +77,7 @@ export function ReviewFilters({ filters, options, onChange, onExcessOnlyChange }
           <TextField size="small" label="Min Deduction" type="number" value={filters.calculatedExcessMin ?? ''} onChange={event => onChange('calculatedExcessMin', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
           <TextField size="small" label="Max Deduction" type="number" value={filters.calculatedExcessMax ?? ''} onChange={event => onChange('calculatedExcessMax', event.target.value)} sx={{ width: 170 }} slotProps={{ htmlInput: { min: 0, step: '0.01' } }} />
           <Button variant={excessOnly ? 'contained' : 'outlined'} aria-pressed={excessOnly} onClick={toggleExcessOnly} sx={{ alignSelf: { sm: 'center' } }}>{excessOnly ? 'Showing Numbers with Deduction' : 'Numbers with Deduction'}</Button>
+          {deductionAction && <Box sx={{ ml: { sm: 'auto !important' }, alignSelf: { sm: 'center' } }}>{deductionAction}</Box>}
         </Stack>
       </Stack>
     </Paper>
@@ -249,6 +256,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) { 
 function SectionValues({ values }: { values: Record<string, string | undefined> }) { return <>{Object.entries(values).map(([key, value]) => <Typography key={key} variant="body2" sx={{ whiteSpace: 'pre-line' }}><strong>{key}:</strong> {value ?? '—'}</Typography>)}</> }
 function TextTimeline({ entries, empty }: { entries: string[]; empty: string }) { return entries.length === 0 ? <Typography color="text.secondary">{empty}</Typography> : <AuditTimeline entries={entries} /> }
 function displayResponsibility(value?: string) { return value === 'ByUser' ? 'By User' : value === 'ByCompany' ? 'By Company' : 'Unassessed' }
-function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: SelectOption[] }) { const labelId = `review-filter-${label.toLowerCase().replaceAll(' ', '-')}`; return <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel id={labelId}>{label}</InputLabel><Select labelId={labelId} label={label} value={value} onChange={event => onChange(event.target.value)}>{options.map(([optionValue, optionLabel]) => <MenuItem key={optionValue || 'all'} value={optionValue}>{optionLabel}</MenuItem>)}</Select></FormControl> }
-function MasterFilter({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: MasterOption[] }) { return <FilterSelect label={label} value={value} onChange={onChange} options={[['', `All ${label.toLowerCase()}s`], ...options.map(option => [String(option.code ?? option.id), option.name ?? option.id] as const)]} /> }
+function FilterSelect({ label, value, onChange, options, fullWidth = false }: { label: string; value: string; onChange: (value: string) => void; options: SelectOption[]; fullWidth?: boolean }) { const labelId = `review-filter-${label.toLowerCase().replaceAll(' ', '-')}`; return <FormControl size="small" fullWidth={fullWidth} sx={{ minWidth: fullWidth ? 0 : 170 }}><InputLabel id={labelId}>{label}</InputLabel><Select labelId={labelId} label={label} value={value} onChange={event => onChange(event.target.value)}>{options.map(([optionValue, optionLabel]) => <MenuItem key={optionValue || 'all'} value={optionValue}>{optionLabel}</MenuItem>)}</Select></FormControl> }
+function MasterFilter({ label, value, onChange, options, fullWidth = false }: { label: string; value: string; onChange: (value: string) => void; options: MasterOption[]; fullWidth?: boolean }) { return <FilterSelect label={label} value={value} onChange={onChange} fullWidth={fullWidth} options={[['', `All ${label.toLowerCase()}s`], ...options.map(option => [String(option.code ?? option.id), option.name ?? option.id] as const)]} /> }
 function message(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback }

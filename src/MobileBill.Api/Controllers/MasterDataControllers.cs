@@ -28,7 +28,7 @@ public abstract class MasterDataControllerBase(IMasterDataService service) : Con
 [Route("api/employees")]
 public sealed class EmployeesController(IMasterDataService service) : MasterDataControllerBase(service)
 {
-    [HttpGet] public Task<PagedResult<EmployeeDto>> Get([FromQuery] PagedRequest request, [FromQuery] string? factoryCode, [FromQuery] string? departmentCode, CancellationToken token) => Service.GetEmployeesAsync(request, token, factoryCode, departmentCode);
+    [HttpGet] public Task<PagedResult<EmployeeDto>> Get([FromQuery] PagedRequest request, [FromQuery] string? factoryCode, [FromQuery] string? departmentCode, [FromQuery] string? categoryCode, CancellationToken token) => Service.GetEmployeesAsync(request, token, factoryCode, departmentCode, categoryCode);
     [HttpGet("{id:guid}")] public Task<EmployeeDto> Get(Guid id, CancellationToken token) => Service.GetEmployeeAsync(id, token);
     [HttpPost, Permission(PermissionModules.Employees, PermissionAction.Create)] public async Task<ActionResult<EmployeeDto>> Create(EmployeeUpsertRequest request, CancellationToken token) { var item = await Service.CreateEmployeeAsync(request, token); return CreatedAtAction(nameof(Get), new { item.Id }, item); }
     [HttpPut("{id:guid}"), Permission(PermissionModules.Employees, PermissionAction.Edit)] public Task<EmployeeDto> Update(Guid id, EmployeeUpsertRequest request, CancellationToken token) => Service.UpdateEmployeeAsync(id, request, token);

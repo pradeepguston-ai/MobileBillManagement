@@ -4,6 +4,7 @@
 export function navigationTarget(pathname: string) {
   if (/^\/billing\/[^/]+\/review\/?$/.test(pathname)) return '/monthly-bill-review'
   if (/^\/billing\/[^/]+\/exceptions\/?$/.test(pathname)) return '/exception-review'
+  if (/^\/reports\/monthly-bill\/[^/]+\/?$/.test(pathname)) return '/reports/monthly-bill'
   if (pathname === '/billing' || pathname.startsWith('/billing/')) return '/billing'
   return pathname
 }

@@ -14,9 +14,9 @@ using MobileBill.Infrastructure.Persistence;
 
 namespace MobileBill.Infrastructure.Reports;
 
-// Sends the oldest due report email: builds the rule's Excel and PDF reports (the same files the download gives), attaches
-// them and sends. A busy or unreachable mail service is tried again later; anything else marks the email Failed with the reason.
-public sealed class ReportEmailProcessor(MobileBillDbContext db, IBillingExcelReportService excelReports, IBillingPdfReportService pdfReports,
+// Sends the oldest due report email: builds the rule's Excel and PDF reports and its payroll deduction sheet (the same files the
+// downloads give), attaches them and sends. A busy or unreachable mail service is tried again later; anything else marks the email Failed with the reason.
+public sealed class ReportEmailProcessor(MobileBillDbContext db, IBillingExcelReportService excelReports, IBillingPdfReportService pdfReports, IBillingDeductionReportService deductionReports,
     IEmailSender sender, IOptions<EmailOptions> options, IClock clock, ILogger<ReportEmailProcessor> logger) : IReportEmailProcessor
 {
     private readonly EmailOptions settings = options.Value;
@@ -81,6 +81,7 @@ public sealed class ReportEmailProcessor(MobileBillDbContext db, IBillingExcelRe
         var request = new BillingExcelReportRequest(delivery.BillBatchId, factories, categories);
         var excel = await excelReports.ExportAsync(request, cancellationToken);
         var pdf = await pdfReports.ExportAsync(request, cancellationToken);
+        var deductions = await deductionReports.ExportForRuleAsync(delivery.BillBatchId, factories, categories, cancellationToken);
 
         var recipients = delivery.Recipients.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         if (recipients.Count == 0) throw new ReportEmailException("The email has no recipients.");
@@ -96,6 +97,7 @@ public sealed class ReportEmailProcessor(MobileBillDbContext db, IBillingExcelRe
             ("Total bill", Money(report.ExportedActualBillTotal)),
             ("Deducted from employees (By User)", Money(report.DeductedFromEmployees)),
             ("Borne by company (By Company)", Money(report.BorneByCompany)),
+            ("Employees on the deduction sheet", deductions.EmployeeCount.ToString("N0", CultureInfo.InvariantCulture)),
         };
 
         var html = new StringBuilder();
@@ -103,7 +105,7 @@ public sealed class ReportEmailProcessor(MobileBillDbContext db, IBillingExcelRe
         if (!string.IsNullOrWhiteSpace(settings.TestRecipient))
             html.Append($"<p style=\"background:#fff4ce;padding:8px;border:1px solid #e0c060\"><b>Test mode.</b> In normal use this email goes to: {Encode(string.Join(", ", recipients))}</p>");
         html.Append("<p>Dear All,</p>");
-        html.Append($"<p>Please find attached the <b>{Encode(period)}</b> mobile bill report for <b>{Encode(delivery.RuleName)}</b>, as Excel and PDF.</p>");
+        html.Append($"<p>Please find attached the <b>{Encode(period)}</b> mobile bill report for <b>{Encode(delivery.RuleName)}</b>, as Excel and PDF, with the mobile bill deduction sheet (Excel) for payroll.</p>");
         html.Append("<table cellpadding=\"6\" style=\"border-collapse:collapse;font-size:14px\">");
         foreach (var (label, value) in rows)
             html.Append($"<tr><td style=\"border:1px solid #d0d7de;background:#f3f6f9;font-weight:bold\">{Encode(label)}</td><td style=\"border:1px solid #d0d7de\">{Encode(value)}</td></tr>");
@@ -114,6 +116,7 @@ public sealed class ReportEmailProcessor(MobileBillDbContext db, IBillingExcelRe
         return new EmailMessage(to, subject, html.ToString(), [
             new EmailAttachment(excel.FileName, excel.ContentType, excel.Content),
             new EmailAttachment(pdf.FileName, pdf.ContentType, pdf.Content),
+            new EmailAttachment(deductions.FileName, deductions.ContentType, deductions.Content),
         ]);
     }
 

@@ -8,7 +8,7 @@ import { LoadingState } from '../common/LoadingState'
 
 export const deliveryRefreshMs = 5_000
 
-// Sends a batch's monthly bill report to each Report Distribution rule's recipients (Excel and PDF, filtered to the rule's
+// Sends a batch's monthly bill report to each Report Distribution rule's recipients (Excel, PDF and the deduction sheet, filtered to the rule's
 // factories and categories) and shows what has been sent. Emails are sent in the background; the list refreshes until they finish.
 export function EmailReportsDialog({ batchId, period, onClose }: { batchId: string; period: string; onClose: () => void }) {
   const [preview, setPreview] = useState<ReportEmailPreview[]>()

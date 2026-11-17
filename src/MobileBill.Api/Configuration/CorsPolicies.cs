@@ -13,7 +13,10 @@ public static class CorsPolicies
                 policy => policy
                     .WithOrigins("http://localhost:5173")
                     .AllowAnyHeader()
-                    .AllowAnyMethod());
+                    .AllowAnyMethod()
+                    // The web app runs on another origin, so the browser hides Content-Disposition (the download's file name)
+                    // unless it is exposed; without it every report downloads under a generic fallback name.
+                    .WithExposedHeaders("Content-Disposition"));
         });
 
         return services;

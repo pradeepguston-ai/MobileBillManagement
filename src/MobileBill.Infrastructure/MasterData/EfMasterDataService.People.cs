@@ -9,12 +9,13 @@ namespace MobileBill.Infrastructure.MasterData;
 
 public sealed partial class EfMasterDataService
 {
-    public async Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken, string? factoryCode = null, string? departmentCode = null)
+    public async Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken, string? factoryCode = null, string? departmentCode = null, string? categoryCode = null)
     {
         var query = _dbContext.Employees.AsNoTracking();
         if (request.IsActive is not null) query = query.Where(employee => employee.IsActive == request.IsActive.Value);
         if (!string.IsNullOrWhiteSpace(factoryCode)) { var factory = factoryCode.Trim(); query = query.Where(employee => employee.FactoryCode == factory); }
         if (!string.IsNullOrWhiteSpace(departmentCode)) { var department = departmentCode.Trim(); query = query.Where(employee => employee.DepartmentCode == department); }
+        if (!string.IsNullOrWhiteSpace(categoryCode)) { var category = categoryCode.Trim(); query = query.Where(employee => employee.CategoryCode == category); }
         if (!string.IsNullOrWhiteSpace(request.Search)) { var search = request.Search.Trim(); query = query.Where(employee => employee.EPF.Contains(search) || employee.FullName.Contains(search) || (employee.CallingName != null && employee.CallingName.Contains(search)) || (employee.NameWithInitials != null && employee.NameWithInitials.Contains(search))); }
         return await ToPagedResultAsync(EmployeeProjection(query.OrderBy(employee => employee.EPF).ThenBy(employee => employee.FactoryCode)), request, cancellationToken);
     }

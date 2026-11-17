@@ -6,6 +6,7 @@ import { userManagementPage } from './auth/permissions'
 import { AppLayout } from './layouts/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
 import { MonthlyBillReportPage } from './pages/MonthlyBillReportPage'
+import { MonthlyBillReportViewPage } from './pages/MonthlyBillReportViewPage'
 import { VasReportPage } from './pages/VasReportPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { CategoriesPage, DepartmentsPage, DesignationsPage, EmployeesPage, FactoriesPage, MobileAllocationsPage, MobileDevicesPage, MobilePackagesPage, ProvidersPage, ThirdPartyCompaniesPage } from './pages/master-data/MasterPages'
@@ -56,6 +57,7 @@ function App() {
           <Route path="billing/:batchId/exceptions" element={<RequirePermission module="exception-review"><ExceptionReviewPage /></RequirePermission>} />
           <Route path="billing/:batchId/review" element={<RequirePermission module="monthly-bill-review"><MonthlyBillReviewPage /></RequirePermission>} />
           <Route path="reports/monthly-bill" element={<RequirePermission module="monthly-bill-report"><MonthlyBillReportPage /></RequirePermission>} />
+          <Route path="reports/monthly-bill/:batchId" element={<RequirePermission module="monthly-bill-report"><MonthlyBillReportViewPage /></RequirePermission>} />
           <Route path="reports/vas" element={<RequirePermission module="vas-report"><VasReportPage /></RequirePermission>} />
           <Route path="activity-log" element={<RequirePermission module="activity-log"><ActivityLogPage /></RequirePermission>} />
           <Route path="admin/users" element={<RequirePermission module={userManagementPage}><UserManagementPage /></RequirePermission>} />

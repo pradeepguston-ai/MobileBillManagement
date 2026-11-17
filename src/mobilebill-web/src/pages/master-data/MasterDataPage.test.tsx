@@ -175,12 +175,13 @@ describe('MasterDataPage states', () => {
     expect((screen.getByRole('combobox', { name: 'Department' }) as HTMLInputElement).value).toBe('Information Technology')
   })
 
-  it('filters employees and mobile allocations by factory and department', async () => {
+  it('filters employees and mobile allocations by factory and department, and employees by category', async () => {
     const listed: URL[] = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
       const url = new URL(String(input))
       if (url.pathname === '/api/factories') return json(page([{ id: 'f1', code: 'CAL', name: 'CONCORD APPAREL (PVT) LTD', isActive: true }]))
       if (url.pathname === '/api/departments') return json(page([{ id: 'd1', code: 'DEP001', name: 'ACCOUNTS', isActive: true }]))
+      if (url.pathname === '/api/categories') return json(page([{ id: 'c1', code: 'CAT001', name: 'STAFF', isActive: true }]))
       if (url.pathname === '/api/employees' || url.pathname === '/api/mobile-accounts') listed.push(url)
       return json(page([], 1, 0, 0))
     })
@@ -194,6 +195,15 @@ describe('MasterDataPage states', () => {
       fireEvent.click(await screen.findByRole('option', { name: 'ACCOUNTS' }))
 
       await waitFor(() => expect(listed.some(url => url.pathname === path && url.searchParams.get('factoryCode') === 'CAL' && url.searchParams.get('departmentCode') === 'DEP001')).toBe(true))
+
+      // Only Employees can also be filtered by category.
+      if (Page === EmployeesPage) {
+        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Category' }))
+        fireEvent.click(await screen.findByRole('option', { name: 'STAFF' }))
+        await waitFor(() => expect(listed.some(url => url.searchParams.get('factoryCode') === 'CAL' && url.searchParams.get('departmentCode') === 'DEP001' && url.searchParams.get('categoryCode') === 'CAT001')).toBe(true))
+      } else {
+        expect(screen.queryByRole('combobox', { name: 'Category' })).toBeNull()
+      }
       unmount()
     }
   }, LongFormTimeout)

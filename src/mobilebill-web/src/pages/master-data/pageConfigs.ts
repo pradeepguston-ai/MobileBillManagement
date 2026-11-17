@@ -46,6 +46,8 @@ const organisationFilters: MasterDataListFilter[] = [
   { key: 'factoryCode', label: 'Factory', path: '/api/factories', toOption: row => nameOption(row) },
   { key: 'departmentCode', label: 'Department', path: '/api/departments', toOption: row => nameOption(row) },
 ]
+// Employees can also be narrowed to one category, such as STAFF or OTHER - THIRD-PARTY.
+const employeeFilters: MasterDataListFilter[] = [...organisationFilters, { key: 'categoryCode', label: 'Category', path: '/api/categories', toOption: row => nameOption(row) }]
 // Department → Section → Sub Section.
 export const sectionsConfig: MasterDataPageConfig<Row> = {
   title: 'Sections',
@@ -85,7 +87,7 @@ export const employeesConfig: MasterDataPageConfig<Row> = {
   module: 'employees',
   editRoles: organisationMasterEditorRoles,
   importer: { roles: organisationMasterEditorRoles, title: 'Import employees from Excel' },
-  listFilters: organisationFilters,
+  listFilters: employeeFilters,
   columns: [{ key: 'epf', header: 'EPF' }, { key: 'title', header: 'Title' }, { key: 'fullName', header: 'Full Name' }, { key: 'nameWithInitials', header: 'Name with Initials' }, { key: 'callingName', header: 'Calling Name' }, { key: 'gender', header: 'Gender' }, { key: 'categoryName', header: 'Category' }, { key: 'designationName', header: 'Designation' }, { key: 'factoryName', header: 'Factory' }, { key: 'departmentName', header: 'Department' }, { key: 'sectionName', header: 'Section' }, { key: 'subSectionName', header: 'Sub Section' }, { key: 'thirdPartyCompanyName', header: 'Third Party Allocation' }, { key: 'isActive', header: 'Status', render: employeeStatus }],
   fields: [{ key: 'epf', label: 'EPF', required: true }, { key: 'fullName', label: 'Full Name', required: true }, { key: 'nameWithInitials', label: 'Name with Initials' }, { key: 'callingName', label: 'Calling Name' }, { key: 'gender', label: 'Gender', type: 'select', required: true, options: genderOptions }, { key: 'title', label: 'Title', disabled: true, helperText: 'Set from Gender.' }, { key: 'categoryCode', label: 'Category', type: 'select', required: true }, { key: 'designationCode', label: 'Designation', type: 'select', required: true }, { key: 'factoryCode', label: 'Factory', type: 'select', required: true }, { key: 'departmentCode', label: 'Department', type: 'select', required: true }, { key: 'sectionCode', label: 'Section', type: 'select', dependsOn: 'departmentCode' }, { key: 'subSectionCode', label: 'Sub Section', type: 'select', dependsOn: 'sectionCode' }, { key: 'thirdPartyCompanyCode', label: 'Third Party Allocation', type: 'select', emptyOptionLabel: 'Not Applicable', visibleWhen: (values, options) => isThirdParty(options.categoryCode?.find(option => option.value === values.categoryCode)) }],
   lookups: [

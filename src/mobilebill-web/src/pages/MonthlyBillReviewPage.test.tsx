@@ -55,6 +55,8 @@ describe('MonthlyBillReviewPage', () => {
     expect(screen.getByText('Billing Period: August 2026', { exact: false })).toBeTruthy()
     expect(screen.getByText('Sam')).toBeTruthy()
     expect(screen.getAllByText('Unassessed').length).toBeGreaterThan(0)
+    // The review screen keeps the Exception filter that the report view leaves out.
+    expect(screen.getByRole('combobox', { name: 'Exception' })).toBeTruthy()
   })
 
   it('sends filters and sorting to the server and fetches rows 100 at a time', async () => {

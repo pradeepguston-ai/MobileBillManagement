@@ -523,6 +523,120 @@ public sealed class BillingExcelReportApiTests
         Assert.Equal(390096.74m, reopened.Worksheet("Monthly Bill Report").Cell(totalsRow, 13).GetValue<decimal>());
     }
 
+    [Theory]
+    [InlineData(BillBatchStatus.ITReview, HttpStatusCode.Conflict)]
+    [InlineData(BillBatchStatus.FinanceApproval, HttpStatusCode.Conflict)]
+    [InlineData(BillBatchStatus.Completed, HttpStatusCode.OK)]
+    [InlineData(BillBatchStatus.Locked, HttpStatusCode.OK)]
+    public async Task Deduction_report_is_available_only_for_completed_or_locked_batches(BillBatchStatus status, HttpStatusCode expected)
+    {
+        using var fixture = new ReportApiFixture();
+        var batchId = await fixture.SeedAsync(status, [ValidRow()], 100m);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/deduction-excel");
+
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Deduction_report_lists_each_employee_once_with_the_by_user_deduction_of_all_their_numbers()
+    {
+        using var fixture = new ReportApiFixture();
+        var twoNumbers = Guid.NewGuid();
+        var rows = new[]
+        {
+            ValidRow("740052872", finalDeduction: 100.50m) with { Epf = "211876", NameWithInitials = "B.A.C.S. BALASOORIYA", Designation = "FINANCE EXECUTIVE", Category = "EXECUTIVE", EmployeeId = twoNumbers },
+            ValidRow("740052873", finalDeduction: 20.25m) with { Epf = "211876", NameWithInitials = "B.A.C.S. BALASOORIYA", Designation = "FINANCE EXECUTIVE", Category = "EXECUTIVE", EmployeeId = twoNumbers },
+            ValidRow("740109589", finalDeduction: 50m) with { Epf = "2", EmployeeName = "Y.R.Y.N. SAMARASINHGHE", Designation = "FACTORY MANAGER", Category = "MANAGERIAL" },
+            ValidRow("740120380", finalDeduction: 40m) with { Epf = "300", EmployeeName = "Staff Member", Category = "Staff", Factory = "Factory B" },
+            ValidRow("740147546", Responsibility.ByCompany, finalDeduction: 30m) with { Epf = "400" },   // company pays: left out
+            ValidRow("740181493", finalDeduction: 0m) with { Epf = "500" },                               // nothing to deduct: left out
+        };
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, rows, 500m);
+
+        var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/deduction-excel");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(ExcelContentType, response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("Mobile_Bill_Deduction_2026_08.xlsx", response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        using var workbook = new XLWorkbook(await response.Content.ReadAsStreamAsync());
+        var sheet = workbook.Worksheet("Mobile Bill Deduction");
+        Assert.Equal("Mobile Bill Deduction — August 2026", sheet.Cell("A1").GetString());
+        Assert.Contains("Dialog Telecom", sheet.Cell("A2").GetString());
+        Assert.Equal("Filters: None (all employees with a By User deduction)", sheet.Cell("A3").GetString());
+        Assert.Equal(["SE NO", "EPF NO.", "EMPLOYEE NAME", "DESIGNATION", "PAYROLL CATEGORY", "SALARY ADVANCE (LKR)", "FESTIVAL ADVANCE (LKR)", "ANNUAL BOI ENTRY PERMIT (LKR)", "MOBILE BILL DEDUCTION (LKR)", "STATUS"],
+            Enumerable.Range(1, 10).Select(column => sheet.Cell(5, column).GetString()));
+
+        // Sorted by EPF number; the employee with two numbers is one row with both deductions added.
+        Assert.Equal("01", sheet.Cell(6, 1).GetFormattedString());
+        Assert.Equal(("2", "Y.R.Y.N. SAMARASINHGHE", "FACTORY MANAGER", "MANAGERIAL", 50m, "By User"), (sheet.Cell(6, 2).GetString(), sheet.Cell(6, 3).GetString(), sheet.Cell(6, 4).GetString(), sheet.Cell(6, 5).GetString(), sheet.Cell(6, 9).GetValue<decimal>(), sheet.Cell(6, 10).GetString()));
+        Assert.Equal(("300", 40m), (sheet.Cell(7, 2).GetString(), sheet.Cell(7, 9).GetValue<decimal>()));
+        Assert.Equal(("211876", "B.A.C.S. BALASOORIYA", 120.75m), (sheet.Cell(8, 2).GetString(), sheet.Cell(8, 3).GetString(), sheet.Cell(8, 9).GetValue<decimal>()));
+        // The advance and BOI permit columns are left empty for payroll.
+        Assert.All(Enumerable.Range(6, 3), row => Assert.All(Enumerable.Range(6, 3), column => Assert.True(sheet.Cell(row, column).IsEmpty())));
+
+        Assert.Equal("TOTAL", sheet.Cell(9, 3).GetString());
+        Assert.Equal(210.75m, sheet.Cell(9, 9).GetValue<decimal>());
+        Assert.Equal("-", sheet.Cell(9, 6).GetFormattedString().Trim());
+        Assert.True(sheet.Cell(10, 3).IsEmpty());
+    }
+
+    // The web app is on another origin: the browser only lets it read the file name if Content-Disposition is exposed.
+    [Theory]
+    [InlineData("excel")]
+    [InlineData("pdf")]
+    [InlineData("deduction-excel")]
+    public async Task Report_downloads_expose_their_file_name_to_the_web_app(string format)
+    {
+        using var fixture = new ReportApiFixture();
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Completed, [ValidRow()], 100m);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/reports/billing/{batchId}/{format}");
+        request.Headers.Add("Origin", "http://localhost:5173");
+
+        var response = await fixture.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(response.Content.Headers.ContentDisposition?.FileName);
+        Assert.Contains("Content-Disposition", response.Headers.GetValues("Access-Control-Expose-Headers").SelectMany(value => value.Split(',', StringSplitOptions.TrimEntries)), StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Deduction_report_follows_the_screen_filters()
+    {
+        using var fixture = new ReportApiFixture();
+        var rows = new[]
+        {
+            ValidRow("740052872", finalDeduction: 10m) with { Epf = "100" },
+            ValidRow("740120380", finalDeduction: 40m) with { Epf = "300", Category = "Staff", Factory = "Factory B" },
+            ValidRow("740147546", Responsibility.ByCompany, finalDeduction: 30m) with { Epf = "400" },
+        };
+        var batchId = await fixture.SeedAsync(BillBatchStatus.Locked, rows, 500m);
+        async Task<(string? FileName, IXLWorksheet Sheet, XLWorkbook Book)> Download(string query)
+        {
+            var response = await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/deduction-excel?{query}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var book = new XLWorkbook(await response.Content.ReadAsStreamAsync());
+            return (response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"'), book.Worksheet(1), book);
+        }
+
+        var (factoryFile, factory, factoryBook) = await Download("factoryCode=FB&categoryCode=STF");
+        using (factoryBook)
+        {
+            Assert.Equal("Mobile_Bill_Deduction_2026_08_FB_Staff.xlsx", factoryFile);
+            Assert.Equal("Filters: Factory Factory B; Category Staff", factory.Cell("A3").GetString());
+            Assert.Equal(("300", "TOTAL", 40m), (factory.Cell(6, 2).GetString(), factory.Cell(7, 3).GetString(), factory.Cell(7, 9).GetValue<decimal>()));
+        }
+
+        var (_, search, searchBook) = await Download("search=740052872&calculatedExcessMin=0.01");
+        using (searchBook) Assert.Equal(("100", 10m), (search.Cell(6, 2).GetString(), search.Cell(7, 9).GetValue<decimal>()));
+
+        // Company-paid numbers are never deductions, so asking for By Company gives an empty sheet with a zero total.
+        var (_, company, companyBook) = await Download("responsibility=ByCompany");
+        using (companyBook) Assert.Equal(("TOTAL", 0m), (company.Cell(6, 3).GetString(), company.Cell(6, 9).GetValue<decimal>()));
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await fixture.Client.GetAsync($"/api/reports/billing/{batchId}/deduction-excel?calculatedExcessMin=10&calculatedExcessMax=1")).StatusCode);
+    }
+
     private static RowSeed ValidRow(
         string mobile = "761499100",
         Responsibility? responsibility = Responsibility.ByUser,
@@ -574,7 +688,7 @@ public sealed class BillingExcelReportApiTests
         string MobileNumber, string Epf, string EmployeeName, string Category, string Designation, string Factory,
         string Department, string CallingName, decimal CreditLimit, decimal MonthlyRental, decimal ActualBill,
         decimal Variance, decimal FinalDeduction, Responsibility? Responsibility, string? Remark,
-        MonthlyBillStatus Status, DateTimeOffset? AssessedAt, string? Section = null, string? SubSection = null, bool IsPooled = false, string? NameWithInitials = null);
+        MonthlyBillStatus Status, DateTimeOffset? AssessedAt, string? Section = null, string? SubSection = null, bool IsPooled = false, string? NameWithInitials = null, Guid? EmployeeId = null);
 
     private sealed class ReportApiFixture : IDisposable
     {
@@ -619,8 +733,8 @@ public sealed class BillingExcelReportApiTests
                     PageNumber = 1, ExtractionStatus = BillLineExtractionStatus.Extracted, TotalDueAmount = row.ActualBill
                 };
                 db.Add(line);
-                var employeeId = Guid.NewGuid();
-                if (row.NameWithInitials is not null)
+                var employeeId = row.EmployeeId ?? Guid.NewGuid();
+                if (row.NameWithInitials is not null && db.Employees.Local.All(employee => employee.Id != employeeId))
                     db.Add(new Employee { Id = employeeId, EPF = row.Epf, FullName = row.EmployeeName, NameWithInitials = row.NameWithInitials, CategoryCode = "CAT", DesignationCode = "DES", FactoryCode = "FAC", DepartmentCode = "DEP" });
                 db.Add(new MonthlyBill
                 {

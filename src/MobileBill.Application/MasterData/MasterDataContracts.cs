@@ -90,7 +90,7 @@ public sealed record MobileAccountReassignRequest(Guid EmployeeId);
 public interface IMasterDataService
 {
     // factoryCode / departmentCode narrow the list to one factory or department (employees, and the holders of mobile numbers).
-    Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken, string? factoryCode = null, string? departmentCode = null);
+    Task<PagedResult<EmployeeDto>> GetEmployeesAsync(PagedRequest request, CancellationToken cancellationToken, string? factoryCode = null, string? departmentCode = null, string? categoryCode = null);
     Task<EmployeeDto> GetEmployeeAsync(Guid id, CancellationToken cancellationToken);
     Task<EmployeeDto> CreateEmployeeAsync(EmployeeUpsertRequest request, CancellationToken cancellationToken);
     Task<EmployeeDto> UpdateEmployeeAsync(Guid id, EmployeeUpsertRequest request, CancellationToken cancellationToken);

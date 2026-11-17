@@ -38,7 +38,18 @@ public sealed class EfBillBatchReviewQueryService(MobileBillDbContext db) : IBil
     public async Task<PagedResult<BillReviewRowDto>> GetRowsAsync(Guid batchId, BillReviewRowsRequest request, CancellationToken token)
     {
         if (!await db.BillBatches.AnyAsync(x => x.Id == batchId, token)) throw new BillBatchNotFoundException(batchId);
-        var query = db.MonthlyBills.AsNoTracking().Where(x => x.BillLine.BillBatchId == batchId);
+        var query = Filter(db, db.MonthlyBills.AsNoTracking().Where(x => x.BillLine.BillBatchId == batchId), request);
+        query = Sort(query, request.SortBy, request.SortDirection);
+        var count = await query.CountAsync(token); var page = request.NormalizedPageNumber; var size = request.NormalizedPageSize;
+        var items = await query.Skip((page - 1) * size).Take(size).Select(x => new BillReviewRowDto(x.Id, x.MobileNumberSnapshot, x.EmployeeEpfSnapshot, x.EmployeeNameSnapshot, x.CallingNameSnapshot, x.CategoryNameSnapshot ?? "", x.DesignationNameSnapshot ?? "", x.FactoryNameSnapshot ?? "", x.DepartmentNameSnapshot ?? "", x.CreditLimit, x.MonthlyRental, x.CreditLimit + x.MonthlyRental, x.ActualBill, x.Variance, x.CalculatedExcess, x.Responsibility, x.FinalDeduction, x.Remark, x.Status, x.Exceptions.Any(), x.AssessedAt != null, x.SectionNameSnapshot, x.SubSectionNameSnapshot, x.IsPooled, x.PackageCodeSnapshot,
+            x.IsPooled ? null : db.Employees.Where(e => e.Id == x.EmployeeId).Select(e => e.NameWithInitials).FirstOrDefault(), x.FactoryCodeSnapshot)).ToListAsync(token);
+        return new PagedResult<BillReviewRowDto>(items, page, size, count);
+    }
+
+    // The Monthly Bill Review filters (everything except sorting and paging). The deduction report uses the same rules,
+    // so its download matches what the screen shows.
+    internal static IQueryable<MonthlyBill> Filter(MobileBillDbContext db, IQueryable<MonthlyBill> query, BillReviewRowsRequest request)
+    {
         if (!string.IsNullOrWhiteSpace(request.FactoryCode)) query = query.Where(x => x.FactoryCodeSnapshot == request.FactoryCode);
         if (!string.IsNullOrWhiteSpace(request.DepartmentCode)) query = query.Where(x => x.DepartmentCodeSnapshot == request.DepartmentCode);
         if (!string.IsNullOrWhiteSpace(request.CategoryCode)) query = query.Where(x => x.CategoryCodeSnapshot == request.CategoryCode);
@@ -53,11 +64,7 @@ public sealed class EfBillBatchReviewQueryService(MobileBillDbContext db) : IBil
         if (request.CalculatedExcessMax is not null) query = query.Where(x => x.CalculatedExcess <= request.CalculatedExcessMax.Value);
         var search = request.Search?.Trim(); if (!string.IsNullOrEmpty(search)) query = query.Where(x => x.MobileNumberSnapshot.Contains(search) || x.EmployeeEpfSnapshot.Contains(search) || x.EmployeeNameSnapshot.Contains(search) || (x.CallingNameSnapshot != null && x.CallingNameSnapshot.Contains(search))
             || (!x.IsPooled && db.Employees.Any(e => e.Id == x.EmployeeId && e.NameWithInitials != null && e.NameWithInitials.Contains(search))));
-        query = Sort(query, request.SortBy, request.SortDirection);
-        var count = await query.CountAsync(token); var page = request.NormalizedPageNumber; var size = request.NormalizedPageSize;
-        var items = await query.Skip((page - 1) * size).Take(size).Select(x => new BillReviewRowDto(x.Id, x.MobileNumberSnapshot, x.EmployeeEpfSnapshot, x.EmployeeNameSnapshot, x.CallingNameSnapshot, x.CategoryNameSnapshot ?? "", x.DesignationNameSnapshot ?? "", x.FactoryNameSnapshot ?? "", x.DepartmentNameSnapshot ?? "", x.CreditLimit, x.MonthlyRental, x.CreditLimit + x.MonthlyRental, x.ActualBill, x.Variance, x.CalculatedExcess, x.Responsibility, x.FinalDeduction, x.Remark, x.Status, x.Exceptions.Any(), x.AssessedAt != null, x.SectionNameSnapshot, x.SubSectionNameSnapshot, x.IsPooled, x.PackageCodeSnapshot,
-            x.IsPooled ? null : db.Employees.Where(e => e.Id == x.EmployeeId).Select(e => e.NameWithInitials).FirstOrDefault(), x.FactoryCodeSnapshot)).ToListAsync(token);
-        return new PagedResult<BillReviewRowDto>(items, page, size, count);
+        return query;
     }
 
     // Name with initials is not snapshotted on the bill, so it is read from the current employee record (SIM Pool rows have none).

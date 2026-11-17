@@ -150,6 +150,24 @@ export const downloadExcelReport = (batchId: string) => downloadReport(batchId, 
 // Leave both filters empty for the full batch report.
 export const downloadReportAs = (batchId: string, format: ReportFormat, filters?: ReportFilters) => downloadReport(batchId, format, filters)
 
+// The payroll deduction sheet (one row per employee, By User deductions only). filters are the Monthly Bill Review
+// filters as sent for the rows (factoryCode, categoryCode, search, …), so the file matches the screen.
+export async function downloadDeductionReport(batchId: string, filters: Record<string, string> = {}) {
+  const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value.trim() !== ''))
+  const query = params.toString() ? `?${params}` : ''
+  const response = await apiResponse(`/api/reports/billing/${batchId}/deduction-excel${query}`)
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = encoded ? decodeURIComponent(encoded) : plain ?? `mobile-bill-deduction-${batchId}.xlsx`
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 // All extracted lines of a batch as an Excel file; search keeps only matching mobile numbers, like the screen.
 export async function downloadBillLinesExcel(batchId: string, search = '') {
   const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''

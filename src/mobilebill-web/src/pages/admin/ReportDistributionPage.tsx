@@ -118,7 +118,7 @@ export function ReportDistributionPage() {
             renderInput={params => <TextField {...params} label="Recipients" placeholder="Pick a user or type an email" helperText="Pick system users, or type an email address and press Enter." />}
           />
           <FormControlLabel control={<Switch checked={form.isActive} onChange={event => setForm({ ...form, isActive: event.target.checked })} />} label="Active (included when sending reports)" />
-          <Typography variant="body2" color="text.secondary">Each email carries the report as Excel and PDF, filtered to the chosen factories and categories. Leave a filter on “All” to include everything.</Typography>
+          <Typography variant="body2" color="text.secondary">Each email carries the report as Excel and PDF, plus the mobile bill deduction sheet (Excel) for payroll, all filtered to the chosen factories and categories. Leave a filter on “All” to include everything.</Typography>
         </Stack>
       </DialogContent>}
       <DialogActions><Button onClick={() => setForm(undefined)}>Cancel</Button><Button variant="contained" disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save'}</Button></DialogActions>

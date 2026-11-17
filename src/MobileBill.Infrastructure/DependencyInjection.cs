@@ -64,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<IBillTrendService, EfBillTrendService>();
         services.AddScoped<IVasReportService, VasReportService>();
         services.AddScoped<IBillingExcelReportService, ClosedXmlBillingExcelReportService>();
+        services.AddScoped<IBillingDeductionReportService, ClosedXmlDeductionReportService>();
         services.AddScoped<IBillingPdfReportService, PdfBillingReportService>();
         services.AddScoped<IBillLinesExcelExportService, ClosedXmlBillLinesExcelExportService>();
         services.AddScoped<IBillingInsightsService, EfBillingInsightsService>();

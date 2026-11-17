@@ -41,6 +41,8 @@ describe('MonthlyBillReportPage', () => {
     expect((buttons[0] as HTMLButtonElement).disabled).toBe(false)
     expect((buttons[1] as HTMLButtonElement).disabled).toBe(false)
     expect((buttons[2] as HTMLButtonElement).disabled).toBe(true)
+    // Open Report shows the report only (filters and rows), not the full review screen.
+    expect(screen.getAllByRole('link', { name: 'Open Report' }).map(link => link.getAttribute('href'))).toEqual(['/reports/monthly-bill/completed', '/reports/monthly-bill/locked', '/reports/monthly-bill/review'])
   })
 
   it('uses the server filename for an eligible report download', async () => {
