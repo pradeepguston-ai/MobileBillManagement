@@ -14,7 +14,7 @@ const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200
 function mockReport(status = 'Completed') {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
     const url = String(input)
-    if (url.includes('/api/categories')) return json(page([{ id: 'c1', code: 'CAT001', name: 'EXECUTIVE' }]))
+    if (url.includes('/api/categories')) return json(page([{ id: 'c1', code: 'CAT001', name: 'EXECUTIVE' }, { id: 'c2', code: 'CAT002', name: 'GENERAL EMPLOYEE' }]))
     if (url.includes('/api/factories') || url.includes('/api/departments') || url.includes('/api/sections')) return json(page([]))
     if (url.includes('/trend')) return json({ monthlyBillId: 'bill-1', mobileNumber: row.mobileNumber, employeeEpf: row.employeeEpf, employeeName: row.employeeName, scope: 'ThisNumber', months: 12, points: [], currentActualBill: 150, average: null, changePercent: null, isAboveUsual: false, monthsOverLimit: 0, highestYear: null, highestMonth: null, highestActualBill: null, aboveUsualThresholdPercent: 30 })
     if (url.includes('/rows/bill-1')) return json(detail)
@@ -45,13 +45,25 @@ describe('MonthlyBillReportViewPage', () => {
     expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toHaveProperty('disabled', true)
   })
 
-  it('sends the chosen filter to the server and opens a row read-only', async () => {
+  it('filters by several ticked categories and opens a row read-only', async () => {
     const fetchMock = mockReport(); renderPage()
     await screen.findByText('B.A.C.S. BALASOORIYA')
+    const listed = (code: string) => fetchMock.mock.calls.some(([url]) => String(url).includes('/rows?') && new URL(String(url)).searchParams.get('categoryCode') === code)
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Category' }))
+    const category = screen.getByRole('combobox', { name: 'Category' })
+    expect(category.textContent).toBe('All categories')
+    fireEvent.mouseDown(category)
     fireEvent.click(await screen.findByRole('option', { name: 'EXECUTIVE' }))
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/rows?') && new URL(String(url)).searchParams.get('categoryCode') === 'CAT001')).toBe(true))
+    fireEvent.click(screen.getByRole('option', { name: 'GENERAL EMPLOYEE' }))
+    await waitFor(() => expect(listed('CAT001,CAT002')).toBe(true))
+    expect(screen.getByRole('option', { name: 'EXECUTIVE' }).querySelector('input')).toHaveProperty('checked', true)
+    expect(screen.getByRole('option', { name: 'All categories' }).querySelector('input')).toHaveProperty('checked', false)
+    expect(category.textContent).toBe('EXECUTIVE, GENERAL EMPLOYEE')
+
+    // Ticking All categories clears the others.
+    fireEvent.click(screen.getByRole('option', { name: 'All categories' }))
+    await waitFor(() => expect(category.textContent).toBe('All categories'))
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
 
     fireEvent.click(await screen.findByText('B.A.C.S. BALASOORIYA'))
     expect(await screen.findByText('Your role can view assessments but not change them.')).toBeTruthy()
@@ -68,6 +80,8 @@ describe('MonthlyBillReportViewPage', () => {
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Category' }))
     fireEvent.click(await screen.findByRole('option', { name: 'EXECUTIVE' }))
+    fireEvent.click(screen.getByRole('option', { name: 'GENERAL EMPLOYEE' }))
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
     fireEvent.click(screen.getByRole('button', { name: 'Numbers with Deduction' }))
     const download = await screen.findByRole('button', { name: 'Download Deduction Excel' })
     await waitFor(() => expect(download).toHaveProperty('disabled', false))
@@ -76,7 +90,7 @@ describe('MonthlyBillReportViewPage', () => {
     await waitFor(() => expect(downloadedName).toBe('Mobile_Bill_Deduction_2026_08.xlsx'))
     const url = new URL(String(fetchMock.mock.calls.find(([input]) => String(input).includes('/deduction-excel'))![0]))
     expect(url.pathname).toBe('/api/reports/billing/batch-1/deduction-excel')
-    expect(url.searchParams.get('categoryCode')).toBe('CAT001')
+    expect(url.searchParams.get('categoryCode')).toBe('CAT001,CAT002')
     expect(url.searchParams.get('calculatedExcessMin')).toBe('0.01')
     expect(url.searchParams.has('sortBy')).toBe(false)
   })

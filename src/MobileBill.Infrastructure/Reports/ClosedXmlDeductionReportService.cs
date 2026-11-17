@@ -92,8 +92,8 @@ public sealed class ClosedXmlDeductionReportService(MobileBillDbContext db, IClo
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Mobile Bill Deduction");
         sheet.ShowGridLines = false;
-        sheet.Style.Font.FontName = "Arial";
-        sheet.Style.Font.FontSize = 10;
+        sheet.Style.Font.FontName = "Calibri";
+        sheet.Style.Font.FontSize = 11;
         var lastColumn = Columns.Length;
 
         sheet.Cell(1, 1).Value = $"Mobile Bill Deduction — {period}";
@@ -169,7 +169,7 @@ public sealed class ClosedXmlDeductionReportService(MobileBillDbContext db, IClo
         if (await FactoryNameAsync(filters.FactoryCode, cancellationToken) is { } factory) parts.Add($"Factory {factory}");
         if (await DepartmentNameAsync(filters.DepartmentCode, cancellationToken) is { } department) parts.Add($"Department {department}");
         if (await SectionNameAsync(filters.SectionCode, cancellationToken) is { } section) parts.Add($"Section {section}");
-        if (await CategoryNameAsync(filters.CategoryCode, cancellationToken) is { } category) parts.Add($"Category {category}");
+        if (filters.CategoryCodes.Count > 0) parts.Add($"Category {string.Join(", ", await NamesAsync(filters.CategoryCodes, CategoryNameAsync, cancellationToken))}");
         if (filters.Responsibility is { } responsibility) parts.Add($"Responsibility {responsibility switch { ReviewResponsibilityFilter.ByUser => "By User", ReviewResponsibilityFilter.ByCompany => "By Company", _ => "Unassigned" }}");
         if (filters.CalculatedExcessMin is { } min) parts.Add($"Deduction from {min.ToString(MoneyFormat, CultureInfo.InvariantCulture)}");
         if (filters.CalculatedExcessMax is { } max) parts.Add($"Deduction up to {max.ToString(MoneyFormat, CultureInfo.InvariantCulture)}");
@@ -179,8 +179,10 @@ public sealed class ClosedXmlDeductionReportService(MobileBillDbContext db, IClo
 
     private async Task<string> FileNameSuffixAsync(BillReviewRowsRequest filters, CancellationToken cancellationToken)
     {
-        var parts = new[] { filters.FactoryCode?.Trim(), await DepartmentNameAsync(filters.DepartmentCode, cancellationToken), await SectionNameAsync(filters.SectionCode, cancellationToken), await CategoryNameAsync(filters.CategoryCode, cancellationToken) }
-            .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => FileNamePart(x!)).Where(x => x.Length > 0);
+        // Each name is cleaned on its own; several categories are joined with "-" (as in the Monthly Bill Report file names).
+        var categories = string.Join("-", (await NamesAsync(filters.CategoryCodes, CategoryNameAsync, cancellationToken)).Select(FileNamePart).Where(x => x.Length > 0));
+        var parts = new[] { FileNamePart(filters.FactoryCode ?? ""), FileNamePart(await DepartmentNameAsync(filters.DepartmentCode, cancellationToken) ?? ""), FileNamePart(await SectionNameAsync(filters.SectionCode, cancellationToken) ?? ""), categories }
+            .Where(x => x.Length > 0);
         return string.Concat(parts.Select(x => "_" + x));
     }
 

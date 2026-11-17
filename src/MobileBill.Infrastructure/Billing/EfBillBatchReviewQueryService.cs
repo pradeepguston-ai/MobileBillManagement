@@ -52,7 +52,7 @@ public sealed class EfBillBatchReviewQueryService(MobileBillDbContext db) : IBil
     {
         if (!string.IsNullOrWhiteSpace(request.FactoryCode)) query = query.Where(x => x.FactoryCodeSnapshot == request.FactoryCode);
         if (!string.IsNullOrWhiteSpace(request.DepartmentCode)) query = query.Where(x => x.DepartmentCodeSnapshot == request.DepartmentCode);
-        if (!string.IsNullOrWhiteSpace(request.CategoryCode)) query = query.Where(x => x.CategoryCodeSnapshot == request.CategoryCode);
+        var categories = request.CategoryCodes; if (categories.Count > 0) query = query.Where(x => x.CategoryCodeSnapshot != null && categories.Contains(x.CategoryCodeSnapshot));
         if (!string.IsNullOrWhiteSpace(request.SectionCode)) query = query.Where(x => x.SectionCodeSnapshot == request.SectionCode);
         if (request.Responsibility is not null) query = request.Responsibility switch { ReviewResponsibilityFilter.Unassessed => query.Where(x => x.Responsibility == null), ReviewResponsibilityFilter.ByUser => query.Where(x => x.Responsibility == Responsibility.ByUser), _ => query.Where(x => x.Responsibility == Responsibility.ByCompany) };
         if (request.Exception == ReviewExceptionFilter.HasException) query = query.Where(x => x.Exceptions.Any());

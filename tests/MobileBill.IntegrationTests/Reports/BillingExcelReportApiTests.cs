@@ -562,6 +562,7 @@ public sealed class BillingExcelReportApiTests
         using var workbook = new XLWorkbook(await response.Content.ReadAsStreamAsync());
         var sheet = workbook.Worksheet("Mobile Bill Deduction");
         Assert.Equal("Mobile Bill Deduction — August 2026", sheet.Cell("A1").GetString());
+        Assert.All(new[] { sheet.Cell("A1"), sheet.Cell(5, 1), sheet.Cell(6, 3), sheet.Cell(9, 9) }, cell => Assert.Equal("Calibri", cell.Style.Font.FontName));
         Assert.Contains("Dialog Telecom", sheet.Cell("A2").GetString());
         Assert.Equal("Filters: None (all employees with a By User deduction)", sheet.Cell("A3").GetString());
         Assert.Equal(["SE NO", "EPF NO.", "EMPLOYEE NAME", "DESIGNATION", "PAYROLL CATEGORY", "SALARY ADVANCE (LKR)", "FESTIVAL ADVANCE (LKR)", "ANNUAL BOI ENTRY PERMIT (LKR)", "MOBILE BILL DEDUCTION (LKR)", "STATUS"],
@@ -625,6 +626,15 @@ public sealed class BillingExcelReportApiTests
             Assert.Equal("Mobile_Bill_Deduction_2026_08_FB_Staff.xlsx", factoryFile);
             Assert.Equal("Filters: Factory Factory B; Category Staff", factory.Cell("A3").GetString());
             Assert.Equal(("300", "TOTAL", 40m), (factory.Cell(6, 2).GetString(), factory.Cell(7, 3).GetString(), factory.Cell(7, 9).GetValue<decimal>()));
+        }
+
+        // Several categories, comma-separated as the Open Report screen sends them: either one matches.
+        var (manyFile, many, manyBook) = await Download("categoryCode=CAT,STF");
+        using (manyBook)
+        {
+            Assert.Equal("Mobile_Bill_Deduction_2026_08_Manager-Staff.xlsx", manyFile);
+            Assert.Equal("Filters: Category Manager, Staff", many.Cell("A3").GetString());
+            Assert.Equal(("100", "300", 50m), (many.Cell(6, 2).GetString(), many.Cell(7, 2).GetString(), many.Cell(8, 9).GetValue<decimal>()));
         }
 
         var (_, search, searchBook) = await Download("search=740052872&calculatedExcessMin=0.01");

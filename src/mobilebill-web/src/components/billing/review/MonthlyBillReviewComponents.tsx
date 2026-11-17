@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Card, CardContent, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, FormControl, FormControlLabel, InputLabel, ListItemText, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { useState, type FormEvent, type ReactNode } from 'react'
@@ -62,7 +62,9 @@ export function ReviewFilters({ filters, options, onChange, onExcessOnlyChange, 
     <MasterFilter label="Factory" fullWidth={report} value={filters.factoryCode ?? ''} onChange={value => onChange('factoryCode', value)} options={options.factories} />
     <MasterFilter label="Department" fullWidth={report} value={filters.departmentCode ?? ''} onChange={value => { onChange('departmentCode', value); onChange('sectionCode', '') }} options={options.departments} />
     <MasterFilter label="Section" fullWidth={report} value={filters.sectionCode ?? ''} onChange={value => onChange('sectionCode', value)} options={sections} />
-    <MasterFilter label="Category" fullWidth={report} value={filters.categoryCode ?? ''} onChange={value => onChange('categoryCode', value)} options={options.categories} />
+    {report
+      ? <MasterMultiFilter label="Category" value={filters.categoryCode ?? ''} onChange={value => onChange('categoryCode', value)} options={options.categories} />
+      : <MasterFilter label="Category" value={filters.categoryCode ?? ''} onChange={value => onChange('categoryCode', value)} options={options.categories} />}
     <FilterSelect label="Responsibility" fullWidth={report} value={filters.responsibility ?? ''} onChange={value => onChange('responsibility', value)} options={[['', 'All responsibilities'], ['Unassessed', 'Unassigned'], ['ByUser', 'By User'], ['ByCompany', 'By Company']]} />
     {!report && <FilterSelect label="Exception" value={filters.exception ?? 'All'} onChange={value => onChange('exception', value)} options={[['All', 'All exceptions'], ['HasException', 'Has exception'], ['NoException', 'No exception']]} />}
   </>
@@ -257,5 +259,22 @@ function SectionValues({ values }: { values: Record<string, string | undefined> 
 function TextTimeline({ entries, empty }: { entries: string[]; empty: string }) { return entries.length === 0 ? <Typography color="text.secondary">{empty}</Typography> : <AuditTimeline entries={entries} /> }
 function displayResponsibility(value?: string) { return value === 'ByUser' ? 'By User' : value === 'ByCompany' ? 'By Company' : 'Unassessed' }
 function FilterSelect({ label, value, onChange, options, fullWidth = false }: { label: string; value: string; onChange: (value: string) => void; options: SelectOption[]; fullWidth?: boolean }) { const labelId = `review-filter-${label.toLowerCase().replaceAll(' ', '-')}`; return <FormControl size="small" fullWidth={fullWidth} sx={{ minWidth: fullWidth ? 0 : 170 }}><InputLabel id={labelId}>{label}</InputLabel><Select labelId={labelId} label={label} value={value} onChange={event => onChange(event.target.value)}>{options.map(([optionValue, optionLabel]) => <MenuItem key={optionValue || 'all'} value={optionValue}>{optionLabel}</MenuItem>)}</Select></FormControl> }
-function MasterFilter({ label, value, onChange, options, fullWidth = false }: { label: string; value: string; onChange: (value: string) => void; options: MasterOption[]; fullWidth?: boolean }) { return <FilterSelect label={label} value={value} onChange={onChange} fullWidth={fullWidth} options={[['', `All ${label.toLowerCase()}s`], ...options.map(option => [String(option.code ?? option.id), option.name ?? option.id] as const)]} /> }
+function MasterFilter({ label, value, onChange, options, fullWidth = false }: { label: string; value: string; onChange: (value: string) => void; options: MasterOption[]; fullWidth?: boolean }) { return <FilterSelect label={label} value={value} onChange={onChange} fullWidth={fullWidth} options={[['', allLabel(label)], ...options.map(option => [String(option.code ?? option.id), option.name ?? option.id] as const)]} /> }
+// "All factories", "All categories", "All sections".
+function allLabel(label: string) { const word = label.toLowerCase(); return `All ${word.endsWith('y') ? `${word.slice(0, -1)}ies` : `${word}s`}` }
+// Several values ticked at once; value is a comma-separated list of codes and empty means all.
+function MasterMultiFilter({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: MasterOption[] }) {
+  const labelId = `review-filter-${label.toLowerCase().replaceAll(' ', '-')}`
+  const selected = value.split(',').filter(Boolean)
+  const nameFor = (code: string) => options.find(option => String(option.code ?? option.id) === code)?.name ?? code
+  return <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
+    <InputLabel id={labelId} shrink>{label}</InputLabel>
+    <Select multiple displayEmpty notched labelId={labelId} label={label} value={selected}
+      onChange={event => { const next = event.target.value; const codes = typeof next === 'string' ? next.split(',') : next; onChange(codes.includes('') ? '' : codes.join(',')) }}
+      renderValue={codes => codes.length === 0 ? allLabel(label) : codes.map(nameFor).join(', ')}>
+      <MenuItem value=""><Checkbox size="small" checked={selected.length === 0} /><ListItemText primary={allLabel(label)} /></MenuItem>
+      {options.map(option => { const code = String(option.code ?? option.id); return <MenuItem key={code} value={code}><Checkbox size="small" checked={selected.includes(code)} /><ListItemText primary={option.name ?? code} /></MenuItem> })}
+    </Select>
+  </FormControl>
+}
 function message(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback }
