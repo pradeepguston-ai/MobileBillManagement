@@ -70,6 +70,58 @@ describe('SIM Pool', () => {
     expect(screen.getByRole('cell', { name: 'Recent Leaver' })).toBeTruthy()
   })
 
+  it('assigns a pooled number to a new holder from the SIM Pool tab, then reloads the pool', async () => {
+    const posted: Array<{ url: string; body: unknown }> = []
+    let poolLoads = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (init?.method === 'POST') { posted.push({ url, body: JSON.parse(String(init.body)) }); return json({ ...allocation, id: 'p1', status: 'Assigned' }) }
+      if (url.includes('/api/mobile-accounts/pool')) return json(poolLoads++ === 0
+        ? [{ id: 'p1', mobileNumber: '0770000001', previousEpf: 'EPF-1', previousEmployeeName: 'Old Holder', factory: 'F', department: 'D', pooledOn: '2026-07-01', reason: 'Resigned', daysInPool: 96, isLongIdle: true, monthlyCreditLimit: 1000, monthlyRental: 100 }]
+        : [])
+      if (url.includes('/api/employees')) return page([{ id: 'e2', epf: 'EPF-2', fullName: 'Joiner', factoryName: 'Head Office', isActive: true }])
+      if (url.includes('/api/mobile-packages')) return page([{ id: 'pk1', code: 'PKG-500', description: 'Basic', providerName: 'Dialog', monthlyRental: 500, defaultCreditLimit: 1500, isActive: true }])
+      return page([])
+    })
+    render(<MobileAllocationsPage />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'SIM Pool' }))
+    // Assign comes before Disconnect in the row.
+    const row = (await screen.findByRole('cell', { name: '0770000001' })).closest('tr')!
+    expect(within(row).getAllByRole('button').map(button => button.textContent)).toEqual(['Assign', 'Disconnect'])
+    fireEvent.click(within(row).getByRole('button', { name: 'Assign' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Assign 0770000001 to a new holder')).toBeTruthy()
+    // The amounts start as the pooled SIM's; choosing a package fills in its rental.
+    expect((within(dialog).getByRole('spinbutton', { name: 'Monthly Credit Limit' }) as HTMLInputElement).value).toBe('1000')
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'New holder' }), { target: { value: 'Joiner' } })
+    fireEvent.click(await screen.findByRole('option', { name: 'EPF-2 — Joiner — Head Office' }))
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Package' }), { target: { value: 'PKG' } })
+    fireEvent.click(await screen.findByRole('option', { name: /PKG-500/ }))
+    expect((within(dialog).getByRole('spinbutton', { name: 'Monthly Rental' }) as HTMLInputElement).value).toBe('500')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() => expect(posted).toEqual([{ url: expect.stringContaining('/api/mobile-accounts/p1/assign-from-pool'), body: { employeeId: 'e2', monthlyCreditLimit: 1000, monthlyRental: 500, packageId: 'pk1' } }]))
+    expect(await screen.findByText('The SIM Pool is empty. Every active number has a holder.')).toBeTruthy()
+  })
+
+  it('asks for the new holder before assigning a pooled number', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+      const url = String(input)
+      if (url.includes('/api/mobile-accounts/pool')) return json([{ id: 'p1', mobileNumber: '0770000001', previousEpf: 'EPF-1', previousEmployeeName: 'Old Holder', factory: 'F', department: 'D', pooledOn: '2026-07-01', reason: 'Resigned', daysInPool: 10, isLongIdle: false, monthlyCreditLimit: 1000, monthlyRental: 100 }])
+      return page([])
+    })
+    render(<MobileAllocationsPage />)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'SIM Pool' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Assign' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Assign' }))
+
+    expect(await within(dialog).findByText('New holder is required.')).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
   it('disconnects a pooled number from the SIM Pool tab with the date and reason, then reloads the pool', async () => {
     const posted: Array<{ url: string; body: unknown }> = []
     let poolLoads = 0

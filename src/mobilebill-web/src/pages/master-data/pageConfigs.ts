@@ -30,14 +30,14 @@ export const thirdPartyCompaniesConfig = namedReference('Third Party Companies',
 // Third Party Allocation is only for the OTHER - THIRD-PARTY category (the server checks the same rule).
 const isThirdParty = (categoryOption?: { label: string }) => categoryOption?.label.replace(/\s+/g, ' ').trim().toUpperCase() === 'OTHER - THIRD-PARTY'
 // The same EPF can exist in different factories, so employees are picked by ID and shown with their factory.
-const employeeOption = (row: Row) => {
+export const employeeOption = (row: Row) => {
   const parts = { epf: row.epf, nameWithInitials: row.nameWithInitials, fullName: row.fullName, callingName: row.callingName, factory: row.factoryName || row.factoryCode }
   return { value: String(row.id), label: employeeLabel(parts), searchText: employeeSearchText(parts) }
 }
 // The SIM type of an allocation, as stored and as shown.
 export const simTypeLabels: Record<string, string> = { Voice: 'Voice', VoiceData: 'Voice + Data', Data: 'Data', ESim: 'eSIM' }
 const simTypeOptions = Object.entries(simTypeLabels).map(([key, label]) => ({ value: key, label }))
-const packageOption = (row: Row) => ({ value: String(row.id), label: `${value(row, 'code')} — ${value(row, 'description')} (${value(row, 'providerName')})`, data: row })
+export const packageOption = (row: Row) => ({ value: String(row.id), label: `${value(row, 'code')} — ${value(row, 'description')} (${value(row, 'providerName')})`, data: row })
 const codeOption = (row: Row, parentKey?: string) => ({ value: String(row.code), label: `${String(row.code)} — ${String(row.name)}`, parentValue: parentKey ? String(row[parentKey] ?? '') : undefined })
 // For masters with hidden codes: the code is still the value saved, but only the name is shown.
 const nameOption = (row: Row, parentKey?: string) => ({ value: String(row.code), label: String(row.name), parentValue: parentKey ? String(row[parentKey] ?? '') : undefined })
